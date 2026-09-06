@@ -8,6 +8,7 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "dev": "tsx watch src/index.ts",
+    "tunnel": "node tunnel.js",
     "test": "vitest run",
     "test:watch": "vitest"
   },
