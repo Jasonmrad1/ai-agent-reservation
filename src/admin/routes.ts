@@ -210,7 +210,7 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
     res.json({ success: true });
   });
 
-  // 5. Admin Dashboard Web UI
+  // 5. Admin Dashboard Web UI - Microsoft Teams Calendar Experience
   router.get('/dashboard', (req: Request, res: Response) => {
     const key = (req.query.key as string) || '';
     res.type('html').send(`<!DOCTYPE html>
@@ -228,31 +228,30 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
       --bg-subtle: #121316;
       --surface: #17181c;
       --surface-elevated: #1e1f25;
-      --surface-hover: #23252d;
+      --surface-hover: #24262e;
       --border: #262830;
-      --border-subtle: #1d1f25;
+      --border-subtle: #1c1e24;
       --border-focus: #24b47e;
       --emerald: #24b47e;
-      --emerald-subtle: rgba(36, 180, 126, 0.1);
-      --emerald-border: rgba(36, 180, 126, 0.25);
+      --emerald-subtle: rgba(36, 180, 126, 0.12);
+      --emerald-border: rgba(36, 180, 126, 0.28);
       --emerald-hover: #1f9d6c;
       --emerald-text: #34d399;
       --text: #f4f4f6;
       --text-muted: #a1a1aa;
       --text-subtle: #71717a;
-      --text-faint: #52525b;
       --amber: #fbbf24;
-      --amber-subtle: rgba(251, 191, 36, 0.08);
-      --amber-border: rgba(251, 191, 36, 0.2);
+      --amber-subtle: rgba(251, 191, 36, 0.1);
+      --amber-border: rgba(251, 191, 36, 0.25);
       --red: #f87171;
-      --red-subtle: rgba(248, 113, 113, 0.08);
-      --red-border: rgba(248, 113, 113, 0.2);
+      --red-subtle: rgba(248, 113, 113, 0.1);
+      --red-border: rgba(248, 113, 113, 0.25);
       --sky: #38bdf8;
-      --sky-subtle: rgba(56, 189, 248, 0.08);
-      --sky-border: rgba(56, 189, 248, 0.2);
+      --sky-subtle: rgba(56, 189, 248, 0.12);
+      --sky-border: rgba(56, 189, 248, 0.3);
       --purple: #c084fc;
-      --purple-subtle: rgba(192, 132, 252, 0.08);
-      --purple-border: rgba(192, 132, 252, 0.2);
+      --purple-subtle: rgba(192, 132, 252, 0.12);
+      --purple-border: rgba(192, 132, 252, 0.3);
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -260,18 +259,17 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
       background: var(--bg);
       color: var(--text);
       line-height: 1.5;
-      padding-bottom: 60px;
+      overflow-x: hidden;
       -webkit-font-smoothing: antialiased;
-      -moz-osx-font-smoothing: grayscale;
     }
     .mono { font-family: 'JetBrains Mono', monospace; }
-    
-    /* Top Bar */
-    .top-nav {
+
+    /* Teams Top Bar */
+    .teams-top-bar {
       background: var(--bg-subtle);
       border-bottom: 1px solid var(--border);
-      padding: 0 32px;
-      height: 58px;
+      padding: 0 24px;
+      height: 60px;
       display: flex;
       justify-content: space-between;
       align-items: center;
@@ -280,179 +278,93 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
       z-index: 50;
       backdrop-filter: blur(12px);
     }
-    .brand {
+    .teams-left {
       display: flex;
       align-items: center;
-      gap: 12px;
+      gap: 16px;
     }
-    .brand-icon {
-      width: 30px;
-      height: 30px;
-      border-radius: 6px;
-      background: var(--surface-elevated);
+    .brand-logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 600;
+      font-size: 15px;
+      color: #fff;
+    }
+    .brand-logo svg {
+      width: 22px;
+      height: 22px;
+      stroke: var(--emerald);
+    }
+    .nav-group {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--surface);
       border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 3px;
+    }
+    .nav-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      padding: 5px 10px;
+      border-radius: 4px;
+      font-size: 12px;
+      font-family: inherit;
+      font-weight: 500;
       display: flex;
       align-items: center;
       justify-content: center;
-      color: var(--emerald);
+      transition: all 0.15s;
     }
-    .brand-title {
+    .nav-btn:hover {
+      background: var(--surface-hover);
+      color: #fff;
+    }
+    .nav-btn.today {
+      color: #fff;
+      font-weight: 600;
+      padding: 5px 12px;
+    }
+    .date-range-label {
       font-size: 14.5px;
       font-weight: 600;
       color: #fff;
       letter-spacing: -0.01em;
+      min-width: 170px;
     }
-    .brand-subtitle {
-      font-size: 12px;
-      color: var(--text-subtle);
-      font-weight: 400;
-    }
-    .status-pill {
-      display: inline-flex;
+    .teams-right {
+      display: flex;
       align-items: center;
-      gap: 8px;
-      background: var(--emerald-subtle);
-      border: 1px solid var(--emerald-border);
-      padding: 5px 12px;
-      border-radius: 9999px;
-      font-size: 12px;
-      color: var(--emerald-text);
-      font-weight: 500;
+      gap: 10px;
+      flex-wrap: wrap;
     }
-    .pulse-dot {
-      width: 6px;
-      height: 6px;
-      background: var(--emerald-text);
-      border-radius: 50%;
-      animation: pulse 2s infinite ease-in-out;
+    .preset-pills {
+      display: flex;
+      gap: 5px;
+      align-items: center;
     }
-    @keyframes pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.35; transform: scale(0.75); } }
-
-    /* Layout */
-    .container { max-width: 1240px; margin: 28px auto; padding: 0 24px; }
-
-    /* KPI Cards */
-    .kpi-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-      gap: 16px;
-      margin-bottom: 24px;
-    }
-    .kpi-card {
+    .preset-btn {
       background: var(--surface);
       border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 18px 20px;
-      transition: border-color 0.15s;
-    }
-    .kpi-card:hover { border-color: #363842; }
-    .kpi-title { font-size: 11px; font-weight: 600; color: var(--text-subtle); text-transform: uppercase; letter-spacing: 0.05em; }
-    .kpi-value { font-size: 26px; font-weight: 600; color: #fff; margin: 6px 0 3px; letter-spacing: -0.02em; }
-    .kpi-sub { font-size: 12px; color: var(--text-muted); }
-
-    /* Tabs */
-    .tabs-wrapper {
-      display: flex;
-      gap: 4px;
-      background: var(--bg-subtle);
-      border: 1px solid var(--border);
-      padding: 4px;
-      border-radius: 8px;
-      margin-bottom: 24px;
-      overflow-x: auto;
-    }
-    .tab-btn {
-      padding: 8px 16px;
-      background: transparent;
-      border: none;
-      border-radius: 6px;
       color: var(--text-muted);
+      border-radius: 5px;
+      padding: 5px 11px;
+      font-size: 12px;
       cursor: pointer;
-      font-weight: 500;
-      font-size: 13px;
       font-family: inherit;
       transition: all 0.15s;
-      white-space: nowrap;
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
     }
-    .tab-btn svg { width: 15px; height: 15px; stroke: currentColor; opacity: 0.7; }
-    .tab-btn:hover { color: #fff; background: var(--surface-hover); }
-    .tab-btn.active {
-      background: var(--surface-elevated);
+    .preset-btn:hover {
       color: #fff;
-      border: 1px solid var(--border);
-      font-weight: 600;
+      border-color: #3f414d;
+      background: var(--surface-hover);
     }
-    .tab-btn.active svg { opacity: 1; stroke: var(--emerald); }
-
-    /* Panels */
-    .panel { display: none; }
-    .panel.active { display: block; animation: fadeIn 0.15s ease-out; }
-    @keyframes fadeIn { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: translateY(0); } }
-
-    .card {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      overflow: hidden;
-      margin-bottom: 24px;
-    }
-    .card-header {
-      padding: 16px 22px;
-      border-bottom: 1px solid var(--border);
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      background: var(--surface);
-    }
-    .card-header h2 { font-size: 15px; font-weight: 600; color: #fff; letter-spacing: -0.01em; }
-    .card-header p { font-size: 12.5px; color: var(--text-subtle); margin-top: 2px; }
-    .card-body { padding: 20px 22px; }
-
-    /* Tables */
-    .table-container { overflow-x: auto; }
-    table { width: 100%; border-collapse: collapse; text-align: left; }
-    th {
-      background: #111215;
-      padding: 12px 18px;
-      font-size: 11px;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      color: var(--text-subtle);
-      border-bottom: 1px solid var(--border);
-      font-weight: 600;
-    }
-    td {
-      padding: 13px 18px;
-      border-bottom: 1px solid var(--border-subtle);
-      font-size: 13px;
-      color: var(--text);
-    }
-    tr:last-child td { border-bottom: none; }
-    tr:hover td { background: rgba(255,255,255,0.015); }
-
-    /* Badges */
-    .badge {
-      display: inline-flex;
-      align-items: center;
-      padding: 2px 8px;
-      border-radius: 4px;
-      font-size: 11.5px;
-      font-weight: 500;
-      letter-spacing: 0.01em;
-    }
-    .badge-home { background: var(--sky-subtle); color: var(--sky); border: 1px solid var(--sky-border); }
-    .badge-office { background: rgba(255,255,255,0.05); color: #d4d4d8; border: 1px solid var(--border); }
-    .badge-paid { background: var(--emerald-subtle); color: var(--emerald-text); border: 1px solid var(--emerald-border); }
-    .badge-unpaid { background: var(--red-subtle); color: var(--red); border: 1px solid var(--red-border); }
-    .badge-pending { background: var(--amber-subtle); color: var(--amber); border: 1px solid var(--amber-border); }
-    .badge-rescheduled { background: var(--purple-subtle); color: var(--purple); border: 1px solid var(--purple-border); }
-
-    /* Buttons */
     .btn {
-      padding: 6px 13px;
+      padding: 6px 14px;
       border-radius: 6px;
       border: 1px solid transparent;
       cursor: pointer;
@@ -465,114 +377,75 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
       transition: all 0.15s;
     }
     .btn svg { width: 14px; height: 14px; stroke: currentColor; }
-    .btn-emerald {
-      background: var(--emerald);
-      color: #ffffff;
+    .btn-emerald { background: var(--emerald); color: #ffffff; font-weight: 600; }
+    .btn-emerald:hover { background: var(--emerald-hover); }
+    .btn-secondary { background: var(--surface-elevated); border-color: var(--border); color: #e4e4e7; }
+    .btn-secondary:hover { background: var(--surface-hover); border-color: #383a45; color: #fff; }
+    .btn-purple { background: var(--purple-subtle); border-color: var(--purple-border); color: var(--purple); font-weight: 600; }
+    .btn-purple:hover { background: rgba(192, 132, 252, 0.2); }
+    .btn-danger { background: var(--red-subtle); border-color: var(--red-border); color: var(--red); }
+    .btn-danger:hover { background: rgba(248, 113, 113, 0.2); }
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      background: var(--emerald-subtle);
+      border: 1px solid var(--emerald-border);
+      padding: 4px 10px;
+      border-radius: 9999px;
+      font-size: 11.5px;
+      color: var(--emerald-text);
       font-weight: 500;
     }
-    .btn-emerald:hover { background: var(--emerald-hover); }
-    .btn-secondary {
-      background: var(--surface-elevated);
-      border-color: var(--border);
-      color: #e4e4e7;
+    .pulse-dot {
+      width: 6px;
+      height: 6px;
+      background: var(--emerald-text);
+      border-radius: 50%;
+      animation: pulse 2s infinite ease-in-out;
     }
-    .btn-secondary:hover { background: var(--surface-hover); border-color: #383a45; }
-    .btn-danger {
-      background: var(--red-subtle);
-      border-color: var(--red-border);
-      color: var(--red);
-    }
-    .btn-danger:hover { background: rgba(248, 113, 113, 0.15); }
-    .btn-purple {
-      background: var(--purple-subtle);
-      border-color: var(--purple-border);
-      color: var(--purple);
-    }
-    .btn-purple:hover { background: rgba(192, 132, 252, 0.15); }
+    @keyframes pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.35; transform: scale(0.75); } }
 
-    /* Inputs */
-    input[type="text"], input[type="date"], input[type="time"], textarea, select {
-      background: #0f1013;
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      color: #f4f4f6;
-      padding: 7px 11px;
-      font-size: 13px;
-      font-family: inherit;
-      transition: border-color 0.15s;
+    /* Main Calendar Canvas */
+    .calendar-app-container {
+      padding: 16px 24px 32px;
+      max-width: 1500px;
+      margin: 0 auto;
     }
-    input:focus, textarea:focus, select:focus {
-      outline: none;
-      border-color: var(--border-focus);
-    }
-
-    /* Teams-Style Visual Week Calendar Grid */
-    .calendar-week-container {
-      background: #0f1013;
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      overflow: hidden;
-      margin-bottom: 20px;
-    }
-    .calendar-week-header-bar {
-      padding: 12px 18px;
-      border-bottom: 1px solid var(--border);
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
+    .calendar-card {
       background: var(--surface);
-      flex-wrap: wrap;
-      gap: 10px;
-    }
-    .preset-pills {
-      display: flex;
-      gap: 6px;
-      flex-wrap: wrap;
-      align-items: center;
-    }
-    .preset-btn {
-      background: var(--surface-elevated);
       border: 1px solid var(--border);
-      color: var(--text-muted);
-      border-radius: 4px;
-      padding: 4px 10px;
-      font-size: 11.5px;
-      cursor: pointer;
-      font-family: inherit;
-      transition: all 0.15s;
+      border-radius: 10px;
+      overflow: hidden;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.3);
     }
-    .preset-btn:hover {
-      color: #fff;
-      border-color: #3f414d;
-      background: var(--surface-hover);
-    }
-    .calendar-week-body {
+    .calendar-body-scroll {
       display: flex;
       overflow-x: auto;
       position: relative;
       user-select: none;
     }
     .time-axis {
-      width: 54px;
+      width: 58px;
       flex-shrink: 0;
       border-right: 1px solid var(--border);
       background: #0d0e11;
-      padding-top: 50px; /* aligns with day column headers */
+      padding-top: 60px; /* aligns with day headers */
     }
     .time-axis-slot {
       height: 36px;
-      font-size: 10px;
+      font-size: 10.5px;
       color: var(--text-subtle);
       font-family: 'JetBrains Mono', monospace;
       text-align: right;
-      padding-right: 8px;
+      padding-right: 10px;
       transform: translateY(-6px);
       box-sizing: border-box;
     }
     .days-columns-grid {
       display: flex;
       flex: 1;
-      min-width: 680px;
+      min-width: 820px;
     }
     .day-column {
       flex: 1;
@@ -580,14 +453,15 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
       display: flex;
       flex-direction: column;
       position: relative;
+      background: #111216;
     }
     .day-column:last-child {
       border-right: none;
     }
     .day-col-header {
-      height: 50px;
+      height: 60px;
       border-bottom: 1px solid var(--border);
-      background: #111215;
+      background: #141519;
       padding: 6px 8px;
       display: flex;
       flex-direction: column;
@@ -595,13 +469,33 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
       align-items: center;
       gap: 3px;
     }
-    .day-col-name {
-      font-size: 12px;
-      font-weight: 600;
-      color: #fff;
+    .day-header-meta {
       display: flex;
       align-items: center;
-      gap: 5px;
+      gap: 6px;
+    }
+    .day-abbr {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-subtle);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .day-num {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12.5px;
+      font-weight: 600;
+      color: #fff;
+    }
+    .day-num.today {
+      background: var(--emerald);
+      color: #fff;
+      box-shadow: 0 0 10px rgba(36, 180, 126, 0.4);
     }
     .day-col-status {
       font-size: 10.5px;
@@ -610,16 +504,21 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
       cursor: pointer;
       background: var(--emerald-subtle);
       border: 1px solid var(--emerald-border);
-      padding: 1px 6px;
-      border-radius: 3px;
+      padding: 1px 7px;
+      border-radius: 4px;
+      transition: all 0.15s;
+    }
+    .day-col-status:hover {
+      background: rgba(36, 180, 126, 0.22);
     }
     .day-col-status.closed {
       color: var(--text-subtle);
       background: rgba(255,255,255,0.03);
       border-color: var(--border-subtle);
     }
+
     .day-col-track {
-      height: 504px; /* 14 hours (07:00-21:00) * 36px = 504px */
+      height: 504px; /* 14 hours (07:00-21:00) * 36px */
       position: relative;
       background:
         repeating-linear-gradient(
@@ -634,12 +533,11 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
       background:
         repeating-linear-gradient(
           45deg,
-          rgba(255, 255, 255, 0.015),
-          rgba(255, 255, 255, 0.015) 10px,
+          rgba(255, 255, 255, 0.02),
+          rgba(255, 255, 255, 0.02) 10px,
           transparent 10px,
           transparent 20px
         );
-      cursor: pointer;
     }
     .closed-overlay-btn {
       position: absolute;
@@ -650,7 +548,7 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
       border: 1px solid var(--border);
       color: var(--text-subtle);
       font-size: 11px;
-      padding: 5px 9px;
+      padding: 5px 10px;
       border-radius: 4px;
       cursor: pointer;
       white-space: nowrap;
@@ -662,13 +560,13 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
       background: var(--surface-hover);
     }
 
-    /* Availability Draggable Block */
+    /* Draggable Working Hours Shaded Window */
     .avail-block {
       position: absolute;
-      left: 4px;
-      right: 4px;
-      background: var(--emerald-subtle);
-      border: 1.5px solid var(--emerald);
+      left: 3px;
+      right: 3px;
+      background: rgba(36, 180, 126, 0.09);
+      border: 1px dashed var(--emerald);
       border-radius: 6px;
       z-index: 10;
       display: flex;
@@ -677,12 +575,11 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
       overflow: hidden;
       cursor: grab;
       touch-action: none;
-      transition: background-color 0.15s, border-color 0.15s;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+      transition: background-color 0.15s;
     }
     .avail-block:active {
       cursor: grabbing;
-      background: rgba(36, 180, 126, 0.22);
+      background: rgba(36, 180, 126, 0.16);
     }
     .avail-drag-handle {
       height: 9px;
@@ -690,68 +587,193 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
       align-items: center;
       justify-content: center;
       cursor: ns-resize;
-      background: rgba(36, 180, 126, 0.2);
+      background: rgba(36, 180, 126, 0.18);
       touch-action: none;
     }
     .avail-drag-handle::after {
       content: "";
-      width: 22px;
+      width: 20px;
       height: 2px;
       background: var(--emerald-text);
       border-radius: 1px;
     }
-    .avail-drag-handle.top {
-      border-bottom: 1px solid rgba(36, 180, 126, 0.2);
-    }
-    .avail-drag-handle.bottom {
-      border-top: 1px solid rgba(36, 180, 126, 0.2);
-    }
+    .avail-drag-handle.top { border-bottom: 1px solid rgba(36, 180, 126, 0.15); }
+    .avail-drag-handle.bottom { border-top: 1px solid rgba(36, 180, 126, 0.15); }
     .avail-block-label {
-      padding: 3px 5px;
-      font-size: 10.5px;
-      font-weight: 600;
-      color: #fff;
+      padding: 2px 4px;
+      font-size: 10px;
+      font-weight: 500;
+      color: var(--emerald-text);
       text-align: center;
       font-family: 'JetBrains Mono', monospace;
       pointer-events: none;
     }
-    .avail-block-sub {
-      font-size: 9px;
-      color: var(--emerald-text);
-      font-weight: 500;
-      display: block;
-      opacity: 0.9;
-    }
 
-    /* Booked Appointment Badge on Timeline */
-    .cal-appt-badge {
+    /* Microsoft Teams Meeting Cards */
+    .teams-meeting-card {
       position: absolute;
-      left: 3px;
-      right: 3px;
-      background: rgba(56, 189, 248, 0.2);
-      border: 1px solid rgba(56, 189, 248, 0.45);
-      border-radius: 4px;
-      padding: 3px 5px;
-      font-size: 10px;
-      color: #e0f2fe;
-      z-index: 15;
-      overflow: hidden;
-      white-space: nowrap;
-      text-overflow: ellipsis;
+      left: 4px;
+      right: 4px;
+      background: #181920;
+      border: 1px solid #292a34;
+      border-left: 4px solid var(--emerald);
+      border-radius: 6px;
+      padding: 5px 8px;
       cursor: pointer;
-      box-shadow: 0 1px 4px rgba(0,0,0,0.4);
+      z-index: 20;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+      transition: transform 0.1s ease, box-shadow 0.15s ease, border-color 0.15s ease;
     }
-    .cal-appt-badge:hover {
-      background: rgba(56, 189, 248, 0.35);
-      border-color: #38bdf8;
+    .teams-meeting-card:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 16px rgba(0,0,0,0.6);
+      border-color: #404252;
+      z-index: 25;
     }
-    .cal-appt-badge.in-office {
-      background: rgba(192, 132, 252, 0.2);
-      border-color: rgba(192, 132, 252, 0.45);
-      color: #f3e8ff;
+    .teams-meeting-card.home-visit {
+      background: #111a28;
+      border-color: rgba(56, 189, 248, 0.35);
+      border-left: 4px solid #38bdf8;
+    }
+    .teams-meeting-card.in-office {
+      background: #1a1628;
+      border-color: rgba(192, 132, 252, 0.35);
+      border-left: 4px solid #c084fc;
+    }
+    .meeting-title {
+      font-size: 11px;
+      font-weight: 600;
+      color: #fff;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .meeting-time {
+      font-size: 10px;
+      color: var(--text-muted);
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .meeting-patient {
+      font-size: 10.5px;
+      color: #e2e8f0;
+      font-weight: 500;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .meeting-badge {
+      font-size: 9.5px;
+      color: var(--text-subtle);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      margin-top: 1px;
     }
 
-    /* Floating Drag Tooltip */
+    /* Badges */
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+    }
+    .badge-home { background: var(--sky-subtle); color: var(--sky); border: 1px solid var(--sky-border); }
+    .badge-office { background: var(--purple-subtle); color: var(--purple); border: 1px solid var(--purple-border); }
+    .badge-paid { background: var(--emerald-subtle); color: var(--emerald-text); border: 1px solid var(--emerald-border); }
+    .badge-unpaid { background: var(--red-subtle); color: var(--red); border: 1px solid var(--red-border); }
+    .badge-rescheduled { background: var(--amber-subtle); color: var(--amber); border: 1px solid var(--amber-border); }
+    .badge-pending { background: rgba(255,255,255,0.06); color: #d4d4d8; border: 1px solid var(--border); }
+
+    /* Modals & Popovers */
+    .modal-backdrop {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.7);
+      backdrop-filter: blur(4px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      padding: 16px;
+    }
+    .modal-backdrop.active { display: flex; animation: fadeIn 0.15s ease-out; }
+    .modal-card {
+      background: #16171c;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      width: 100%;
+      max-width: 520px;
+      overflow: hidden;
+      box-shadow: 0 16px 40px rgba(0,0,0,0.6);
+    }
+    .modal-header {
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: #141519;
+    }
+    .modal-body { padding: 20px; }
+    .modal-footer {
+      padding: 14px 20px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+      background: #141519;
+    }
+    .chip-group { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 14px; }
+    .chip {
+      background: var(--surface-elevated);
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      border-radius: 9999px;
+      padding: 4px 10px;
+      font-size: 11.5px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .chip:hover { color: #fff; border-color: #454754; background: var(--surface-hover); }
+
+    /* Form controls in modals */
+    input[type="text"], input[type="date"], input[type="time"], textarea {
+      background: #0d0e11;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: #f4f4f6;
+      padding: 7px 11px;
+      font-size: 13px;
+      font-family: inherit;
+    }
+    input:focus, textarea:focus { outline: none; border-color: var(--border-focus); }
+
+    /* Toast */
+    .toast-container { position: fixed; bottom: 24px; right: 24px; z-index: 1000; }
+    .toast {
+      background: #1c1e24;
+      border: 1px solid var(--emerald);
+      color: #fff;
+      padding: 10px 16px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 500;
+      display: none;
+      align-items: center;
+      gap: 10px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+      animation: slideUp 0.2s ease-out;
+    }
+    @keyframes slideUp { from { transform: translateY(10px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: translateY(0); } }
+
     .drag-tooltip {
       position: fixed;
       z-index: 999;
@@ -768,405 +790,206 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
       transform: translate(-50%, -130%);
     }
 
-    /* Day Schedule Cards */
+    /* Day row item in work hours modal */
     .day-item {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 13px 18px;
-      background: var(--surface-elevated);
-      border: 1px solid var(--border-subtle);
-      border-radius: 6px;
-      margin-bottom: 8px;
-      transition: border-color 0.15s;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--border-subtle);
     }
-    .day-item:hover { border-color: #34363f; }
-    .day-meta { width: 130px; font-weight: 600; font-size: 14px; color: #fff; }
-    
-    /* Toggle Switch */
-    .switch-wrap {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      cursor: pointer;
-    }
-    .switch {
-      position: relative;
-      display: inline-block;
-      width: 38px;
-      height: 22px;
-    }
+    .day-item:last-child { border-bottom: none; }
+    .switch-wrap { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+    .switch { position: relative; width: 34px; height: 18px; }
     .switch input { opacity: 0; width: 0; height: 0; }
-    .slider {
-      position: absolute;
-      cursor: pointer;
-      top: 0; left: 0; right: 0; bottom: 0;
-      background-color: #23252d;
-      transition: .2s;
-      border-radius: 22px;
-      border: 1px solid var(--border);
-    }
-    .slider:before {
-      position: absolute;
-      content: "";
-      height: 14px;
-      width: 14px;
-      left: 3px;
-      bottom: 3px;
-      background-color: #71717a;
-      transition: .2s;
-      border-radius: 50%;
-    }
-    input:checked + .slider {
-      background-color: var(--emerald-subtle);
-      border-color: var(--emerald-border);
-    }
-    input:checked + .slider:before {
-      transform: translateX(16px);
-      background-color: var(--emerald);
-    }
+    .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #2b2d35; border-radius: 18px; transition: .2s; }
+    .slider:before { position: absolute; content: ""; height: 12px; width: 12px; left: 3px; bottom: 3px; background-color: #fff; border-radius: 50%; transition: .2s; }
+    input:checked + .slider { background-color: var(--emerald); }
+    input:checked + .slider:before { transform: translateX(16px); }
 
-    /* Toast */
-    .toast-container {
-      position: fixed;
-      bottom: 24px;
-      right: 24px;
-      z-index: 100;
-    }
-    .toast {
-      background: var(--surface-elevated);
-      border: 1px solid var(--border);
-      box-shadow: 0 10px 30px rgba(0,0,0,0.6);
-      color: #fff;
-      padding: 12px 18px;
-      border-radius: 6px;
-      font-size: 13px;
-      display: none;
-      align-items: center;
-      gap: 10px;
-      animation: slideUp 0.15s ease-out;
-    }
-    @keyframes slideUp { from { transform: translateY(8px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-
-    /* Modal */
-    .modal-backdrop {
-      display: none;
-      position: fixed;
-      top: 0; left: 0; right: 0; bottom: 0;
-      background: rgba(0,0,0,0.7);
-      backdrop-filter: blur(8px);
-      z-index: 99;
-      align-items: center;
-      justify-content: center;
-      padding: 20px;
-    }
-    .modal-backdrop.active { display: flex; }
-    .modal-card {
-      background: #141519;
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      width: 100%;
-      max-width: 500px;
-      box-shadow: 0 25px 50px -12px rgba(0,0,0,0.75);
-      overflow: hidden;
-      animation: popIn 0.15s ease-out;
-    }
-    @keyframes popIn { from { transform: scale(0.97); opacity: 0; } to { transform: scale(1); opacity: 1; } }
-    .modal-header {
-      padding: 16px 20px;
-      background: var(--surface);
-      border-bottom: 1px solid var(--border);
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-    .modal-header h3 { font-size: 15px; font-weight: 600; color: #fff; }
-    .modal-body { padding: 20px; }
-    .modal-footer {
-      padding: 12px 20px;
-      background: var(--surface);
-      border-top: 1px solid var(--border);
-      display: flex;
-      justify-content: flex-end;
-      gap: 8px;
-    }
-    .chip-group { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 14px; }
-    .chip {
-      background: var(--surface-elevated);
-      border: 1px solid var(--border);
-      color: var(--text-muted);
-      border-radius: 4px;
-      padding: 3px 9px;
-      font-size: 11.5px;
-      cursor: pointer;
-      transition: all 0.15s;
-    }
-    .chip:hover { color: #fff; border-color: #454754; background: var(--surface-hover); }
+    table { width: 100%; border-collapse: collapse; text-align: left; }
+    th { padding: 8px 12px; font-size: 11px; text-transform: uppercase; color: var(--text-subtle); border-bottom: 1px solid var(--border); }
+    td { padding: 8px 12px; border-bottom: 1px solid var(--border-subtle); font-size: 12px; }
   </style>
 </head>
 <body>
-  <!-- Top Navigation Bar -->
-  <nav class="top-nav">
-    <div class="brand">
-      <div class="brand-icon">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
-        </svg>
-      </div>
-      <div>
-        <div class="brand-title">Practice Management Dashboard</div>
-        <div class="brand-subtitle">WhatsApp Autonomous Scheduling Engine</div>
-      </div>
-    </div>
-    <div style="display: flex; align-items: center; gap: 12px;">
-      <div class="status-pill">
-        <span class="pulse-dot"></span>
-        <span>Gateway Online</span>
-      </div>
-      <a href="/health" target="_blank" style="text-decoration: none;">
-        <button class="btn btn-secondary" style="font-size: 11.5px; padding: 4px 10px;">Health</button>
-      </a>
-    </div>
-  </nav>
-
-  <div class="container">
-    <!-- Top KPI Grid -->
-    <div class="kpi-grid">
-      <div class="kpi-card">
-        <div class="kpi-title">Upcoming Appointments</div>
-        <div class="kpi-value" id="kpiApptsCount">-</div>
-        <div class="kpi-sub" id="kpiApptsBreakdown">Synced with Google Calendar</div>
-      </div>
-      <div class="kpi-card">
-        <div class="kpi-title">Weekly Work Hours</div>
-        <div class="kpi-value" id="kpiDaysOpen" style="color: var(--emerald-text);">-</div>
-        <div class="kpi-sub">Active bookable schedule days</div>
-      </div>
-      <div class="kpi-card">
-        <div class="kpi-title">Billing & Revenue</div>
-        <div class="kpi-value" id="kpiRevenueSum" style="color: var(--emerald-text);">-</div>
-        <div class="kpi-sub" id="kpiInvoicesUnpaid">Generated via WhatsApp</div>
-      </div>
-      <div class="kpi-card">
-        <div class="kpi-title">Escalations & Alerts</div>
-        <div class="kpi-value" id="kpiAlertsCount">-</div>
-        <div class="kpi-sub" id="kpiAlertsSub">Zero delivery failures</div>
-      </div>
-    </div>
-
-    <!-- Navigation Tabs -->
-    <div class="tabs-wrapper">
-      <button class="tab-btn active" onclick="showTab('tab-appointments', this)">
+  <!-- Microsoft Teams Style Top Bar -->
+  <header class="teams-top-bar">
+    <div class="teams-left">
+      <div class="brand-logo">
         <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
           <line x1="16" y1="2" x2="16" y2="6"></line>
           <line x1="8" y1="2" x2="8" y2="6"></line>
           <line x1="3" y1="10" x2="21" y2="10"></line>
         </svg>
-        Upcoming Appointments
-      </button>
-      <button class="tab-btn" onclick="showTab('tab-availability', this)">
-        <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="12" cy="12" r="10"></circle>
-          <polyline points="12 6 12 12 16 14"></polyline>
-        </svg>
+        <span>Calendar</span>
+      </div>
+
+      <div class="nav-group">
+        <button class="nav-btn" onclick="prevWeek()" title="Previous Week">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"></polyline></svg>
+        </button>
+        <button class="nav-btn today" onclick="todayWeek()">Today</button>
+        <button class="nav-btn" onclick="nextWeek()" title="Next Week">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
+        </button>
+      </div>
+
+      <div class="date-range-label" id="currentMonthYear">-</div>
+    </div>
+
+    <div class="teams-right">
+      <div class="preset-pills">
+        <button class="preset-btn" onclick="applyPreset('standard')">Standard 9-5</button>
+        <button class="preset-btn" onclick="applyPreset('extended')">Extended 8-6</button>
+        <button class="preset-btn" onclick="applyPreset('all')">All 7 Days</button>
+      </div>
+
+      <button class="btn btn-secondary" onclick="openWorkHoursModal()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
         Weekly Work Hours
       </button>
-      <button class="tab-btn" onclick="showTab('tab-invoices', this)">
-        <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <rect x="1" y="4" width="22" height="16" rx="2" ry="2"></rect>
-          <line x1="1" y1="10" x2="23" y2="10"></line>
-        </svg>
-        Billing & Invoices
-      </button>
-      <button class="tab-btn" onclick="showTab('tab-alerts', this)">
-        <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
-          <line x1="12" y1="9" x2="12" y2="13"></line>
-          <line x1="12" y1="17" x2="12.01" y2="17"></line>
-        </svg>
-        Alerts & Escalations
-      </button>
-    </div>
 
-    <!-- Tab 1: Appointments -->
-    <div id="tab-appointments" class="panel active">
-      <div class="card">
-        <div class="card-header">
-          <div>
-            <h2>Upcoming Appointments</h2>
-            <p>Direct bookings and reschedules from WhatsApp. Fully synced with your calendar.</p>
-          </div>
-          <button class="btn btn-secondary" onclick="loadAppointments()">Refresh</button>
+      <button class="btn btn-emerald" onclick="saveAllWeeklyHours()">
+        Save All Weekly Hours
+      </button>
+
+      <div class="status-pill">
+        <span class="pulse-dot"></span>
+        <span>WhatsApp Live</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Teams Calendar Canvas -->
+  <main class="calendar-app-container">
+    <div class="calendar-card">
+      <div class="calendar-body-scroll">
+        <div class="time-axis" id="timeAxis"></div>
+        <div class="days-columns-grid" id="daysColumnsGrid"></div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Teams Meeting Details Drawer / Popover Modal -->
+  <div id="reservationDetailsModal" class="modal-backdrop">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span id="detailVisitBadge" class="badge badge-office">IN-OFFICE</span>
+          <h3 id="detailServiceTitle" style="font-size: 15px; color: #fff; font-weight: 600;">General Consultation</h3>
         </div>
-        <div class="table-container">
-          <table id="appointmentsTable">
-            <thead>
-              <tr>
-                <th>Patient</th>
-                <th>Service</th>
-                <th>Visit Type</th>
-                <th>Address / Location</th>
-                <th>Schedule</th>
-                <th>Status</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr><td colspan="7" style="text-align: center; color: var(--text-subtle); padding: 32px;">Loading appointments...</td></tr>
-            </tbody>
-          </table>
+        <button onclick="closeReservationModal()" style="background: transparent; border: none; color: var(--text-muted); cursor: pointer; font-size: 18px;">✕</button>
+      </div>
+      <div class="modal-body">
+        <!-- Date & Time -->
+        <div style="display: flex; gap: 12px; margin-bottom: 16px;">
+          <div style="color: var(--emerald); padding-top: 2px;">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+          </div>
+          <div>
+            <div id="detailDateTime" style="font-size: 13.5px; font-weight: 600; color: #fff;">-</div>
+            <div id="detailStatusContainer" style="margin-top: 4px;">
+              <span id="detailStatusPill" class="badge badge-paid">CONFIRMED</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Patient Info -->
+        <div style="display: flex; gap: 12px; margin-bottom: 16px;">
+          <div style="color: var(--sky); padding-top: 2px;">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          </div>
+          <div>
+            <div id="detailPatientName" style="font-size: 13.5px; font-weight: 600; color: #fff;">-</div>
+            <div style="display: flex; align-items: center; gap: 8px; margin-top: 4px;">
+              <span id="detailPatientPhone" class="mono" style="font-size: 12px; color: var(--text-muted);">-</span>
+              <a id="detailWhatsAppLink" href="#" target="_blank" style="text-decoration: none;">
+                <span class="badge" style="background: rgba(36, 180, 126, 0.15); color: var(--emerald-text); border: 1px solid var(--emerald-border); cursor: pointer; font-size: 11px;">
+                  Open WhatsApp Chat ↗
+                </span>
+              </a>
+            </div>
+          </div>
+        </div>
+
+        <!-- Location / Address -->
+        <div style="display: flex; gap: 12px; margin-bottom: 16px;">
+          <div style="color: #f43f5e; padding-top: 2px;">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+          </div>
+          <div>
+            <div style="font-size: 11px; text-transform: uppercase; color: var(--text-subtle); letter-spacing: 0.05em;">Location / Address</div>
+            <div id="detailAddress" style="font-size: 13px; color: #e4e4e7; margin-top: 2px;">-</div>
+          </div>
+        </div>
+
+        <!-- Booking Notes / Directives -->
+        <div id="detailNotesContainer" style="background: #0d0e11; border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px; margin-top: 10px;">
+          <div style="font-size: 11px; color: var(--text-subtle);">Booking Notes:</div>
+          <div id="detailNotes" style="font-size: 12.5px; color: var(--text-muted); margin-top: 3px;">-</div>
+        </div>
+      </div>
+      <div class="modal-footer" style="display: flex; justify-content: space-between; align-items: center;">
+        <button class="btn btn-danger" id="detailCancelBtn" onclick="cancelFromDetails()">Cancel Visit</button>
+        <div style="display: flex; gap: 8px;">
+          <button class="btn btn-purple" id="detailRescheduleBtn" onclick="openRescheduleFromDetails()">
+            AI Reschedule
+          </button>
+          <button class="btn btn-emerald" id="detailCompleteBtn" onclick="completeFromDetails()">
+            Complete & Bill
+          </button>
         </div>
       </div>
     </div>
+  </div>
 
-    <!-- Tab 2: Weekly Work Hours & Availability -->
-    <div id="tab-availability" class="panel">
-      <div class="card">
-        <div class="card-header">
-          <div>
-            <h2>Weekly Work Hours</h2>
-            <p>Interactive week schedule. Drag green handles or blocks to set your bookable hours, or use presets.</p>
-          </div>
-          <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
-            <div class="preset-pills">
-              <button class="preset-btn" onclick="applyPreset('standard')">Standard 9-5 (M-F)</button>
-              <button class="preset-btn" onclick="applyPreset('extended')">Extended 8-6 (M-Sat)</button>
-              <button class="preset-btn" onclick="applyPreset('all')">All 7 Days</button>
-            </div>
-            <button class="btn btn-emerald" onclick="saveAllWeeklyHours()">Save All Weekly Hours</button>
-          </div>
+  <!-- Weekly Work Hours Drawer / Settings Modal -->
+  <div id="workHoursModal" class="modal-backdrop">
+    <div class="modal-card" style="max-width: 580px;">
+      <div class="modal-header">
+        <div>
+          <h3 style="margin: 0; color: #fff; font-size: 15px;">Weekly Work Hours</h3>
+          <p style="margin: 2px 0 0; font-size: 12px; color: var(--text-subtle);">Set your weekly practice schedule and bookable time windows.</p>
         </div>
-
-        <div style="padding: 18px 20px 0;">
-          <!-- Visual Teams-Style Week Calendar Grid -->
-          <div class="calendar-week-container">
-            <div class="calendar-week-header-bar">
-              <div style="font-size: 12px; font-weight: 600; color: #fff; display: flex; align-items: center; gap: 8px;">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--emerald)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
-                  <line x1="16" y1="2" x2="16" y2="6"></line>
-                  <line x1="8" y1="2" x2="8" y2="6"></line>
-                  <line x1="3" y1="10" x2="21" y2="10"></line>
-                </svg>
-                <span>Week Availability & Appointments Overview</span>
-              </div>
-              <div style="display: flex; align-items: center; gap: 14px; font-size: 11px; color: var(--text-subtle);">
-                <span style="display: flex; align-items: center; gap: 5px;">
-                  <span style="width: 10px; height: 10px; border-radius: 2px; background: var(--emerald-subtle); border: 1px solid var(--emerald);"></span>
-                  Bookable Window (Drag to Adjust)
-                </span>
-                <span style="display: flex; align-items: center; gap: 5px;">
-                  <span style="width: 10px; height: 10px; border-radius: 2px; background: rgba(56, 189, 248, 0.25); border: 1px solid rgba(56, 189, 248, 0.5);"></span>
-                  Booked Patient Visits
-                </span>
-              </div>
-            </div>
-            <div class="calendar-week-body">
-              <div class="time-axis" id="timeAxis"></div>
-              <div class="days-columns-grid" id="daysColumnsGrid"></div>
-            </div>
-          </div>
-        </div>
-
-        <div class="card-body" style="border-top: 1px solid var(--border); padding-top: 18px;">
-          <div style="font-size: 12.5px; font-weight: 600; color: var(--text-muted); margin-bottom: 10px;">Exact Hours & Single Day Controls</div>
-          <div id="weeklyRulesList"></div>
-        </div>
+        <button onclick="closeWorkHoursModal()" style="background: transparent; border: none; color: var(--text-muted); cursor: pointer; font-size: 18px;">✕</button>
       </div>
+      <div class="modal-body" style="max-height: 480px; overflow-y: auto;">
+        <div style="display: flex; gap: 6px; margin-bottom: 16px;">
+          <button class="preset-btn" onclick="applyPreset('standard')">Standard 9-5 (M-F)</button>
+          <button class="preset-btn" onclick="applyPreset('extended')">Extended 8-6 (M-Sat)</button>
+          <button class="preset-btn" onclick="applyPreset('all')">All 7 Days</button>
+        </div>
+        <div id="weeklyRulesList"></div>
 
-      <!-- Vacation Overrides -->
-      <div class="card">
-        <div class="card-header">
-          <div>
-            <h2>Date Overrides & Blockouts</h2>
-            <p>Block out specific days (holidays, conferences) or set one-off custom hours.</p>
+        <!-- Date Blockouts -->
+        <div style="margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--border);">
+          <div style="font-size: 12.5px; font-weight: 600; color: #fff; margin-bottom: 8px;">Date Blockouts & Holidays</div>
+          <div style="max-height: 120px; overflow-y: auto; margin-bottom: 12px;">
+            <table id="overridesTable">
+              <thead>
+                <tr><th>Date</th><th>Status</th><th>Reason</th><th>Action</th></tr>
+              </thead>
+              <tbody></tbody>
+            </table>
           </div>
-        </div>
-        <div class="table-container">
-          <table id="overridesTable">
-            <thead>
-              <tr>
-                <th>Date</th>
-                <th>Status</th>
-                <th>Hours</th>
-                <th>Reason</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody></tbody>
-          </table>
-        </div>
-        <div class="card-body" style="border-top: 1px solid var(--border); background: var(--surface-elevated);">
-          <div style="font-size: 13px; font-weight: 600; margin-bottom: 12px; color: #fff;">Add New Date Override</div>
-          <div style="display: flex; gap: 14px; align-items: flex-end; flex-wrap: wrap;">
+          <div style="display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap;">
             <div>
-              <label style="font-size: 11.5px; color: var(--text-muted); display: block; margin-bottom: 4px;">Date</label>
-              <input type="date" id="overrideDate" style="width: 170px;">
+              <label style="font-size: 11px; color: var(--text-subtle); display: block; margin-bottom: 3px;">Date</label>
+              <input type="date" id="overrideDate" style="width: 140px;">
             </div>
             <div>
-              <label style="font-size: 11.5px; color: var(--text-muted); display: block; margin-bottom: 4px;">Reason / Notes</label>
-              <input type="text" id="overrideReason" placeholder="e.g. Vacation, Conference" style="width: 280px;">
+              <label style="font-size: 11px; color: var(--text-subtle); display: block; margin-bottom: 3px;">Reason</label>
+              <input type="text" id="overrideReason" placeholder="e.g. Vacation" style="width: 200px;">
             </div>
-            <button class="btn btn-emerald" onclick="addOverride()">Add Blockout</button>
+            <button class="btn btn-emerald" onclick="addOverride()">Add Off Day</button>
           </div>
         </div>
       </div>
-    </div>
-
-    <!-- Tab 3: Billing & Invoices -->
-    <div id="tab-invoices" class="panel">
-      <div class="card">
-        <div class="card-header">
-          <div>
-            <h2>Invoices & Receipts</h2>
-            <p>Generated strictly from completed visits and delivered instantly to patients on WhatsApp.</p>
-          </div>
-          <button class="btn btn-secondary" onclick="loadInvoices()">Refresh</button>
-        </div>
-        <div class="table-container">
-          <table id="invoicesTable">
-            <thead>
-              <tr>
-                <th>Invoice</th>
-                <th>Patient</th>
-                <th>Service</th>
-                <th>Amount</th>
-                <th>Status</th>
-                <th>Date Issued</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody></tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-
-    <!-- Tab 4: Alerts & Human Escalations -->
-    <div id="tab-alerts" class="panel">
-      <div class="card">
-        <div class="card-header">
-          <div>
-            <h2>Alerts & Human Escalations</h2>
-            <p>Delivery tracking failures, opt-outs, and patient requests for staff assistance.</p>
-          </div>
-          <button class="btn btn-secondary" onclick="loadAlerts()">Refresh</button>
-        </div>
-        <div class="table-container">
-          <table id="alertsTable">
-            <thead>
-              <tr>
-                <th>Type</th>
-                <th>Title</th>
-                <th>Details</th>
-                <th>Status</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody></tbody>
-          </table>
-        </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeWorkHoursModal()">Close</button>
+        <button class="btn btn-emerald" onclick="saveAllWeeklyHours()">Save All Weekly Hours</button>
       </div>
     </div>
   </div>
@@ -1175,11 +998,11 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
   <div id="aiRescheduleModal" class="modal-backdrop">
     <div class="modal-card">
       <div class="modal-header">
-        <h3>Prompt AI to Reschedule</h3>
+        <h3 style="font-size: 15px; color: #fff;">Prompt AI to Reschedule</h3>
         <button onclick="closeRescheduleModal()" style="background: transparent; border: none; color: var(--text-muted); cursor: pointer; font-size: 16px;">✕</button>
       </div>
       <div class="modal-body">
-        <div style="background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 12px 14px; margin-bottom: 16px;">
+        <div style="background: #0d0e11; border: 1px solid var(--border); border-radius: 6px; padding: 12px 14px; margin-bottom: 16px;">
           <div style="font-size: 13.5px; font-weight: 600; color: #fff;" id="modalPatientName">-</div>
           <div style="font-size: 12px; color: var(--text-muted); margin-top: 2px;" id="modalApptTime">-</div>
         </div>
@@ -1189,14 +1012,14 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
         </label>
         
         <div class="chip-group">
-          <span class="chip" onclick="applyDirective('Hospital surgery emergency, please pick another day')">Hospital Emergency</span>
-          <span class="chip" onclick="applyDirective('Doctor unavailable on this morning, suggest afternoon slots')">Morning Conflict</span>
+          <span class="chip" onclick="applyDirective('Hospital emergency, please pick another day')">Hospital Emergency</span>
+          <span class="chip" onclick="applyDirective('Doctor unavailable this morning, suggest afternoon slots')">Morning Conflict</span>
           <span class="chip" onclick="applyDirective('Suggest Wednesday 2pm or Thursday 11am')">Offer Wed / Thu</span>
         </div>
 
-        <textarea id="modalDoctorPrompt" rows="3" style="width: 100%; max-width: 100%;" placeholder="e.g. Schedule conflict on Tuesday morning. Inquire if Wednesday afternoon or Thursday works best."></textarea>
+        <textarea id="modalDoctorPrompt" rows="3" style="width: 100%; max-width: 100%;" placeholder="e.g. Doctor called into surgery. Propose alternative slots on Thursday or Friday."></textarea>
         <p style="font-size: 11.5px; color: var(--text-subtle); margin-top: 6px;">
-          The AI will compose a polite WhatsApp message with open candidate slots and send it directly to the patient.
+          The AI will compose a natural WhatsApp message with candidate slots from your working hours and dispatch it to the patient.
         </p>
       </div>
       <div class="modal-footer">
@@ -1208,7 +1031,7 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
     </div>
   </div>
 
-  <!-- Toast Notification -->
+  <!-- Toast Notification & Drag Tooltip -->
   <div class="toast-container">
     <div id="statusToast" class="toast">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--emerald-text)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
@@ -1217,104 +1040,306 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
       <span id="toastMessage">Success</span>
     </div>
   </div>
-
   <div id="dragTooltip" class="drag-tooltip"></div>
 
   <script>
-    const adminKey = "${key}";
-    const headers = {
+    var adminKey = "${key}";
+    var headers = {
       'Content-Type': 'application/json',
       'Authorization': 'Bearer ' + adminKey
     };
 
-    let activeRescheduleApptId = null;
-    let cachedRules = [];
-    let cachedAppointments = [];
-    let dragState = null;
+    var cachedRules = [];
+    var cachedAppointments = [];
+    var activeSelectedAppt = null;
+    var activeRescheduleApptId = null;
+    var dragState = null;
+
+    var START_HOUR = 7;
+    var END_HOUR = 21;
+    var TOTAL_MINUTES = (END_HOUR - START_HOUR) * 60;
+    var TRACK_HEIGHT = 504;
+    var PX_PER_MIN = TRACK_HEIGHT / TOTAL_MINUTES;
+
+    function getMonday(d) {
+      var date = new Date(d);
+      var day = date.getDay();
+      var diff = date.getDate() - day + (day === 0 ? -6 : 1);
+      var monday = new Date(date.setDate(diff));
+      monday.setHours(0, 0, 0, 0);
+      return monday;
+    }
+
+    var currentWeekMonday = getMonday(new Date());
+
+    function prevWeek() {
+      currentWeekMonday.setDate(currentWeekMonday.getDate() - 7);
+      renderWeeklyGrid();
+    }
+
+    function nextWeek() {
+      currentWeekMonday.setDate(currentWeekMonday.getDate() + 7);
+      renderWeeklyGrid();
+    }
+
+    function todayWeek() {
+      currentWeekMonday = getMonday(new Date());
+      renderWeeklyGrid();
+    }
 
     function showToast(msg) {
-      const toast = document.getElementById('statusToast');
-      const msgElem = document.getElementById('toastMessage');
+      var toast = document.getElementById('statusToast');
+      var msgElem = document.getElementById('toastMessage');
       msgElem.innerText = msg;
       toast.style.display = 'flex';
-      setTimeout(() => { toast.style.display = 'none'; }, 4000);
+      setTimeout(function() { toast.style.display = 'none'; }, 4000);
     }
 
-    function showTab(tabId, btn) {
-      document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
-      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-      document.getElementById(tabId).classList.add('active');
-      if (btn) btn.classList.add('active');
+    function timeToMinutes(tStr) {
+      if (!tStr) return START_HOUR * 60;
+      var parts = tStr.split(':');
+      var h = parseInt(parts[0], 10) || 0;
+      var m = parseInt(parts[1], 10) || 0;
+      return h * 60 + m;
     }
 
-    async function loadAppointments() {
-      try {
-        const res = await fetch('/admin/api/appointments?key=' + adminKey, { headers });
-        const data = await res.json();
-        const tbody = document.querySelector('#appointmentsTable tbody');
-        
-        cachedAppointments = data.appointments || [];
-        renderWeeklyGrid();
-        
-        let homeCount = 0;
-        let officeCount = 0;
+    function minutesToTime(mins) {
+      var clamped = Math.max(START_HOUR * 60, Math.min(END_HOUR * 60, mins));
+      var h = Math.floor(clamped / 60);
+      var m = clamped % 60;
+      return String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0');
+    }
 
-        if (!data.appointments || data.appointments.length === 0) {
-          tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: var(--text-subtle); padding: 32px;">No appointments found.</td></tr>';
-          document.getElementById('kpiApptsCount').innerText = '0';
-          return;
+    function minutesToY(mins) {
+      var clamped = Math.max(START_HOUR * 60, Math.min(END_HOUR * 60, mins));
+      return (clamped - (START_HOUR * 60)) * PX_PER_MIN;
+    }
+
+    function renderTimeAxis() {
+      var axis = document.getElementById('timeAxis');
+      if (!axis || axis.children.length > 0) return;
+      var html = '';
+      for (var h = START_HOUR; h <= END_HOUR; h++) {
+        var label = String(h).padStart(2, '0') + ':00';
+        html += '<div class="time-axis-slot">' + label + '</div>';
+      }
+      axis.innerHTML = html;
+    }
+
+    var DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+    function renderWeeklyGrid() {
+      renderTimeAxis();
+      var grid = document.getElementById('daysColumnsGrid');
+      if (!grid) return;
+
+      var weekDates = [];
+      for (var i = 0; i < 7; i++) {
+        var wd = new Date(currentWeekMonday);
+        wd.setDate(currentWeekMonday.getDate() + i);
+        weekDates.push(wd);
+      }
+
+      var months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      var firstD = weekDates[0];
+      var lastD = weekDates[6];
+      var rangeStr = months[firstD.getMonth()] + ' ' + firstD.getDate() + ' – ' + (firstD.getMonth() === lastD.getMonth() ? '' : months[lastD.getMonth()] + ' ') + lastD.getDate() + ', ' + firstD.getFullYear();
+      var monthYearElem = document.getElementById('currentMonthYear');
+      if (monthYearElem) monthYearElem.innerText = rangeStr;
+
+      var todayStr = new Date().toDateString();
+      var colsHtml = '';
+
+      for (var colIdx = 0; colIdx < 7; colIdx++) {
+        var colDate = weekDates[colIdx];
+        var dayOfWeek = colDate.getDay();
+        var isToday = (colDate.toDateString() === todayStr);
+
+        var rule = null;
+        for (var r = 0; r < cachedRules.length; r++) {
+          if (Number(cachedRules[r].day_of_week) === dayOfWeek) {
+            rule = cachedRules[r];
+            break;
+          }
+        }
+        if (!rule) {
+          rule = { day_of_week: dayOfWeek, start_time: '09:00', end_time: '17:00', is_active: false };
         }
 
-        data.appointments.forEach(a => {
-          if (a.visit_type === 'home_visit') homeCount++; else officeCount++;
+        var isActive = Boolean(rule.is_active);
+        var startMins = timeToMinutes(rule.start_time);
+        var endMins = timeToMinutes(rule.end_time);
+        var topY = minutesToY(startMins);
+        var bottomY = minutesToY(endMins);
+        var height = Math.max(24, bottomY - topY);
+
+        var dayAppts = cachedAppointments.filter(function(a) {
+          if (a.status === 'cancelled') return false;
+          var aDate = new Date(a.start_time);
+          return aDate.getFullYear() === colDate.getFullYear() &&
+                 aDate.getMonth() === colDate.getMonth() &&
+                 aDate.getDate() === colDate.getDate();
         });
 
-        document.getElementById('kpiApptsCount').innerText = data.appointments.length;
-        document.getElementById('kpiApptsBreakdown').innerText = \`\${officeCount} In-Office • \${homeCount} Home Visits\`;
+        var apptsHtml = '';
+        for (var aIdx = 0; aIdx < dayAppts.length; aIdx++) {
+          var appt = dayAppts[aIdx];
+          var aStart = new Date(appt.start_time);
+          var aEnd = appt.end_time ? new Date(appt.end_time) : new Date(aStart.getTime() + 45*60*1000);
+          var aStartMin = aStart.getHours() * 60 + aStart.getMinutes();
+          var aEndMin = aEnd.getHours() * 60 + aEnd.getMinutes();
+          if (aEndMin <= aStartMin) aEndMin = aStartMin + 45;
 
-        tbody.innerHTML = data.appointments.map(a => \`
-          <tr>
-            <td>
-              <strong style="color: #fff;">\${a.customer_name || 'Patient'}</strong>
-              <div class="mono" style="font-size: 11.5px; color: var(--text-subtle); margin-top: 2px;">\${a.customer_phone}</div>
-            </td>
-            <td><strong>\${a.service}</strong></td>
-            <td>
-              <span class="badge \${a.visit_type === 'home_visit' ? 'badge-home' : 'badge-office'}">
-                \${a.visit_type === 'home_visit' ? 'Home Visit' : 'In-Office'}
-              </span>
-            </td>
-            <td>
-              <div style="font-size: 12.5px;">\${a.address || '<span style="color: var(--text-subtle);">Clinic Office</span>'}</div>
-              \${a.notes ? '<div style="font-size: 11.5px; color: var(--purple); margin-top: 3px;">' + a.notes.substring(0, 60) + '...</div>' : ''}
-            </td>
-            <td>
-              <div style="font-weight: 500; color: #fff;">\${new Date(a.start_time).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}</div>
-              <div class="mono" style="font-size: 11.5px; color: var(--text-muted);">\${new Date(a.start_time).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}</div>
-            </td>
-            <td>
-              <span class="badge \${
-                a.status === 'confirmed' ? 'badge-paid' :
-                a.status === 'rescheduled' ? 'badge-rescheduled' :
-                a.status === 'completed' ? 'badge-paid' :
-                a.status === 'cancelled' ? 'badge-unpaid' : 'badge-pending'
-              }">\${a.status.toUpperCase()}</span>
-            </td>
-            <td>
-              <div style="display: flex; gap: 6px;">
-                \${a.status !== 'completed' && a.status !== 'cancelled' ? \`
-                  <button class="btn btn-purple" onclick="openRescheduleModal('\${a.id}', '\${(a.customer_name || 'Patient').replace(/'/g, "\\\\'")}', '\${a.start_time}')">AI Reschedule</button>
-                  <button class="btn btn-secondary" onclick="completeAndBill('\${a.id}')">Complete & Bill</button>
-                \` : '<span style="color: var(--text-subtle); font-size: 12px;">Archived</span>'}
-              </div>
-            </td>
-          </tr>
-        \`).join('');
-      } catch (e) {
-        console.error(e);
+          var aTop = minutesToY(aStartMin);
+          var aHeight = Math.max(36, (aEndMin - aStartMin) * PX_PER_MIN);
+          var isHome = (appt.visit_type === 'home_visit');
+          var timeStr = aStart.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+          var safeName = (appt.customer_name || 'Patient').replace(/"/g, '&quot;');
+          var safeService = (appt.service || 'Consultation').replace(/"/g, '&quot;');
+          var locLabel = isHome ? ('Home: ' + (appt.address || 'Address provided')) : 'In-Office Clinic';
+
+          apptsHtml += '<div class="teams-meeting-card ' + (isHome ? 'home-visit' : 'in-office') + '" ' +
+            'style="top: ' + aTop + 'px; height: ' + aHeight + 'px;" ' +
+            'onclick="openReservationModal(\'' + appt.id + '\')">' +
+            '<div class="meeting-title">' + safeService + '</div>' +
+            '<div class="meeting-time">' + timeStr + '</div>' +
+            '<div class="meeting-patient">' + safeName + '</div>' +
+            '<div class="meeting-badge">' + locLabel + '</div>' +
+            '</div>';
+        }
+
+        colsHtml += '<div class="day-column" data-day="' + dayOfWeek + '">' +
+          '<div class="day-col-header">' +
+            '<div class="day-header-meta">' +
+              '<span class="day-abbr">' + DAY_NAMES[colIdx] + '</span>' +
+              '<span class="day-num ' + (isToday ? 'today' : '') + '">' + colDate.getDate() + '</span>' +
+            '</div>' +
+            '<span class="day-col-status ' + (isActive ? '' : 'closed') + '" onclick="toggleDayOpen(' + dayOfWeek + ')" title="Click to toggle bookable/closed">' +
+              (isActive ? (rule.start_time + ' - ' + rule.end_time) : 'Closed') +
+            '</span>' +
+          '</div>' +
+          '<div class="day-col-track ' + (isActive ? '' : 'day-closed') + '" id="track-' + dayOfWeek + '" data-day="' + dayOfWeek + '">';
+
+        if (!isActive) {
+          colsHtml += '<button class="closed-overlay-btn" onclick="toggleDayOpen(' + dayOfWeek + ')">+ Open ' + DAY_NAMES[colIdx] + '</button>';
+        } else {
+          colsHtml += '<div class="avail-block" id="availBlock-' + dayOfWeek + '" data-day="' + dayOfWeek + '" style="top: ' + topY + 'px; height: ' + height + 'px;">' +
+            '<div class="avail-drag-handle top" data-handle="top" data-day="' + dayOfWeek + '" title="Drag to adjust start time"></div>' +
+            '<div class="avail-block-label" data-handle="move" data-day="' + dayOfWeek + '" title="Drag to shift work hours">' +
+              '<span id="blockLabel-' + dayOfWeek + '">' + rule.start_time + ' - ' + rule.end_time + '</span>' +
+            '</div>' +
+            '<div class="avail-drag-handle bottom" data-handle="bottom" data-day="' + dayOfWeek + '" title="Drag to adjust end time"></div>' +
+          '</div>';
+        }
+
+        colsHtml += apptsHtml + '</div></div>';
       }
+
+      grid.innerHTML = colsHtml;
     }
 
+    // Teams Meeting Details Popover Modal
+    function openReservationModal(id) {
+      var appt = null;
+      for (var i = 0; i < cachedAppointments.length; i++) {
+        if (cachedAppointments[i].id === id) {
+          appt = cachedAppointments[i];
+          break;
+        }
+      }
+      if (!appt) return;
+      activeSelectedAppt = appt;
+
+      var isHome = (appt.visit_type === 'home_visit');
+      var badge = document.getElementById('detailVisitBadge');
+      badge.className = 'badge ' + (isHome ? 'badge-home' : 'badge-office');
+      badge.innerText = isHome ? 'HOME VISIT' : 'IN-OFFICE';
+
+      document.getElementById('detailServiceTitle').innerText = appt.service || 'Medical Consultation';
+
+      var startDate = new Date(appt.start_time);
+      var endDate = appt.end_time ? new Date(appt.end_time) : new Date(startDate.getTime() + 60*60*1000);
+      var dateStr = startDate.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric' });
+      var timeStr = startDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ' – ' + endDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      document.getElementById('detailDateTime').innerText = dateStr + ' • ' + timeStr;
+
+      var statusBadge = document.getElementById('detailStatusPill');
+      var st = (appt.status || 'confirmed').toLowerCase();
+      statusBadge.className = 'badge ' + (st === 'confirmed' ? 'badge-paid' : st === 'rescheduled' ? 'badge-rescheduled' : st === 'completed' ? 'badge-paid' : 'badge-pending');
+      statusBadge.innerText = st.toUpperCase();
+
+      document.getElementById('detailPatientName').innerText = appt.customer_name || 'Patient';
+      document.getElementById('detailPatientPhone').innerText = appt.customer_phone || '-';
+
+      var cleanPhone = (appt.customer_phone || '').replace(/[^0-9]/g, '');
+      var waLink = document.getElementById('detailWhatsAppLink');
+      if (cleanPhone) {
+        waLink.href = 'https://wa.me/' + cleanPhone;
+        waLink.style.display = 'inline-block';
+      } else {
+        waLink.style.display = 'none';
+      }
+
+      var addrElem = document.getElementById('detailAddress');
+      if (isHome) {
+        var rawAddr = appt.address || 'Address provided via WhatsApp';
+        addrElem.innerHTML = rawAddr + ' &nbsp;<a href="https://maps.google.com/?q=' + encodeURIComponent(rawAddr) + '" target="_blank" style="color: var(--sky); font-size: 11.5px; text-decoration: underline;">Open in Maps ↗</a>';
+      } else {
+        addrElem.innerText = 'Clinic Office (In-Person Patient Visit)';
+      }
+
+      var notesElem = document.getElementById('detailNotes');
+      var notesBox = document.getElementById('detailNotesContainer');
+      if (appt.notes) {
+        notesElem.innerText = appt.notes;
+        notesBox.style.display = 'block';
+      } else {
+        notesBox.style.display = 'none';
+      }
+
+      document.getElementById('reservationDetailsModal').classList.add('active');
+    }
+
+    function closeReservationModal() {
+      document.getElementById('reservationDetailsModal').classList.remove('active');
+      activeSelectedAppt = null;
+    }
+
+    function openRescheduleFromDetails() {
+      if (!activeSelectedAppt) return;
+      var a = activeSelectedAppt;
+      closeReservationModal();
+      openRescheduleModal(a.id, a.customer_name || 'Patient', a.start_time);
+    }
+
+    async function completeFromDetails() {
+      if (!activeSelectedAppt) return;
+      if (!confirm('Mark visit as completed and dispatch invoice receipt to patient on WhatsApp?')) return;
+      await fetch('/admin/api/appointments/' + activeSelectedAppt.id + '/complete?key=' + adminKey, { method: 'POST', headers: headers });
+      showToast('Appointment completed & WhatsApp receipt dispatched.');
+      closeReservationModal();
+      loadAppointments();
+    }
+
+    async function cancelFromDetails() {
+      if (!activeSelectedAppt) return;
+      if (!confirm('Are you sure you want to cancel this visit?')) return;
+      await fetch('/admin/api/appointments/' + activeSelectedAppt.id + '/cancel?key=' + adminKey, { method: 'POST', headers: headers });
+      showToast('Appointment cancelled.');
+      closeReservationModal();
+      loadAppointments();
+    }
+
+    // Work Hours Modal
+    function openWorkHoursModal() {
+      document.getElementById('workHoursModal').classList.add('active');
+    }
+
+    function closeWorkHoursModal() {
+      document.getElementById('workHoursModal').classList.remove('active');
+    }
+
+    // AI Reschedule Modal
     function openRescheduleModal(id, name, startTime) {
       activeRescheduleApptId = id;
       document.getElementById('modalPatientName').innerText = 'Patient: ' + name;
@@ -1334,371 +1359,33 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
 
     async function submitAiReschedule() {
       if (!activeRescheduleApptId) return;
-      const promptText = document.getElementById('modalDoctorPrompt').value;
-      const btn = document.getElementById('modalSubmitBtn');
+      var promptText = document.getElementById('modalDoctorPrompt').value;
+      var btn = document.getElementById('modalSubmitBtn');
       btn.innerText = 'Dispatching...';
       btn.disabled = true;
 
       try {
-        const res = await fetch('/admin/api/appointments/' + activeRescheduleApptId + '/request-reschedule?key=' + adminKey, {
+        var res = await fetch('/admin/api/appointments/' + activeRescheduleApptId + '/request-reschedule?key=' + adminKey, {
           method: 'POST',
-          headers,
+          headers: headers,
           body: JSON.stringify({ doctorPrompt: promptText })
         });
-        const data = await res.json();
+        var data = await res.json();
         closeRescheduleModal();
 
         if (data.success) {
-          showToast("AI reschedule outreach sent to patient via WhatsApp");
+          showToast('AI reschedule outreach sent to patient via WhatsApp.');
           loadAppointments();
         } else {
-          alert("Error: " + (data.error || "Failed to trigger AI reschedule"));
+          alert('Error: ' + (data.error || 'Failed to trigger AI reschedule'));
         }
       } catch (err) {
-        alert("Network error: " + err.message);
+        alert('Network error: ' + err.message);
       } finally {
         btn.innerText = 'Dispatch WhatsApp Request';
         btn.disabled = false;
       }
     }
-
-    async function completeAndBill(id) {
-      if (!confirm('Mark visit as completed and dispatch invoice to patient on WhatsApp?')) return;
-      await fetch('/admin/api/appointments/' + id + '/complete?key=' + adminKey, { method: 'POST', headers });
-      showToast("Appointment completed & invoice sent.");
-      loadAppointments();
-      loadInvoices();
-    }
-
-    async function loadInvoices() {
-      try {
-        const res = await fetch('/admin/api/invoices?key=' + adminKey, { headers });
-        const data = await res.json();
-        const tbody = document.querySelector('#invoicesTable tbody');
-
-        let totalRev = 0;
-        let unpaidCount = 0;
-
-        if (!data.invoices || data.invoices.length === 0) {
-          tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: var(--text-subtle); padding: 32px;">No invoices generated yet.</td></tr>';
-          document.getElementById('kpiRevenueSum').innerText = '$0.00';
-          document.getElementById('kpiInvoicesUnpaid').innerText = '0 Unpaid Invoices';
-          return;
-        }
-
-        data.invoices.forEach(i => {
-          totalRev += Number(i.amount);
-          if (i.status === 'unpaid') unpaidCount++;
-        });
-
-        document.getElementById('kpiRevenueSum').innerText = '$' + totalRev.toFixed(2);
-        document.getElementById('kpiInvoicesUnpaid').innerText = \`\${unpaidCount} Pending / Unpaid\`;
-
-        tbody.innerHTML = data.invoices.map(i => \`
-          <tr>
-            <td><span class="mono" style="color: var(--emerald); font-weight: 500;">\${i.id.substring(0,8).toUpperCase()}</span></td>
-            <td><strong>\${i.customer_name || i.customer_phone}</strong></td>
-            <td>\${i.service_description}</td>
-            <td class="mono" style="font-weight: 600; color: #fff;">$\${Number(i.amount).toFixed(2)} \${i.currency}</td>
-            <td><span class="badge \${i.status === 'paid' ? 'badge-paid' : 'badge-unpaid'}">\${i.status.toUpperCase()}</span></td>
-            <td>\${new Date(i.created_at).toLocaleDateString()}</td>
-            <td>
-              \${i.status === 'unpaid' ? \`<button class="btn btn-emerald" onclick="markPaid('\${i.id}')">Mark Paid</button>\` : '<span style="color: var(--emerald); font-size: 12.5px;">Paid</span>'}
-            </td>
-          </tr>
-        \`).join('');
-      } catch (e) {
-        console.error(e);
-      }
-    }
-
-    async function markPaid(id) {
-      await fetch('/admin/api/invoices/' + id + '/pay?key=' + adminKey, { method: 'POST', headers });
-      showToast("Payment recorded. WhatsApp confirmation receipt dispatched.");
-      loadInvoices();
-    }
-
-    async function loadAlerts() {
-      try {
-        const res = await fetch('/admin/api/alerts?key=' + adminKey, { headers });
-        const data = await res.json();
-        const tbody = document.querySelector('#alertsTable tbody');
-
-        const pending = (data.alerts || []).filter(a => a.status === 'pending');
-        document.getElementById('kpiAlertsCount').innerText = pending.length;
-        document.getElementById('kpiAlertsSub').innerText = pending.length === 0 ? 'All systems nominal' : \`\${pending.length} require review\`;
-
-        if (!data.alerts || data.alerts.length === 0) {
-          tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--text-subtle); padding: 32px;">No alerts. System running smoothly.</td></tr>';
-          return;
-        }
-
-        tbody.innerHTML = data.alerts.map(a => \`
-          <tr>
-            <td><span class="badge badge-pending">\${a.type}</span></td>
-            <td><strong>\${a.title}</strong></td>
-            <td style="color: var(--text-muted); font-size: 13px;">\${a.details}</td>
-            <td><span class="badge \${a.status === 'resolved' ? 'badge-paid' : 'badge-unpaid'}">\${a.status}</span></td>
-            <td>
-              \${a.status === 'pending' ? \`<button class="btn btn-secondary" onclick="resolveAlert('\${a.id}')">Resolve</button>\` : '<span style="color: var(--text-subtle); font-size: 12px;">Resolved</span>'}
-            </td>
-          </tr>
-        \`).join('');
-      } catch (e) {
-        console.error(e);
-      }
-    }
-
-    async function resolveAlert(id) {
-      await fetch('/admin/api/alerts/' + id + '/resolve?key=' + adminKey, { method: 'POST', headers });
-      showToast("Alert resolved.");
-      loadAlerts();
-    }
-
-    const START_HOUR = 7;
-    const END_HOUR = 21;
-    const TOTAL_MINUTES = (END_HOUR - START_HOUR) * 60;
-    const TRACK_HEIGHT = 504;
-    const PX_PER_MIN = TRACK_HEIGHT / TOTAL_MINUTES;
-
-    function timeToMinutes(tStr) {
-      if (!tStr) return START_HOUR * 60;
-      const parts = tStr.split(':');
-      const h = parseInt(parts[0], 10) || 0;
-      const m = parseInt(parts[1], 10) || 0;
-      return h * 60 + m;
-    }
-
-    function minutesToTime(mins) {
-      const clamped = Math.max(START_HOUR * 60, Math.min(END_HOUR * 60, mins));
-      const h = Math.floor(clamped / 60);
-      const m = clamped % 60;
-      return String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0');
-    }
-
-    function minutesToY(mins) {
-      const clamped = Math.max(START_HOUR * 60, Math.min(END_HOUR * 60, mins));
-      return (clamped - (START_HOUR * 60)) * PX_PER_MIN;
-    }
-
-    function renderTimeAxis() {
-      const axis = document.getElementById('timeAxis');
-      if (!axis || axis.children.length > 0) return;
-      let html = '';
-      for (let h = START_HOUR; h <= END_HOUR; h++) {
-        const label = String(h).padStart(2, '0') + ':00';
-        html += '<div class="time-axis-slot">' + label + '</div>';
-      }
-      axis.innerHTML = html;
-    }
-
-    const WEEK_DAYS = [
-      { day: 1, name: 'Mon', full: 'Monday' },
-      { day: 2, name: 'Tue', full: 'Tuesday' },
-      { day: 3, name: 'Wed', full: 'Wednesday' },
-      { day: 4, name: 'Thu', full: 'Thursday' },
-      { day: 5, name: 'Fri', full: 'Friday' },
-      { day: 6, name: 'Sat', full: 'Saturday' },
-      { day: 0, name: 'Sun', full: 'Sunday' }
-    ];
-
-    function renderWeeklyGrid() {
-      renderTimeAxis();
-      var grid = document.getElementById('daysColumnsGrid');
-      if (!grid) return;
-
-      var colsHtml = '';
-      for (var i = 0; i < WEEK_DAYS.length; i++) {
-        var d = WEEK_DAYS[i];
-        var rule = null;
-        for (var r = 0; r < cachedRules.length; r++) {
-          if (Number(cachedRules[r].day_of_week) === d.day) {
-            rule = cachedRules[r];
-            break;
-          }
-        }
-        if (!rule) {
-          rule = { day_of_week: d.day, start_time: '09:00', end_time: '17:00', is_active: false };
-        }
-
-        var isActive = Boolean(rule.is_active);
-        var startMins = timeToMinutes(rule.start_time);
-        var endMins = timeToMinutes(rule.end_time);
-        var topY = minutesToY(startMins);
-        var bottomY = minutesToY(endMins);
-        var height = Math.max(24, bottomY - topY);
-
-        var apptsHtml = '';
-        for (var aIdx = 0; aIdx < cachedAppointments.length; aIdx++) {
-          var a = cachedAppointments[aIdx];
-          if (a.status === 'cancelled') continue;
-          var aDate = new Date(a.start_time);
-          if (aDate.getDay() !== d.day) continue;
-          var aStartMins = aDate.getHours() * 60 + aDate.getMinutes();
-          var aEndMins = aStartMins + 45;
-          var aTop = minutesToY(aStartMins);
-          var aHeight = Math.max(22, (aEndMins - aStartMins) * PX_PER_MIN);
-          var isHome = (a.visit_type === 'home_visit');
-          var timeDisplay = aDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-          var safeName = (a.customer_name || 'Patient').replace(/"/g, '&quot;');
-          apptsHtml += '<div class="cal-appt-badge ' + (isHome ? 'home' : 'in-office') + '" ' +
-            'style="top: ' + aTop + 'px; height: ' + aHeight + 'px;" ' +
-            'title="' + safeName + ' - ' + a.service + ' (' + (isHome ? 'Home Visit' : 'In-Office') + ')" ' +
-            'onclick="openRescheduleModal(\'' + a.id + '\', \'' + safeName + '\', \'' + a.start_time + '\')">' +
-            '<strong>' + timeDisplay + '</strong> ' + safeName +
-            '</div>';
-        }
-
-        colsHtml += '<div class="day-column" data-day="' + d.day + '">' +
-          '<div class="day-col-header">' +
-            '<span class="day-col-name">' + d.name + '</span>' +
-            '<span class="day-col-status ' + (isActive ? '' : 'closed') + '" onclick="toggleDayOpen(' + d.day + ')" title="Click to toggle bookable/closed">' +
-              (isActive ? (rule.start_time + ' - ' + rule.end_time) : 'Closed') +
-            '</span>' +
-          '</div>' +
-          '<div class="day-col-track ' + (isActive ? '' : 'day-closed') + '" id="track-' + d.day + '" data-day="' + d.day + '">';
-
-        if (!isActive) {
-          colsHtml += '<button class="closed-overlay-btn" onclick="toggleDayOpen(' + d.day + ')">+ Open ' + d.name + '</button>';
-        } else {
-          colsHtml += '<div class="avail-block" id="availBlock-' + d.day + '" data-day="' + d.day + '" style="top: ' + topY + 'px; height: ' + height + 'px;">' +
-            '<div class="avail-drag-handle top" data-handle="top" data-day="' + d.day + '" title="Drag to adjust start time"></div>' +
-            '<div class="avail-block-label" data-handle="move" data-day="' + d.day + '" title="Drag whole block to shift hours">' +
-              '<div id="blockLabel-' + d.day + '">' + rule.start_time + ' - ' + rule.end_time + '</div>' +
-              '<span class="avail-block-sub">Bookable (Drag to move)</span>' +
-            '</div>' +
-            '<div class="avail-drag-handle bottom" data-handle="bottom" data-day="' + d.day + '" title="Drag to adjust end time"></div>' +
-          '</div>';
-        }
-
-        colsHtml += apptsHtml + '</div></div>';
-      }
-
-      grid.innerHTML = colsHtml;
-    }
-
-    function showDragTooltip(x, y, text) {
-      var tip = document.getElementById('dragTooltip');
-      if (!tip) return;
-      tip.innerText = text;
-      tip.style.left = x + 'px';
-      tip.style.top = y + 'px';
-      tip.style.display = 'block';
-    }
-
-    function hideDragTooltip() {
-      var tip = document.getElementById('dragTooltip');
-      if (tip) tip.style.display = 'none';
-    }
-
-    document.addEventListener('pointerdown', function(e) {
-      var handle = e.target.closest('[data-handle]');
-      if (!handle) return;
-      var day = Number(handle.getAttribute('data-day'));
-      var mode = handle.getAttribute('data-handle');
-      var block = document.getElementById('availBlock-' + day);
-      var track = document.getElementById('track-' + day);
-      if (!block || !track) return;
-
-      var rule = null;
-      for (var i = 0; i < cachedRules.length; i++) {
-        if (Number(cachedRules[i].day_of_week) === day) {
-          rule = cachedRules[i];
-          break;
-        }
-      }
-      var origStartMin = timeToMinutes(rule ? rule.start_time : '09:00');
-      var origEndMin = timeToMinutes(rule ? rule.end_time : '17:00');
-
-      dragState = {
-        mode: mode,
-        day: day,
-        startY: e.clientY,
-        origStartMin: origStartMin,
-        origEndMin: origEndMin,
-        currStartMin: origStartMin,
-        currEndMin: origEndMin,
-        block: block,
-        label: document.getElementById('blockLabel-' + day)
-      };
-
-      try {
-        handle.setPointerCapture(e.pointerId);
-      } catch (err) {}
-
-      showDragTooltip(e.clientX, e.clientY, minutesToTime(origStartMin) + ' - ' + minutesToTime(origEndMin));
-      e.preventDefault();
-    });
-
-    document.addEventListener('pointermove', function(e) {
-      if (!dragState) return;
-
-      var deltaY = e.clientY - dragState.startY;
-      var deltaMin = Math.round((deltaY / PX_PER_MIN) / 15) * 15;
-
-      var newStart = dragState.origStartMin;
-      var newEnd = dragState.origEndMin;
-
-      if (dragState.mode === 'top') {
-        newStart = Math.max(START_HOUR * 60, Math.min(dragState.origEndMin - 30, dragState.origStartMin + deltaMin));
-      } else if (dragState.mode === 'bottom') {
-        newEnd = Math.min(END_HOUR * 60, Math.max(dragState.origStartMin + 30, dragState.origEndMin + deltaMin));
-      } else if (dragState.mode === 'move') {
-        var duration = dragState.origEndMin - dragState.origStartMin;
-        newStart = Math.max(START_HOUR * 60, Math.min(END_HOUR * 60 - duration, dragState.origStartMin + deltaMin));
-        newEnd = newStart + duration;
-      }
-
-      dragState.currStartMin = newStart;
-      dragState.currEndMin = newEnd;
-
-      var topY = minutesToY(newStart);
-      var height = Math.max(24, minutesToY(newEnd) - topY);
-
-      dragState.block.style.top = topY + 'px';
-      dragState.block.style.height = height + 'px';
-      if (dragState.label) {
-        dragState.label.innerText = minutesToTime(newStart) + ' - ' + minutesToTime(newEnd);
-      }
-
-      showDragTooltip(e.clientX, e.clientY, minutesToTime(newStart) + ' - ' + minutesToTime(newEnd));
-    });
-
-    document.addEventListener('pointerup', async function(e) {
-      if (!dragState) return;
-      var day = dragState.day;
-      var currStartMin = dragState.currStartMin;
-      var currEndMin = dragState.currEndMin;
-      dragState = null;
-      hideDragTooltip();
-
-      var finalStart = minutesToTime(currStartMin);
-      var finalEnd = minutesToTime(currEndMin);
-
-      var startInput = document.getElementById('start-' + day);
-      var endInput = document.getElementById('end-' + day);
-      var activeInput = document.getElementById('active-' + day);
-      if (startInput) startInput.value = finalStart;
-      if (endInput) endInput.value = finalEnd;
-      if (activeInput) activeInput.checked = true;
-
-      var rule = null;
-      for (var i = 0; i < cachedRules.length; i++) {
-        if (Number(cachedRules[i].day_of_week) === day) {
-          rule = cachedRules[i];
-          break;
-        }
-      }
-      if (rule) {
-        rule.start_time = finalStart;
-        rule.end_time = finalEnd;
-        rule.is_active = true;
-      } else {
-        cachedRules.push({ day_of_week: day, start_time: finalStart, end_time: finalEnd, is_active: true });
-      }
-
-      await saveSingleDayHours(day);
-    });
 
     async function toggleDayOpen(day) {
       var rule = null;
@@ -1757,14 +1444,6 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
           start = '09:00';
           end = '18:00';
         }
-
-        var check = document.getElementById('active-' + day);
-        var startIn = document.getElementById('start-' + day);
-        var endIn = document.getElementById('end-' + day);
-        if (check) check.checked = isActive;
-        if (startIn) startIn.value = start;
-        if (endIn) endIn.value = end;
-
         return {
           day_of_week: day,
           is_active: isActive,
@@ -1787,6 +1466,35 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
       }
     }
 
+    async function loadAppointments() {
+      try {
+        var res = await fetch('/admin/api/appointments?key=' + adminKey, { headers: headers });
+        var data = await res.json();
+        cachedAppointments = data.appointments || [];
+
+        // Center on week of first upcoming appointment if current week has none
+        if (cachedAppointments.length > 0) {
+          var upcoming = cachedAppointments.filter(function(a) { return a.status !== 'cancelled'; });
+          if (upcoming.length > 0) {
+            upcoming.sort(function(x, y) { return new Date(x.start_time).getTime() - new Date(y.start_time).getTime(); });
+            var hasInCurrentWeek = upcoming.some(function(a) {
+              var d = new Date(a.start_time);
+              var endWeek = new Date(currentWeekMonday);
+              endWeek.setDate(endWeek.getDate() + 7);
+              return d >= currentWeekMonday && d < endWeek;
+            });
+            if (!hasInCurrentWeek) {
+              currentWeekMonday = getMonday(upcoming[0].start_time);
+            }
+          }
+        }
+
+        renderWeeklyGrid();
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
     async function loadAvailability() {
       try {
         var res = await fetch('/admin/api/availability?key=' + adminKey, { headers: headers });
@@ -1797,40 +1505,33 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
         cachedRules = data.rules || [];
         renderWeeklyGrid();
 
-        var activeDaysCount = 0;
-        for (var i = 0; i < (data.rules || []).length; i++) {
-          if (data.rules[i].is_active) activeDaysCount++;
-        }
-        document.getElementById('kpiDaysOpen').innerText = activeDaysCount + ' / 7 Days';
-
         var rulesHtml = '';
         for (var rIdx = 0; rIdx < (data.rules || []).length; rIdx++) {
           var r = data.rules[rIdx];
           rulesHtml += '<div class="day-item" data-day="' + r.day_of_week + '">' +
-            '<div class="day-meta">' + days[r.day_of_week] + '</div>' +
+            '<div style="font-weight: 500; font-size: 13px; color: #fff; width: 90px;">' + days[r.day_of_week] + '</div>' +
             '<label class="switch-wrap">' +
               '<div class="switch">' +
                 '<input type="checkbox" id="active-' + r.day_of_week + '" ' + (r.is_active ? 'checked' : '') + '>' +
                 '<span class="slider"></span>' +
               '</div>' +
-              '<span style="font-size: 12.5px; font-weight: 500; color: ' + (r.is_active ? 'var(--emerald)' : 'var(--text-subtle)') + ';">' +
+              '<span style="font-size: 12px; color: ' + (r.is_active ? 'var(--emerald)' : 'var(--text-subtle)') + ';">' +
                 (r.is_active ? 'Bookable' : 'Closed') +
               '</span>' +
             '</label>' +
-            '<div style="display: flex; align-items: center; gap: 8px;">' +
-              '<span style="font-size: 12px; color: var(--text-subtle);">From</span>' +
-              '<input type="time" id="start-' + r.day_of_week + '" value="' + r.start_time + '" style="width: 110px;">' +
-              '<span style="font-size: 12px; color: var(--text-subtle);">To</span>' +
-              '<input type="time" id="end-' + r.day_of_week + '" value="' + r.end_time + '" style="width: 110px;">' +
+            '<div style="display: flex; align-items: center; gap: 6px;">' +
+              '<input type="time" id="start-' + r.day_of_week + '" value="' + r.start_time + '" style="width: 105px;">' +
+              '<span style="font-size: 11px; color: var(--text-subtle);">to</span>' +
+              '<input type="time" id="end-' + r.day_of_week + '" value="' + r.end_time + '" style="width: 105px;">' +
             '</div>' +
-            '<button class="btn btn-secondary" onclick="saveSingleDayHours(' + r.day_of_week + ')">Save Day</button>' +
+            '<button class="btn btn-secondary" style="padding: 4px 10px; font-size: 11.5px;" onclick="saveSingleDayHours(' + r.day_of_week + ')">Save</button>' +
           '</div>';
         }
         rulesContainer.innerHTML = rulesHtml;
 
         var tbody = document.querySelector('#overridesTable tbody');
         if (!data.overrides || data.overrides.length === 0) {
-          tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--text-subtle); padding: 24px;">No date blockouts configured.</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: var(--text-subtle); padding: 14px;">No date blockouts configured.</td></tr>';
           return;
         }
 
@@ -1840,9 +1541,8 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
           overridesHtml += '<tr>' +
             '<td class="mono" style="font-weight: 500; color: #fff;">' + o.date + '</td>' +
             '<td><span class="badge badge-unpaid">' + (o.is_unavailable ? 'Full Day Off' : 'Custom Hours') + '</span></td>' +
-            '<td>' + (o.start_time || 'All Day') + (o.end_time ? ' - ' + o.end_time : '') + '</td>' +
             '<td style="color: var(--text-muted);">' + (o.reason || '-') + '</td>' +
-            '<td><button class="btn btn-danger" onclick="deleteOverride(\'' + o.id + '\')">Remove</button></td>' +
+            '<td><button class="btn btn-danger" style="padding: 2px 7px; font-size: 11px;" onclick="deleteOverride(\'' + o.id + '\')">✕</button></td>' +
           '</tr>';
         }
         tbody.innerHTML = overridesHtml;
@@ -1852,13 +1552,13 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
     }
 
     async function saveSingleDayHours(day) {
-      const isActive = document.getElementById('active-' + day).checked;
-      const startTime = document.getElementById('start-' + day).value;
-      const endTime = document.getElementById('end-' + day).value;
+      var isActive = document.getElementById('active-' + day).checked;
+      var startTime = document.getElementById('start-' + day).value;
+      var endTime = document.getElementById('end-' + day).value;
 
-      const res = await fetch('/admin/api/availability/rules?key=' + adminKey, {
+      var res = await fetch('/admin/api/availability/rules?key=' + adminKey, {
         method: 'POST',
-        headers,
+        headers: headers,
         body: JSON.stringify({
           day_of_week: day,
           start_time: startTime,
@@ -1867,64 +1567,58 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
         })
       });
       if (res.ok) {
-        showToast("Day schedule updated.");
+        showToast('Schedule updated.');
         loadAvailability();
-      } else {
-        alert("Failed to save work hours.");
       }
     }
 
     async function saveAllWeeklyHours() {
-      const days = [0, 1, 2, 3, 4, 5, 6];
-      const rules = days.map(day => {
-        const checkbox = document.getElementById('active-' + day);
-        const startInput = document.getElementById('start-' + day);
-        const endInput = document.getElementById('end-' + day);
+      var days = [0, 1, 2, 3, 4, 5, 6];
+      var rules = days.map(function(day) {
+        var checkbox = document.getElementById('active-' + day);
+        var startInput = document.getElementById('start-' + day);
+        var endInput = document.getElementById('end-' + day);
         return {
           day_of_week: day,
           is_active: checkbox ? checkbox.checked : true,
           start_time: startInput ? startInput.value : '09:00',
-          end_time: endInput ? endInput.value : '17:00',
+          end_time: endInput ? endInput.value : '17:00'
         };
       });
 
-      const res = await fetch('/admin/api/availability/rules/batch?key=' + adminKey, {
+      var res = await fetch('/admin/api/availability/rules/batch?key=' + adminKey, {
         method: 'POST',
-        headers,
-        body: JSON.stringify({ rules })
+        headers: headers,
+        body: JSON.stringify({ rules: rules })
       });
       if (res.ok) {
-        showToast("All weekly work hours saved successfully.");
+        showToast('All weekly work hours saved.');
         loadAvailability();
-      } else {
-        alert("Failed to save all weekly hours.");
       }
     }
 
     async function addOverride() {
-      const date = document.getElementById('overrideDate').value;
-      const reason = document.getElementById('overrideReason').value;
+      var date = document.getElementById('overrideDate').value;
+      var reason = document.getElementById('overrideReason').value;
       if (!date) return alert('Please choose a date.');
       await fetch('/admin/api/availability/overrides?key=' + adminKey, {
         method: 'POST',
-        headers,
-        body: JSON.stringify({ date, is_unavailable: true, reason })
+        headers: headers,
+        body: JSON.stringify({ date: date, is_unavailable: true, reason: reason })
       });
-      showToast("Date override added.");
+      showToast('Date blockout added.');
       loadAvailability();
     }
 
     async function deleteOverride(id) {
-      await fetch('/admin/api/availability/overrides/' + id + '?key=' + adminKey, { method: 'DELETE', headers });
-      showToast("Date override removed.");
+      await fetch('/admin/api/availability/overrides/' + id + '?key=' + adminKey, { method: 'DELETE', headers: headers });
+      showToast('Date blockout removed.');
       loadAvailability();
     }
 
     // Initial Load
     loadAppointments();
     loadAvailability();
-    loadInvoices();
-    loadAlerts();
   </script>
 </body>
 </html>`);
