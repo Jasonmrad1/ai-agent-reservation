@@ -221,31 +221,37 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg: #090a0c;
-      --bg-surface: #111317;
-      --bg-surface-elevated: #181b20;
-      --bg-surface-hover: #1f232a;
-      --border: #232730;
-      --border-focus: #00ff87;
-      --emerald: #00ff87;
-      --emerald-dark: rgba(0, 255, 135, 0.12);
-      --emerald-hover: #05e57b;
-      --emerald-glow: rgba(0, 255, 135, 0.35);
+      --bg: #0c0d0e;
+      --bg-subtle: #121316;
+      --surface: #17181c;
+      --surface-elevated: #1e1f25;
+      --surface-hover: #23252d;
+      --border: #262830;
+      --border-subtle: #1d1f25;
+      --border-focus: #3ecf8e;
+      --emerald: #3ecf8e;
+      --emerald-subtle: rgba(62, 207, 142, 0.08);
+      --emerald-border: rgba(62, 207, 142, 0.22);
+      --emerald-hover: #34b27b;
       --text: #f4f4f6;
-      --text-muted: #9ba1ad;
-      --text-subtle: #6b7280;
-      --warning: #facc15;
-      --warning-bg: rgba(250, 204, 21, 0.12);
-      --warning-border: rgba(250, 204, 21, 0.28);
-      --danger: #ff5c5c;
-      --danger-bg: rgba(255, 92, 92, 0.12);
+      --text-muted: #a1a1aa;
+      --text-subtle: #71717a;
+      --text-faint: #52525b;
+      --amber: #fbbf24;
+      --amber-subtle: rgba(251, 191, 36, 0.08);
+      --amber-border: rgba(251, 191, 36, 0.2);
+      --red: #f87171;
+      --red-subtle: rgba(248, 113, 113, 0.08);
+      --red-border: rgba(248, 113, 113, 0.2);
+      --sky: #38bdf8;
+      --sky-subtle: rgba(56, 189, 248, 0.08);
+      --sky-border: rgba(56, 189, 248, 0.2);
       --purple: #c084fc;
-      --purple-bg: rgba(192, 132, 252, 0.12);
-      --cyan: #38bdf8;
-      --cyan-bg: rgba(56, 189, 248, 0.12);
+      --purple-subtle: rgba(192, 132, 252, 0.08);
+      --purple-border: rgba(192, 132, 252, 0.2);
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -254,15 +260,17 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
       color: var(--text);
       line-height: 1.5;
       padding-bottom: 60px;
-      letter-spacing: -0.2px;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
     }
     .mono { font-family: 'JetBrains Mono', monospace; }
     
     /* Top Bar */
     .top-nav {
-      background: var(--bg-surface);
+      background: var(--bg-subtle);
       border-bottom: 1px solid var(--border);
-      padding: 16px 32px;
+      padding: 0 32px;
+      height: 58px;
       display: flex;
       justify-content: space-between;
       align-items: center;
@@ -273,45 +281,54 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
     }
     .brand {
       display: flex;
-      flex-direction: column;
-      gap: 2px;
+      align-items: center;
+      gap: 12px;
+    }
+    .brand-icon {
+      width: 30px;
+      height: 30px;
+      border-radius: 6px;
+      background: var(--surface-elevated);
+      border: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--emerald);
     }
     .brand-title {
-      font-size: 18px;
-      font-weight: 700;
+      font-size: 14.5px;
+      font-weight: 600;
       color: #fff;
-      letter-spacing: -0.4px;
+      letter-spacing: -0.01em;
     }
     .brand-subtitle {
-      font-size: 12.5px;
-      color: var(--text-muted);
+      font-size: 12px;
+      color: var(--text-subtle);
       font-weight: 400;
     }
     .status-pill {
-      display: flex;
+      display: inline-flex;
       align-items: center;
       gap: 8px;
-      background: var(--emerald-dark);
-      border: 1px solid rgba(0, 255, 135, 0.3);
-      padding: 6px 14px;
+      background: var(--emerald-subtle);
+      border: 1px solid var(--emerald-border);
+      padding: 5px 12px;
       border-radius: 9999px;
       font-size: 12px;
       color: var(--emerald);
-      font-weight: 600;
-      box-shadow: 0 0 14px var(--emerald-glow);
+      font-weight: 500;
     }
     .pulse-dot {
-      width: 8px;
-      height: 8px;
+      width: 6px;
+      height: 6px;
       background: var(--emerald);
       border-radius: 50%;
-      box-shadow: 0 0 10px var(--emerald);
       animation: pulse 2s infinite ease-in-out;
     }
-    @keyframes pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.3; transform: scale(0.7); } }
+    @keyframes pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.35; transform: scale(0.75); } }
 
     /* Layout */
-    .container { max-width: 1240px; margin: 28px auto; padding: 0 20px; }
+    .container { max-width: 1240px; margin: 28px auto; padding: 0 24px; }
 
     /* KPI Cards */
     .kpi-grid {
@@ -321,175 +338,171 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
       margin-bottom: 24px;
     }
     .kpi-card {
-      background: var(--bg-surface);
+      background: var(--surface);
       border: 1px solid var(--border);
-      border-radius: 10px;
+      border-radius: 8px;
       padding: 18px 20px;
-      position: relative;
-      transition: border-color 0.2s, transform 0.2s;
+      transition: border-color 0.15s;
     }
-    .kpi-card:hover {
-      border-color: #444;
-      transform: translateY(-2px);
-    }
-    .kpi-title { font-size: 13px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
-    .kpi-value { font-size: 28px; font-weight: 700; color: #fff; margin: 6px 0 2px; }
-    .kpi-sub { font-size: 12px; color: var(--text-subtle); display: flex; align-items: center; gap: 6px; }
+    .kpi-card:hover { border-color: #363842; }
+    .kpi-title { font-size: 11px; font-weight: 600; color: var(--text-subtle); text-transform: uppercase; letter-spacing: 0.05em; }
+    .kpi-value { font-size: 26px; font-weight: 600; color: #fff; margin: 6px 0 3px; letter-spacing: -0.02em; }
+    .kpi-sub { font-size: 12px; color: var(--text-muted); }
 
     /* Tabs */
     .tabs-wrapper {
       display: flex;
-      gap: 6px;
-      background: var(--bg-surface);
+      gap: 4px;
+      background: var(--bg-subtle);
       border: 1px solid var(--border);
-      padding: 6px;
-      border-radius: 10px;
+      padding: 4px;
+      border-radius: 8px;
       margin-bottom: 24px;
       overflow-x: auto;
     }
     .tab-btn {
-      padding: 9px 18px;
+      padding: 8px 16px;
       background: transparent;
       border: none;
-      border-radius: 7px;
+      border-radius: 6px;
       color: var(--text-muted);
       cursor: pointer;
-      font-weight: 600;
-      font-size: 13.5px;
-      transition: all 0.2s;
+      font-weight: 500;
+      font-size: 13px;
+      font-family: inherit;
+      transition: all 0.15s;
       white-space: nowrap;
-      display: flex;
+      display: inline-flex;
       align-items: center;
       gap: 8px;
     }
-    .tab-btn:hover { color: #fff; background: rgba(255,255,255,0.04); }
+    .tab-btn svg { width: 15px; height: 15px; stroke: currentColor; opacity: 0.7; }
+    .tab-btn:hover { color: #fff; background: var(--surface-hover); }
     .tab-btn.active {
-      background: var(--bg-surface-elevated);
-      color: var(--emerald);
-      box-shadow: 0 1px 3px rgba(0,0,0,0.5);
-      border: 1px solid rgba(62, 207, 142, 0.3);
+      background: var(--surface-elevated);
+      color: #fff;
+      border: 1px solid var(--border);
+      font-weight: 600;
     }
+    .tab-btn.active svg { opacity: 1; stroke: var(--emerald); }
 
     /* Panels */
     .panel { display: none; }
-    .panel.active { display: block; animation: fadeIn 0.2s ease-in-out; }
-    @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+    .panel.active { display: block; animation: fadeIn 0.15s ease-out; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: translateY(0); } }
 
     .card {
-      background: var(--bg-surface);
+      background: var(--surface);
       border: 1px solid var(--border);
-      border-radius: 12px;
+      border-radius: 8px;
       overflow: hidden;
-      box-shadow: 0 4px 20px rgba(0,0,0,0.25);
       margin-bottom: 24px;
     }
     .card-header {
-      padding: 18px 24px;
+      padding: 16px 22px;
       border-bottom: 1px solid var(--border);
       display: flex;
       justify-content: space-between;
       align-items: center;
-      background: var(--bg-surface-elevated);
+      background: var(--surface);
     }
-    .card-header h2 { font-size: 17px; font-weight: 700; color: #fff; }
-    .card-header p { font-size: 13px; color: var(--text-muted); margin-top: 2px; }
-    .card-body { padding: 20px 24px; }
+    .card-header h2 { font-size: 15px; font-weight: 600; color: #fff; letter-spacing: -0.01em; }
+    .card-header p { font-size: 12.5px; color: var(--text-subtle); margin-top: 2px; }
+    .card-body { padding: 20px 22px; }
 
     /* Tables */
     .table-container { overflow-x: auto; }
     table { width: 100%; border-collapse: collapse; text-align: left; }
     th {
-      background: #141414;
+      background: #111215;
       padding: 12px 18px;
-      font-size: 11.5px;
+      font-size: 11px;
       text-transform: uppercase;
-      letter-spacing: 0.6px;
+      letter-spacing: 0.05em;
       color: var(--text-subtle);
       border-bottom: 1px solid var(--border);
-      font-weight: 700;
+      font-weight: 600;
     }
     td {
-      padding: 14px 18px;
-      border-bottom: 1px solid var(--border);
-      font-size: 13.5px;
-      color: #e5e5e5;
+      padding: 13px 18px;
+      border-bottom: 1px solid var(--border-subtle);
+      font-size: 13px;
+      color: var(--text);
     }
     tr:last-child td { border-bottom: none; }
-    tr:hover td { background: var(--bg-surface-elevated); }
+    tr:hover td { background: rgba(255,255,255,0.015); }
 
     /* Badges */
     .badge {
       display: inline-flex;
       align-items: center;
-      gap: 5px;
-      padding: 3px 9px;
-      border-radius: 6px;
+      padding: 2px 8px;
+      border-radius: 4px;
       font-size: 11.5px;
-      font-weight: 600;
-      letter-spacing: 0.2px;
+      font-weight: 500;
+      letter-spacing: 0.01em;
     }
-    .badge-home { background: var(--cyan-bg); color: var(--cyan); border: 1px solid rgba(56, 189, 248, 0.25); }
-    .badge-office { background: rgba(255,255,255,0.06); color: #d4d4d8; border: 1px solid var(--border); }
-    .badge-paid { background: rgba(62, 207, 142, 0.12); color: var(--emerald); border: 1px solid rgba(62, 207, 142, 0.25); }
-    .badge-unpaid { background: var(--danger-bg); color: var(--danger); border: 1px solid rgba(239, 68, 68, 0.25); }
-    .badge-pending { background: var(--warning-bg); color: var(--warning); border: 1px solid var(--warning-border); }
-    .badge-rescheduled { background: var(--purple-bg); color: var(--purple); border: 1px solid rgba(192, 132, 252, 0.25); }
+    .badge-home { background: var(--sky-subtle); color: var(--sky); border: 1px solid var(--sky-border); }
+    .badge-office { background: rgba(255,255,255,0.05); color: #d4d4d8; border: 1px solid var(--border); }
+    .badge-paid { background: var(--emerald-subtle); color: var(--emerald); border: 1px solid var(--emerald-border); }
+    .badge-unpaid { background: var(--red-subtle); color: var(--red); border: 1px solid var(--red-border); }
+    .badge-pending { background: var(--amber-subtle); color: var(--amber); border: 1px solid var(--amber-border); }
+    .badge-rescheduled { background: var(--purple-subtle); color: var(--purple); border: 1px solid var(--purple-border); }
 
     /* Buttons */
     .btn {
-      padding: 7px 14px;
+      padding: 6px 13px;
       border-radius: 6px;
       border: 1px solid transparent;
       cursor: pointer;
-      font-weight: 600;
+      font-weight: 500;
       font-size: 12.5px;
+      font-family: inherit;
       display: inline-flex;
       align-items: center;
       gap: 6px;
       transition: all 0.15s;
     }
-    .btn:hover { transform: translateY(-1px); }
-    .btn:active { transform: translateY(0); }
+    .btn svg { width: 14px; height: 14px; stroke: currentColor; }
     .btn-emerald {
       background: var(--emerald);
-      color: #0b1e16;
-      box-shadow: 0 0 10px var(--emerald-glow);
+      color: #08090a;
+      font-weight: 600;
     }
     .btn-emerald:hover { background: var(--emerald-hover); }
     .btn-secondary {
-      background: #27272a;
-      border-color: #3f3f46;
-      color: #ededed;
+      background: var(--surface-elevated);
+      border-color: var(--border);
+      color: #e4e4e7;
     }
-    .btn-secondary:hover { background: #323238; }
+    .btn-secondary:hover { background: var(--surface-hover); border-color: #383a45; }
     .btn-danger {
-      background: var(--danger-bg);
-      border-color: rgba(239, 68, 68, 0.3);
-      color: var(--danger);
+      background: var(--red-subtle);
+      border-color: var(--red-border);
+      color: var(--red);
     }
-    .btn-danger:hover { background: rgba(239, 68, 68, 0.2); }
+    .btn-danger:hover { background: rgba(248, 113, 113, 0.15); }
     .btn-purple {
-      background: var(--purple-bg);
-      border-color: rgba(192, 132, 252, 0.3);
+      background: var(--purple-subtle);
+      border-color: var(--purple-border);
       color: var(--purple);
     }
-    .btn-purple:hover { background: rgba(192, 132, 252, 0.2); }
+    .btn-purple:hover { background: rgba(192, 132, 252, 0.15); }
 
     /* Inputs */
     input[type="text"], input[type="date"], input[type="time"], textarea, select {
-      background: #141414;
+      background: #0f1013;
       border: 1px solid var(--border);
       border-radius: 6px;
-      color: #ededed;
-      padding: 8px 12px;
+      color: #f4f4f6;
+      padding: 7px 11px;
       font-size: 13px;
       font-family: inherit;
-      transition: border-color 0.2s, box-shadow 0.2s;
+      transition: border-color 0.15s;
     }
     input:focus, textarea:focus, select:focus {
       outline: none;
-      border-color: var(--emerald);
-      box-shadow: 0 0 0 1px var(--emerald);
+      border-color: var(--border-focus);
     }
 
     /* Day Schedule Cards */
@@ -497,15 +510,15 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 14px 20px;
-      background: var(--bg-surface-elevated);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      margin-bottom: 10px;
-      transition: border-color 0.2s;
+      padding: 13px 18px;
+      background: var(--surface-elevated);
+      border: 1px solid var(--border-subtle);
+      border-radius: 6px;
+      margin-bottom: 8px;
+      transition: border-color 0.15s;
     }
-    .day-item:hover { border-color: #3f3f46; }
-    .day-meta { width: 140px; font-weight: 700; font-size: 15px; color: #fff; }
+    .day-item:hover { border-color: #34363f; }
+    .day-meta { width: 130px; font-weight: 600; font-size: 14px; color: #fff; }
     
     /* Toggle Switch */
     .switch-wrap {
@@ -517,38 +530,37 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
     .switch {
       position: relative;
       display: inline-block;
-      width: 42px;
-      height: 24px;
+      width: 38px;
+      height: 22px;
     }
     .switch input { opacity: 0; width: 0; height: 0; }
     .slider {
       position: absolute;
       cursor: pointer;
       top: 0; left: 0; right: 0; bottom: 0;
-      background-color: #27272a;
-      transition: .25s;
-      border-radius: 24px;
-      border: 1px solid #3f3f46;
+      background-color: #23252d;
+      transition: .2s;
+      border-radius: 22px;
+      border: 1px solid var(--border);
     }
     .slider:before {
       position: absolute;
       content: "";
-      height: 16px;
-      width: 16px;
+      height: 14px;
+      width: 14px;
       left: 3px;
       bottom: 3px;
-      background-color: #a1a1aa;
-      transition: .25s;
+      background-color: #71717a;
+      transition: .2s;
       border-radius: 50%;
     }
     input:checked + .slider {
-      background-color: var(--emerald-dark);
-      border-color: var(--emerald);
+      background-color: var(--emerald-subtle);
+      border-color: var(--emerald-border);
     }
     input:checked + .slider:before {
-      transform: translateX(18px);
+      transform: translateX(16px);
       background-color: var(--emerald);
-      box-shadow: 0 0 8px var(--emerald);
     }
 
     /* Toast */
@@ -559,27 +571,27 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
       z-index: 100;
     }
     .toast {
-      background: #181818;
-      border: 1px solid var(--emerald);
-      box-shadow: 0 8px 30px rgba(0,0,0,0.6), 0 0 15px var(--emerald-glow);
+      background: var(--surface-elevated);
+      border: 1px solid var(--border);
+      box-shadow: 0 10px 30px rgba(0,0,0,0.6);
       color: #fff;
-      padding: 14px 20px;
-      border-radius: 8px;
-      font-size: 13.5px;
+      padding: 12px 18px;
+      border-radius: 6px;
+      font-size: 13px;
       display: none;
       align-items: center;
-      gap: 12px;
-      animation: slideUp 0.25s ease-out;
+      gap: 10px;
+      animation: slideUp 0.15s ease-out;
     }
-    @keyframes slideUp { from { transform: translateY(15px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+    @keyframes slideUp { from { transform: translateY(8px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
 
-    /* Supabase Modal */
+    /* Modal */
     .modal-backdrop {
       display: none;
       position: fixed;
       top: 0; left: 0; right: 0; bottom: 0;
-      background: rgba(0,0,0,0.75);
-      backdrop-filter: blur(4px);
+      background: rgba(0,0,0,0.7);
+      backdrop-filter: blur(8px);
       z-index: 99;
       align-items: center;
       justify-content: center;
@@ -587,76 +599,80 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
     }
     .modal-backdrop.active { display: flex; }
     .modal-card {
-      background: var(--bg-surface);
+      background: #141519;
       border: 1px solid var(--border);
-      border-radius: 12px;
+      border-radius: 10px;
       width: 100%;
-      max-width: 520px;
-      box-shadow: 0 20px 40px rgba(0,0,0,0.8), 0 0 25px var(--emerald-glow);
+      max-width: 500px;
+      box-shadow: 0 25px 50px -12px rgba(0,0,0,0.75);
       overflow: hidden;
-      animation: popIn 0.2s ease-out;
+      animation: popIn 0.15s ease-out;
     }
-    @keyframes popIn { from { transform: scale(0.95); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+    @keyframes popIn { from { transform: scale(0.97); opacity: 0; } to { transform: scale(1); opacity: 1; } }
     .modal-header {
-      padding: 16px 22px;
-      background: var(--bg-surface-elevated);
+      padding: 16px 20px;
+      background: var(--surface);
       border-bottom: 1px solid var(--border);
       display: flex;
       justify-content: space-between;
       align-items: center;
     }
-    .modal-header h3 { font-size: 16px; font-weight: 700; color: #fff; display: flex; align-items: center; gap: 8px; }
-    .modal-body { padding: 22px; }
+    .modal-header h3 { font-size: 15px; font-weight: 600; color: #fff; }
+    .modal-body { padding: 20px; }
     .modal-footer {
-      padding: 14px 22px;
-      background: var(--bg-surface-elevated);
+      padding: 12px 20px;
+      background: var(--surface);
       border-top: 1px solid var(--border);
       display: flex;
       justify-content: flex-end;
-      gap: 10px;
+      gap: 8px;
     }
-    .chip-group { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 16px; }
+    .chip-group { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 14px; }
     .chip {
-      background: #27272a;
-      border: 1px solid #3f3f46;
+      background: var(--surface-elevated);
+      border: 1px solid var(--border);
       color: var(--text-muted);
-      border-radius: 20px;
-      padding: 4px 10px;
+      border-radius: 4px;
+      padding: 3px 9px;
       font-size: 11.5px;
       cursor: pointer;
       transition: all 0.15s;
     }
-    .chip:hover { color: var(--emerald); border-color: var(--emerald); background: var(--emerald-dark); }
+    .chip:hover { color: #fff; border-color: #454754; background: var(--surface-hover); }
   </style>
 </head>
 <body>
   <!-- Top Navigation Bar -->
-  <div class="top-nav">
+  <nav class="top-nav">
     <div class="brand">
-      <div class="brand-logo">⚡</div>
+      <div class="brand-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+        </svg>
+      </div>
       <div>
-        <div class="brand-title">Dr. Robert Smith Medical Practice</div>
+        <div class="brand-title">Practice Management Dashboard</div>
         <div class="brand-subtitle">WhatsApp Autonomous Scheduling Engine</div>
       </div>
     </div>
-    <div style="display: flex; align-items: center; gap: 14px;">
+    <div style="display: flex; align-items: center; gap: 12px;">
       <div class="status-pill">
         <span class="pulse-dot"></span>
-        <span>AI Engine Active</span>
+        <span>Gateway Online</span>
       </div>
       <a href="/health" target="_blank" style="text-decoration: none;">
-        <button class="btn btn-secondary" style="font-size: 11.5px;">Health API</button>
+        <button class="btn btn-secondary" style="font-size: 11.5px; padding: 4px 10px;">Health</button>
       </a>
     </div>
-  </div>
+  </nav>
 
   <div class="container">
-    <!-- Top KPI Grid (Supabase style) -->
+    <!-- Top KPI Grid -->
     <div class="kpi-grid">
       <div class="kpi-card">
         <div class="kpi-title">Upcoming Appointments</div>
         <div class="kpi-value" id="kpiApptsCount">-</div>
-        <div class="kpi-sub" id="kpiApptsBreakdown">Synced with iOS Google Calendar</div>
+        <div class="kpi-sub" id="kpiApptsBreakdown">Synced with Google Calendar</div>
       </div>
       <div class="kpi-card">
         <div class="kpi-title">Weekly Work Hours</div>
@@ -677,10 +693,37 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
 
     <!-- Navigation Tabs -->
     <div class="tabs-wrapper">
-      <button class="tab-btn active" onclick="showTab('tab-appointments')">📅 Upcoming Appointments</button>
-      <button class="tab-btn" onclick="showTab('tab-availability')">🕒 Weekly Work Hours & Availability</button>
-      <button class="tab-btn" onclick="showTab('tab-invoices')">💳 Billing & Invoices</button>
-      <button class="tab-btn" onclick="showTab('tab-alerts')">🚨 Alerts & Human Escalations</button>
+      <button class="tab-btn active" onclick="showTab('tab-appointments', this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+          <line x1="16" y1="2" x2="16" y2="6"></line>
+          <line x1="8" y1="2" x2="8" y2="6"></line>
+          <line x1="3" y1="10" x2="21" y2="10"></line>
+        </svg>
+        Upcoming Appointments
+      </button>
+      <button class="tab-btn" onclick="showTab('tab-availability', this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10"></circle>
+          <polyline points="12 6 12 12 16 14"></polyline>
+        </svg>
+        Weekly Work Hours
+      </button>
+      <button class="tab-btn" onclick="showTab('tab-invoices', this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="1" y="4" width="22" height="16" rx="2" ry="2"></rect>
+          <line x1="1" y1="10" x2="23" y2="10"></line>
+        </svg>
+        Billing & Invoices
+      </button>
+      <button class="tab-btn" onclick="showTab('tab-alerts', this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+          <line x1="12" y1="9" x2="12" y2="13"></line>
+          <line x1="12" y1="17" x2="12.01" y2="17"></line>
+        </svg>
+        Alerts & Escalations
+      </button>
     </div>
 
     <!-- Tab 1: Appointments -->
@@ -689,9 +732,9 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
         <div class="card-header">
           <div>
             <h2>Upcoming Appointments</h2>
-            <p>Direct bookings and reschedules from WhatsApp. Fully synced with your Google Calendar.</p>
+            <p>Direct bookings and reschedules from WhatsApp. Fully synced with your calendar.</p>
           </div>
-          <button class="btn btn-secondary" onclick="loadAppointments()">↻ Refresh</button>
+          <button class="btn btn-secondary" onclick="loadAppointments()">Refresh</button>
         </div>
         <div class="table-container">
           <table id="appointmentsTable">
@@ -707,7 +750,7 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
               </tr>
             </thead>
             <tbody>
-              <tr><td colspan="7" style="text-align: center; color: var(--text-muted);">Loading appointments...</td></tr>
+              <tr><td colspan="7" style="text-align: center; color: var(--text-subtle); padding: 32px;">Loading appointments...</td></tr>
             </tbody>
           </table>
         </div>
@@ -720,9 +763,9 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
         <div class="card-header">
           <div>
             <h2>Weekly Work Hours</h2>
-            <p>Explicitly set which days and hours you are available for patients to book via WhatsApp.</p>
+            <p>Set which days and hours you are available for patients to book via WhatsApp.</p>
           </div>
-          <button class="btn btn-emerald" onclick="saveAllWeeklyHours()">💾 Save All Weekly Hours</button>
+          <button class="btn btn-emerald" onclick="saveAllWeeklyHours()">Save All Weekly Hours</button>
         </div>
         <div class="card-body">
           <div id="weeklyRulesList"></div>
@@ -733,7 +776,7 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
       <div class="card">
         <div class="card-header">
           <div>
-            <h2>Vacation & Date Overrides</h2>
+            <h2>Date Overrides & Blockouts</h2>
             <p>Block out specific days (holidays, conferences) or set one-off custom hours.</p>
           </div>
         </div>
@@ -751,18 +794,18 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
             <tbody></tbody>
           </table>
         </div>
-        <div class="card-body" style="border-top: 1px solid var(--border); background: var(--bg-surface-elevated);">
-          <div style="font-size: 13.5px; font-weight: 700; margin-bottom: 12px; color: #fff;">Add New Date Override</div>
+        <div class="card-body" style="border-top: 1px solid var(--border); background: var(--surface-elevated);">
+          <div style="font-size: 13px; font-weight: 600; margin-bottom: 12px; color: #fff;">Add New Date Override</div>
           <div style="display: flex; gap: 14px; align-items: flex-end; flex-wrap: wrap;">
             <div>
-              <label style="font-size: 12px; color: var(--text-muted); display: block; margin-bottom: 4px;">Date (YYYY-MM-DD)</label>
-              <input type="date" id="overrideDate" style="width: 180px;">
+              <label style="font-size: 11.5px; color: var(--text-muted); display: block; margin-bottom: 4px;">Date</label>
+              <input type="date" id="overrideDate" style="width: 170px;">
             </div>
             <div>
-              <label style="font-size: 12px; color: var(--text-muted); display: block; margin-bottom: 4px;">Reason / Notes</label>
-              <input type="text" id="overrideReason" placeholder="e.g. Medical Symposium, Personal" style="width: 280px;">
+              <label style="font-size: 11.5px; color: var(--text-muted); display: block; margin-bottom: 4px;">Reason / Notes</label>
+              <input type="text" id="overrideReason" placeholder="e.g. Vacation, Conference" style="width: 280px;">
             </div>
-            <button class="btn btn-emerald" onclick="addOverride()">+ Add Blockout</button>
+            <button class="btn btn-emerald" onclick="addOverride()">Add Blockout</button>
           </div>
         </div>
       </div>
@@ -776,17 +819,17 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
             <h2>Invoices & Receipts</h2>
             <p>Generated strictly from completed visits and delivered instantly to patients on WhatsApp.</p>
           </div>
-          <button class="btn btn-secondary" onclick="loadInvoices()">↻ Refresh</button>
+          <button class="btn btn-secondary" onclick="loadInvoices()">Refresh</button>
         </div>
         <div class="table-container">
           <table id="invoicesTable">
             <thead>
               <tr>
-                <th>Invoice #</th>
+                <th>Invoice</th>
                 <th>Patient</th>
                 <th>Service</th>
-                <th>Total Fee</th>
-                <th>Payment Status</th>
+                <th>Amount</th>
+                <th>Status</th>
                 <th>Date Issued</th>
                 <th>Actions</th>
               </tr>
@@ -805,7 +848,7 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
             <h2>Alerts & Human Escalations</h2>
             <p>Delivery tracking failures, opt-outs, and patient requests for staff assistance.</p>
           </div>
-          <button class="btn btn-secondary" onclick="loadAlerts()">↻ Refresh</button>
+          <button class="btn btn-secondary" onclick="loadAlerts()">Refresh</button>
         </div>
         <div class="table-container">
           <table id="alertsTable">
@@ -825,38 +868,38 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
     </div>
   </div>
 
-  <!-- Supabase Styled AI Reschedule Modal Dialog -->
+  <!-- AI Reschedule Modal Dialog -->
   <div id="aiRescheduleModal" class="modal-backdrop">
     <div class="modal-card">
       <div class="modal-header">
-        <h3><span>🤖</span> Prompt AI to Reschedule</h3>
-        <button onclick="closeRescheduleModal()" style="background: transparent; border: none; color: var(--text-muted); cursor: pointer; font-size: 18px;">✕</button>
+        <h3>Prompt AI to Reschedule</h3>
+        <button onclick="closeRescheduleModal()" style="background: transparent; border: none; color: var(--text-muted); cursor: pointer; font-size: 16px;">✕</button>
       </div>
       <div class="modal-body">
-        <div style="background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; margin-bottom: 16px;">
-          <div style="font-size: 14px; font-weight: 700; color: #fff;" id="modalPatientName">-</div>
-          <div style="font-size: 12.5px; color: var(--text-muted); margin-top: 2px;" id="modalApptTime">-</div>
+        <div style="background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 12px 14px; margin-bottom: 16px;">
+          <div style="font-size: 13.5px; font-weight: 600; color: #fff;" id="modalPatientName">-</div>
+          <div style="font-size: 12px; color: var(--text-muted); margin-top: 2px;" id="modalApptTime">-</div>
         </div>
         
-        <label style="font-size: 12.5px; font-weight: 600; color: var(--text-muted); display: block; margin-bottom: 6px;">
-          Doctor's Directive / Reason for Rescheduling:
+        <label style="font-size: 12px; font-weight: 500; color: var(--text-muted); display: block; margin-bottom: 6px;">
+          Directive / Reason for Rescheduling:
         </label>
         
         <div class="chip-group">
-          <span class="chip" onclick="applyDirective('Hospital surgery emergency, please pick another day')">+ Hospital Emergency</span>
-          <span class="chip" onclick="applyDirective('Doctor unavailable on this morning, suggest afternoon slots')">+ Morning Conflict</span>
-          <span class="chip" onclick="applyDirective('Suggest Wednesday 2pm or Thursday 11am')">+ Offer Wed / Thu</span>
+          <span class="chip" onclick="applyDirective('Hospital surgery emergency, please pick another day')">Hospital Emergency</span>
+          <span class="chip" onclick="applyDirective('Doctor unavailable on this morning, suggest afternoon slots')">Morning Conflict</span>
+          <span class="chip" onclick="applyDirective('Suggest Wednesday 2pm or Thursday 11am')">Offer Wed / Thu</span>
         </div>
 
-        <textarea id="modalDoctorPrompt" rows="3" style="width: 100%; max-width: 100%;" placeholder="e.g. Doctor called into urgent surgery on Tuesday morning. Ask if Wednesday afternoon or Thursday works for them."></textarea>
+        <textarea id="modalDoctorPrompt" rows="3" style="width: 100%; max-width: 100%;" placeholder="e.g. Schedule conflict on Tuesday morning. Inquire if Wednesday afternoon or Thursday works best."></textarea>
         <p style="font-size: 11.5px; color: var(--text-subtle); margin-top: 6px;">
-          ⚡ Gemini will generate a warm, polite WhatsApp message with open slots and dispatch it directly to the patient.
+          The AI will compose a polite WhatsApp message with open candidate slots and send it directly to the patient.
         </p>
       </div>
       <div class="modal-footer">
         <button class="btn btn-secondary" onclick="closeRescheduleModal()">Cancel</button>
         <button class="btn btn-emerald" id="modalSubmitBtn" onclick="submitAiReschedule()">
-          <span>🚀 Dispatch AI WhatsApp</span>
+          Dispatch WhatsApp Request
         </button>
       </div>
     </div>
@@ -865,7 +908,9 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
   <!-- Toast Notification -->
   <div class="toast-container">
     <div id="statusToast" class="toast">
-      <span style="color: var(--emerald); font-size: 18px;">✔</span>
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--emerald)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="20 6 9 17 4 12"></polyline>
+      </svg>
       <span id="toastMessage">Success</span>
     </div>
   </div>
@@ -887,11 +932,11 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
       setTimeout(() => { toast.style.display = 'none'; }, 4000);
     }
 
-    function showTab(tabId) {
+    function showTab(tabId, btn) {
       document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
       document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
       document.getElementById(tabId).classList.add('active');
-      event.target.classList.add('active');
+      if (btn) btn.classList.add('active');
     }
 
     async function loadAppointments() {
@@ -904,7 +949,7 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
         let officeCount = 0;
 
         if (!data.appointments || data.appointments.length === 0) {
-          tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 32px;">No appointments found.</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: var(--text-subtle); padding: 32px;">No appointments found.</td></tr>';
           document.getElementById('kpiApptsCount').innerText = '0';
           return;
         }
@@ -920,21 +965,21 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
           <tr>
             <td>
               <strong style="color: #fff;">\${a.customer_name || 'Patient'}</strong>
-              <div class="mono" style="font-size: 12px; color: var(--text-muted);">\${a.customer_phone}</div>
+              <div class="mono" style="font-size: 11.5px; color: var(--text-subtle); margin-top: 2px;">\${a.customer_phone}</div>
             </td>
             <td><strong>\${a.service}</strong></td>
             <td>
               <span class="badge \${a.visit_type === 'home_visit' ? 'badge-home' : 'badge-office'}">
-                \${a.visit_type === 'home_visit' ? '🏠 Home Visit' : '🏥 In-Office'}
+                \${a.visit_type === 'home_visit' ? 'Home Visit' : 'In-Office'}
               </span>
             </td>
             <td>
-              <div style="font-size: 13px;">\${a.address || '<span style="color: var(--text-subtle);">Clinic Office</span>'}</div>
-              \${a.notes ? '<div style="font-size: 11.5px; color: var(--purple); margin-top: 3px;">📝 ' + a.notes.substring(0, 60) + '...</div>' : ''}
+              <div style="font-size: 12.5px;">\${a.address || '<span style="color: var(--text-subtle);">Clinic Office</span>'}</div>
+              \${a.notes ? '<div style="font-size: 11.5px; color: var(--purple); margin-top: 3px;">' + a.notes.substring(0, 60) + '...</div>' : ''}
             </td>
             <td>
-              <div style="font-weight: 600; color: #fff;">\${new Date(a.start_time).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}</div>
-              <div class="mono" style="font-size: 12px; color: var(--text-muted);">\${new Date(a.start_time).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}</div>
+              <div style="font-weight: 500; color: #fff;">\${new Date(a.start_time).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}</div>
+              <div class="mono" style="font-size: 11.5px; color: var(--text-muted);">\${new Date(a.start_time).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}</div>
             </td>
             <td>
               <span class="badge \${
@@ -945,10 +990,10 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
               }">\${a.status.toUpperCase()}</span>
             </td>
             <td>
-              <div style="display: flex; gap: 8px;">
+              <div style="display: flex; gap: 6px;">
                 \${a.status !== 'completed' && a.status !== 'cancelled' ? \`
-                  <button class="btn btn-purple" onclick="openRescheduleModal('\${a.id}', '\${(a.customer_name || 'Patient').replace(/'/g, "\\\\'")}', '\${a.start_time}')">🤖 AI Reschedule</button>
-                  <button class="btn btn-emerald" onclick="completeAndBill('\${a.id}')">Complete & Bill</button>
+                  <button class="btn btn-purple" onclick="openRescheduleModal('\${a.id}', '\${(a.customer_name || 'Patient').replace(/'/g, "\\\\'")}', '\${a.start_time}')">AI Reschedule</button>
+                  <button class="btn btn-secondary" onclick="completeAndBill('\${a.id}')">Complete & Bill</button>
                 \` : '<span style="color: var(--text-subtle); font-size: 12px;">Archived</span>'}
               </div>
             </td>
@@ -980,7 +1025,7 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
       if (!activeRescheduleApptId) return;
       const promptText = document.getElementById('modalDoctorPrompt').value;
       const btn = document.getElementById('modalSubmitBtn');
-      btn.innerText = 'Sending...';
+      btn.innerText = 'Dispatching...';
       btn.disabled = true;
 
       try {
@@ -993,7 +1038,7 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
         closeRescheduleModal();
 
         if (data.success) {
-          showToast("AI reschedule outreach sent to patient via WhatsApp!");
+          showToast("AI reschedule outreach sent to patient via WhatsApp");
           loadAppointments();
         } else {
           alert("Error: " + (data.error || "Failed to trigger AI reschedule"));
@@ -1001,7 +1046,7 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
       } catch (err) {
         alert("Network error: " + err.message);
       } finally {
-        btn.innerText = '🚀 Dispatch AI WhatsApp';
+        btn.innerText = 'Dispatch WhatsApp Request';
         btn.disabled = false;
       }
     }
@@ -1024,7 +1069,7 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
         let unpaidCount = 0;
 
         if (!data.invoices || data.invoices.length === 0) {
-          tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 32px;">No invoices generated yet.</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: var(--text-subtle); padding: 32px;">No invoices generated yet.</td></tr>';
           document.getElementById('kpiRevenueSum').innerText = '$0.00';
           document.getElementById('kpiInvoicesUnpaid').innerText = '0 Unpaid Invoices';
           return;
@@ -1040,14 +1085,14 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
 
         tbody.innerHTML = data.invoices.map(i => \`
           <tr>
-            <td><span class="mono" style="color: var(--emerald); font-weight: 600;">\${i.id.substring(0,8).toUpperCase()}</span></td>
+            <td><span class="mono" style="color: var(--emerald); font-weight: 500;">\${i.id.substring(0,8).toUpperCase()}</span></td>
             <td><strong>\${i.customer_name || i.customer_phone}</strong></td>
             <td>\${i.service_description}</td>
-            <td class="mono" style="font-weight: 700; color: #fff;">$\${Number(i.amount).toFixed(2)} \${i.currency}</td>
+            <td class="mono" style="font-weight: 600; color: #fff;">$\${Number(i.amount).toFixed(2)} \${i.currency}</td>
             <td><span class="badge \${i.status === 'paid' ? 'badge-paid' : 'badge-unpaid'}">\${i.status.toUpperCase()}</span></td>
             <td>\${new Date(i.created_at).toLocaleDateString()}</td>
             <td>
-              \${i.status === 'unpaid' ? \`<button class="btn btn-emerald" onclick="markPaid('\${i.id}')">Mark Paid</button>\` : '<span style="color: var(--emerald); font-size: 13px;">✔ Settled</span>'}
+              \${i.status === 'unpaid' ? \`<button class="btn btn-emerald" onclick="markPaid('\${i.id}')">Mark Paid</button>\` : '<span style="color: var(--emerald); font-size: 12.5px;">Paid</span>'}
             </td>
           </tr>
         \`).join('');
@@ -1073,7 +1118,7 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
         document.getElementById('kpiAlertsSub').innerText = pending.length === 0 ? 'All systems nominal' : \`\${pending.length} require review\`;
 
         if (!data.alerts || data.alerts.length === 0) {
-          tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--text-muted); padding: 32px;">No alerts. System running smoothly.</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--text-subtle); padding: 32px;">No alerts. System running smoothly.</td></tr>';
           return;
         }
 
@@ -1084,7 +1129,7 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
             <td style="color: var(--text-muted); font-size: 13px;">\${a.details}</td>
             <td><span class="badge \${a.status === 'resolved' ? 'badge-paid' : 'badge-unpaid'}">\${a.status}</span></td>
             <td>
-              \${a.status === 'pending' ? \`<button class="btn btn-secondary" onclick="resolveAlert('\${a.id}')">Resolve</button>\` : 'Resolved'}
+              \${a.status === 'pending' ? \`<button class="btn btn-secondary" onclick="resolveAlert('\${a.id}')">Resolve</button>\` : '<span style="color: var(--text-subtle); font-size: 12px;">Resolved</span>'}
             </td>
           </tr>
         \`).join('');
@@ -1118,16 +1163,16 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
                 <input type="checkbox" id="active-\${r.day_of_week}" \${r.is_active ? 'checked' : ''}>
                 <span class="slider"></span>
               </div>
-              <span style="font-size: 13px; font-weight: 600; color: \${r.is_active ? 'var(--emerald)' : 'var(--text-subtle)'};">
+              <span style="font-size: 12.5px; font-weight: 500; color: \${r.is_active ? 'var(--emerald)' : 'var(--text-subtle)'};">
                 \${r.is_active ? 'Bookable' : 'Closed'}
               </span>
             </label>
 
-            <div style="display: flex; align-items: center; gap: 10px;">
-              <span style="font-size: 12px; color: var(--text-muted);">From</span>
-              <input type="time" id="start-\${r.day_of_week}" value="\${r.start_time}" style="width: 120px;">
-              <span style="font-size: 12px; color: var(--text-muted);">To</span>
-              <input type="time" id="end-\${r.day_of_week}" value="\${r.end_time}" style="width: 120px;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span style="font-size: 12px; color: var(--text-subtle);">From</span>
+              <input type="time" id="start-\${r.day_of_week}" value="\${r.start_time}" style="width: 110px;">
+              <span style="font-size: 12px; color: var(--text-subtle);">To</span>
+              <input type="time" id="end-\${r.day_of_week}" value="\${r.end_time}" style="width: 110px;">
             </div>
 
             <button class="btn btn-secondary" onclick="saveSingleDayHours(\${r.day_of_week})">Save Day</button>
@@ -1136,12 +1181,12 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
 
         const tbody = document.querySelector('#overridesTable tbody');
         if (!data.overrides || data.overrides.length === 0) {
-          tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--text-muted); padding: 24px;">No date blockouts configured.</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--text-subtle); padding: 24px;">No date blockouts configured.</td></tr>';
           return;
         }
         tbody.innerHTML = data.overrides.map(o => \`
           <tr>
-            <td class="mono" style="font-weight: 600; color: #fff;">\${o.date}</td>
+            <td class="mono" style="font-weight: 500; color: #fff;">\${o.date}</td>
             <td><span class="badge badge-unpaid">\${o.is_unavailable ? 'Full Day Off' : 'Custom Hours'}</span></td>
             <td>\${o.start_time || 'All Day'} \${o.end_time ? ' - ' + o.end_time : ''}</td>
             <td style="color: var(--text-muted);">\${o.reason || '-'}</td>
@@ -1196,7 +1241,7 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
         body: JSON.stringify({ rules })
       });
       if (res.ok) {
-        showToast("✅ All weekly work hours saved successfully!");
+        showToast("All weekly work hours saved successfully.");
         loadAvailability();
       } else {
         alert("Failed to save all weekly hours.");

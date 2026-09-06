@@ -288,7 +288,7 @@ describe('Phases 5, 6, 7: Reminders, Billing, & Admin Dashboard', () => {
       expect(res.status).toBe(200);
       expect(res.text).toContain('Weekly Work Hours');
       expect(res.text).toContain('Save All Weekly Hours');
-      expect(res.text).toContain('🤖 AI Reschedule');
+      expect(res.text).toContain('AI Reschedule');
     });
   });
 });
