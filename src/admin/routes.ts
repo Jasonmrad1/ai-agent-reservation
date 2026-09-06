@@ -231,11 +231,12 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
       --surface-hover: #23252d;
       --border: #262830;
       --border-subtle: #1d1f25;
-      --border-focus: #3ecf8e;
-      --emerald: #3ecf8e;
-      --emerald-subtle: rgba(62, 207, 142, 0.08);
-      --emerald-border: rgba(62, 207, 142, 0.22);
-      --emerald-hover: #34b27b;
+      --border-focus: #24b47e;
+      --emerald: #24b47e;
+      --emerald-subtle: rgba(36, 180, 126, 0.1);
+      --emerald-border: rgba(36, 180, 126, 0.25);
+      --emerald-hover: #1f9d6c;
+      --emerald-text: #34d399;
       --text: #f4f4f6;
       --text-muted: #a1a1aa;
       --text-subtle: #71717a;
@@ -315,13 +316,13 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
       padding: 5px 12px;
       border-radius: 9999px;
       font-size: 12px;
-      color: var(--emerald);
+      color: var(--emerald-text);
       font-weight: 500;
     }
     .pulse-dot {
       width: 6px;
       height: 6px;
-      background: var(--emerald);
+      background: var(--emerald-text);
       border-radius: 50%;
       animation: pulse 2s infinite ease-in-out;
     }
@@ -444,7 +445,7 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
     }
     .badge-home { background: var(--sky-subtle); color: var(--sky); border: 1px solid var(--sky-border); }
     .badge-office { background: rgba(255,255,255,0.05); color: #d4d4d8; border: 1px solid var(--border); }
-    .badge-paid { background: var(--emerald-subtle); color: var(--emerald); border: 1px solid var(--emerald-border); }
+    .badge-paid { background: var(--emerald-subtle); color: var(--emerald-text); border: 1px solid var(--emerald-border); }
     .badge-unpaid { background: var(--red-subtle); color: var(--red); border: 1px solid var(--red-border); }
     .badge-pending { background: var(--amber-subtle); color: var(--amber); border: 1px solid var(--amber-border); }
     .badge-rescheduled { background: var(--purple-subtle); color: var(--purple); border: 1px solid var(--purple-border); }
@@ -466,8 +467,8 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
     .btn svg { width: 14px; height: 14px; stroke: currentColor; }
     .btn-emerald {
       background: var(--emerald);
-      color: #08090a;
-      font-weight: 600;
+      color: #ffffff;
+      font-weight: 500;
     }
     .btn-emerald:hover { background: var(--emerald-hover); }
     .btn-secondary {
@@ -676,12 +677,12 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
       </div>
       <div class="kpi-card">
         <div class="kpi-title">Weekly Work Hours</div>
-        <div class="kpi-value" id="kpiDaysOpen" style="color: var(--emerald);">-</div>
+        <div class="kpi-value" id="kpiDaysOpen" style="color: var(--emerald-text);">-</div>
         <div class="kpi-sub">Active bookable schedule days</div>
       </div>
       <div class="kpi-card">
         <div class="kpi-title">Billing & Revenue</div>
-        <div class="kpi-value" id="kpiRevenueSum" style="color: #6ee7b7;">-</div>
+        <div class="kpi-value" id="kpiRevenueSum" style="color: var(--emerald-text);">-</div>
         <div class="kpi-sub" id="kpiInvoicesUnpaid">Generated via WhatsApp</div>
       </div>
       <div class="kpi-card">
@@ -908,7 +909,7 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
   <!-- Toast Notification -->
   <div class="toast-container">
     <div id="statusToast" class="toast">
-      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--emerald)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--emerald-text)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
         <polyline points="20 6 9 17 4 12"></polyline>
       </svg>
       <span id="toastMessage">Success</span>
