@@ -29,6 +29,8 @@ export function createWebhookRouter(options: WebhookHandlerOptions) {
     const incomingText = (params.Body || '').trim();
     const profileName = params.ProfileName;
 
+    console.log(`\n[Twilio Webhook] 📩 Incoming message from ${fromPhone} (${profileName || 'Patient'}): "${incomingText}"`);
+
     // 1. Signature Verification
     if (!skipSignatureVerification && authToken) {
       const signature = req.headers['x-twilio-signature'] as string;
@@ -45,12 +47,14 @@ export function createWebhookRouter(options: WebhookHandlerOptions) {
       });
 
       if (!isValid) {
+        console.warn(`[Twilio Webhook] ⚠️ Rejected request due to invalid signature from ${fromPhone}`);
         res.status(403).send('Invalid signature');
         return;
       }
     }
 
     if (!fromPhone || !incomingText) {
+      console.warn(`[Twilio Webhook] ⚠️ Missing From or Body in request`);
       res.status(400).send('Missing From or Body');
       return;
     }
@@ -120,13 +124,16 @@ export function createWebhookRouter(options: WebhookHandlerOptions) {
     let replyText = "Thank you for reaching out! We've received your message and will get back to you shortly.";
     if (processMessage) {
       try {
+        console.log(`[Agent] 🧠 Passing message to Gemini agent...`);
         replyText = await processMessage({
           customer,
           conversation,
           incomingText,
           db,
         });
+        console.log(`[Agent] 💬 Gemini response drafted: "${replyText}"`);
       } catch (err: any) {
+        console.error('[Agent] ❌ Error processing message with Gemini:', err);
         replyText = 'I am having trouble processing your request right now. Let me connect you with our team.';
         db.conversations.updateStatus(conversation.id, 'escalated');
         db.alerts.create({
@@ -140,9 +147,12 @@ export function createWebhookRouter(options: WebhookHandlerOptions) {
 
     // 8. Outbound Reply via WhatsApp Gateway
     try {
+      console.log(`[Twilio Webhook] 📤 Sending WhatsApp reply to ${fromPhone}...`);
       const sendResult = await gateway.sendMessage(fromPhone, replyText, customer.id);
+      console.log(`[Twilio Webhook] ✅ Dispatched WhatsApp reply (SID: ${sendResult.messageSid})`);
       db.messages.create(conversation.id, 'outbound', replyText, sendResult.messageSid, 'sent');
     } catch (sendErr: any) {
+      console.error(`[Twilio Webhook] ❌ Failed to send WhatsApp reply to ${fromPhone}:`, sendErr);
       db.messages.create(conversation.id, 'outbound', replyText, null, 'failed');
     }
 

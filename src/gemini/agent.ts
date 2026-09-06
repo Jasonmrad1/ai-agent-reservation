@@ -366,6 +366,7 @@ export class AgentCore {
     }
 
     // 3. Request Gemini classification / tool call
+    console.log(`[Agent] 🤖 Calling Gemini LLM for intent & tool calling...`);
     const geminiRes = await this.client.generateResponse({
       systemPrompt: SYSTEM_PROMPT,
       conversationHistory,
@@ -374,6 +375,7 @@ export class AgentCore {
     });
 
     if (geminiRes.text && (!geminiRes.toolCalls || geminiRes.toolCalls.length === 0)) {
+      console.log(`[Agent] 💬 Gemini responded with direct text (no tool needed)`);
       return geminiRes.text;
     }
 
@@ -383,9 +385,12 @@ export class AgentCore {
 
     // 4. Deterministic tool execution
     const toolCall = geminiRes.toolCalls[0];
+    console.log(`[Agent] 🛠️ Tool invoked: ${toolCall.name} | Args:`, JSON.stringify(toolCall.args));
     const toolResult = await this.executeTool(toolCall, customer, conversation, db);
+    console.log(`[Agent] 📋 Tool result:`, JSON.stringify(toolResult));
 
     // 5. Draft grounded reply from backend tool result
+    console.log(`[Agent] ✍️ Drafting grounded reply from tool result...`);
     const reply = await this.client.generateReplyFromToolResult({
       systemPrompt: SYSTEM_PROMPT,
       userQuery: incomingText,
