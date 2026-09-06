@@ -54,7 +54,7 @@ export class LiveGeminiClient implements GeminiClient {
   private genAI: GoogleGenerativeAI;
   private modelName: string;
 
-  constructor(apiKey: string, modelName: string = 'gemini-1.5-flash') {
+  constructor(apiKey: string, modelName: string = process.env.GEMINI_MODEL || 'gemini-3.6-flash') {
     this.genAI = new GoogleGenerativeAI(apiKey);
     this.modelName = modelName;
   }
