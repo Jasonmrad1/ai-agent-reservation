@@ -51,7 +51,8 @@ export class TwilioWhatsAppGateway implements WhatsAppGateway {
     private accountSid: string,
     private authToken: string,
     private fromNumber: string,
-    private alertRepo?: AdminAlertRepository
+    private alertRepo?: AdminAlertRepository,
+    private statusCallback?: string
   ) {
     this.client = twilio(accountSid, authToken);
   }
@@ -64,11 +65,15 @@ export class TwilioWhatsAppGateway implements WhatsAppGateway {
     try {
       const response = await withRetry(
         async (_attempt) => {
-          const res = await this.client.messages.create({
+          const createOptions: any = {
             from: formattedFrom,
             to: formattedTo,
             body,
-          });
+          };
+          if (this.statusCallback && this.statusCallback !== 'none') {
+            createOptions.statusCallback = this.statusCallback;
+          }
+          const res = await this.client.messages.create(createOptions);
           return res;
         },
         {

@@ -41,7 +41,13 @@ export function createApp(options: CreateAppOptions = {}): AppInstance {
   // 2. Gateway
   const gateway = options.gateway || (
     cfg.twilioAccountSid && cfg.twilioAuthToken
-      ? new TwilioWhatsAppGateway(cfg.twilioAccountSid, cfg.twilioAuthToken, cfg.twilioWhatsappNumber || '', db.alerts)
+      ? new TwilioWhatsAppGateway(
+          cfg.twilioAccountSid,
+          cfg.twilioAuthToken,
+          cfg.twilioWhatsappNumber || '',
+          db.alerts,
+          process.env.STATUS_CALLBACK_URL
+        )
       : new MockWhatsAppGateway()
   );
 
