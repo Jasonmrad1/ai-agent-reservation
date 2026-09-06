@@ -73,6 +73,13 @@ export class CustomerRepository {
     `).run(name, now, id);
   }
 
+  public updatePhone(id: string, phone: string): void {
+    const now = new Date().toISOString();
+    this.db.prepare(`
+      UPDATE customers SET phone = ?, updated_at = ? WHERE id = ?
+    `).run(phone, now, id);
+  }
+
   public setOptOut(id: string, optedOut: boolean): void {
     const now = new Date().toISOString();
     this.db.prepare(`

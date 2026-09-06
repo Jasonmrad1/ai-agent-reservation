@@ -83,8 +83,26 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
 
   // 2. Appointments
   router.get('/api/appointments', requireAdminAuth, (req: Request, res: Response) => {
-    const appointments = db.appointments.listUpcoming(50);
-    res.json({ appointments });
+    const appointments = db.appointments.listUpcoming(100);
+    const enriched = appointments.map((appt) => {
+      let conversationHistory: Array<{ direction: string; body: string; created_at: string }> = [];
+      try {
+        const conv = db.conversations.getOrCreateActive(appt.customer_id);
+        const msgs = db.messages.getRecentMessages(conv.id, 10);
+        conversationHistory = msgs.map((m) => ({
+          direction: m.direction,
+          body: m.body,
+          created_at: m.created_at,
+        }));
+      } catch {
+        // ignore
+      }
+      return {
+        ...appt,
+        conversation_history: conversationHistory,
+      };
+    });
+    res.json({ appointments: enriched });
   });
 
   router.post('/api/appointments/:id/complete', requireAdminAuth, async (req: Request, res: Response) => {
@@ -224,22 +242,22 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg: #0c0d0e;
-      --bg-subtle: #121316;
-      --surface: #17181c;
-      --surface-elevated: #1e1f25;
-      --surface-hover: #24262e;
-      --border: #262830;
-      --border-subtle: #1c1e24;
-      --border-focus: #24b47e;
-      --emerald: #24b47e;
-      --emerald-subtle: rgba(36, 180, 126, 0.12);
-      --emerald-border: rgba(36, 180, 126, 0.28);
-      --emerald-hover: #1f9d6c;
-      --emerald-text: #34d399;
-      --text: #f4f4f6;
-      --text-muted: #a1a1aa;
-      --text-subtle: #71717a;
+      --bg: #000000;
+      --bg-subtle: #08090b;
+      --surface: #0e1014;
+      --surface-elevated: #15181f;
+      --surface-hover: #1c212a;
+      --border: #1a1e27;
+      --border-subtle: #12151c;
+      --border-focus: #00ff88;
+      --emerald: #00ff88;
+      --emerald-subtle: rgba(0, 255, 136, 0.12);
+      --emerald-border: rgba(0, 255, 136, 0.35);
+      --emerald-hover: #00e67a;
+      --emerald-text: #00ff88;
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+      --text-subtle: #64748b;
       --amber: #fbbf24;
       --amber-subtle: rgba(251, 191, 36, 0.1);
       --amber-border: rgba(251, 191, 36, 0.25);
@@ -376,9 +394,16 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
       gap: 6px;
       transition: all 0.15s;
     }
-    .btn svg { width: 14px; height: 14px; stroke: currentColor; }
-    .btn-emerald { background: var(--emerald); color: #ffffff; font-weight: 600; }
-    .btn-emerald:hover { background: var(--emerald-hover); }
+    .btn-emerald {
+      background: var(--emerald);
+      color: #000000;
+      font-weight: 700;
+      box-shadow: 0 0 12px rgba(0, 255, 136, 0.25);
+    }
+    .btn-emerald:hover {
+      background: var(--emerald-hover);
+      box-shadow: 0 0 18px rgba(0, 255, 136, 0.45);
+    }
     .btn-secondary { background: var(--surface-elevated); border-color: var(--border); color: #e4e4e7; }
     .btn-secondary:hover { background: var(--surface-hover); border-color: #383a45; color: #fff; }
     .btn-purple { background: var(--purple-subtle); border-color: var(--purple-border); color: var(--purple); font-weight: 600; }
@@ -565,8 +590,8 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
       position: absolute;
       left: 3px;
       right: 3px;
-      background: rgba(36, 180, 126, 0.09);
-      border: 1px dashed var(--emerald);
+      background: rgba(0, 255, 136, 0.08);
+      border: 1.5px dashed rgba(0, 255, 136, 0.45);
       border-radius: 6px;
       z-index: 10;
       display: flex;
@@ -575,48 +600,60 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
       overflow: hidden;
       cursor: grab;
       touch-action: none;
-      transition: background-color 0.15s;
+      transition: background-color 0.15s, border-color 0.15s;
     }
-    .avail-block:active {
+    .avail-block:hover {
+      border-color: #00ff88;
+      background: rgba(0, 255, 136, 0.11);
+    }
+    .avail-block.is-dragging, .avail-block:active {
       cursor: grabbing;
-      background: rgba(36, 180, 126, 0.16);
+      background: rgba(0, 255, 136, 0.16);
+      border-color: #00ff88;
+      box-shadow: 0 0 12px rgba(0, 255, 136, 0.25);
     }
     .avail-drag-handle {
-      height: 9px;
+      height: 10px;
       display: flex;
       align-items: center;
       justify-content: center;
       cursor: ns-resize;
-      background: rgba(36, 180, 126, 0.18);
+      background: rgba(0, 255, 136, 0.18);
       touch-action: none;
+      transition: background-color 0.15s;
+    }
+    .avail-drag-handle:hover {
+      background: rgba(0, 255, 136, 0.4);
     }
     .avail-drag-handle::after {
       content: "";
-      width: 20px;
+      width: 24px;
       height: 2px;
-      background: var(--emerald-text);
+      background: #00ff88;
       border-radius: 1px;
+      box-shadow: 0 0 4px #00ff88;
     }
-    .avail-drag-handle.top { border-bottom: 1px solid rgba(36, 180, 126, 0.15); }
-    .avail-drag-handle.bottom { border-top: 1px solid rgba(36, 180, 126, 0.15); }
+    .avail-drag-handle.top { border-bottom: 1px solid rgba(0, 255, 136, 0.2); }
+    .avail-drag-handle.bottom { border-top: 1px solid rgba(0, 255, 136, 0.2); }
     .avail-block-label {
-      padding: 2px 4px;
-      font-size: 10px;
-      font-weight: 500;
-      color: var(--emerald-text);
+      padding: 3px 4px;
+      font-size: 10.5px;
+      font-weight: 600;
+      color: #00ff88;
       text-align: center;
       font-family: 'JetBrains Mono', monospace;
-      pointer-events: none;
+      cursor: grab;
+      user-select: none;
     }
 
-    /* Microsoft Teams Meeting Cards */
+    /* Microsoft Teams Meeting Cards - Low Opacity Neon Green */
     .teams-meeting-card {
       position: absolute;
       left: 4px;
       right: 4px;
-      background: #181920;
-      border: 1px solid #292a34;
-      border-left: 4px solid var(--emerald);
+      background: rgba(0, 255, 136, 0.12);
+      border: 1px solid rgba(0, 255, 136, 0.28);
+      border-left: 4px solid #00ff88;
       border-radius: 6px;
       padding: 5px 8px;
       cursor: pointer;
@@ -625,28 +662,30 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
       display: flex;
       flex-direction: column;
       gap: 2px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.4);
-      transition: transform 0.1s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+      backdrop-filter: blur(4px);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+      transition: transform 0.1s ease, box-shadow 0.15s ease, background-color 0.15s ease, border-color 0.15s ease;
     }
     .teams-meeting-card:hover {
       transform: translateY(-1px);
-      box-shadow: 0 6px 16px rgba(0,0,0,0.6);
-      border-color: #404252;
+      background: rgba(0, 255, 136, 0.19);
+      box-shadow: 0 4px 14px rgba(0, 255, 136, 0.22);
+      border-color: rgba(0, 255, 136, 0.6);
       z-index: 25;
     }
     .teams-meeting-card.home-visit {
-      background: #111a28;
-      border-color: rgba(56, 189, 248, 0.35);
-      border-left: 4px solid #38bdf8;
+      background: rgba(0, 255, 136, 0.11);
+      border-color: rgba(0, 255, 136, 0.32);
+      border-left: 4px solid #00ff88;
     }
     .teams-meeting-card.in-office {
-      background: #1a1628;
-      border-color: rgba(192, 132, 252, 0.35);
-      border-left: 4px solid #c084fc;
+      background: rgba(0, 255, 136, 0.13);
+      border-color: rgba(0, 255, 136, 0.32);
+      border-left: 4px solid #00ff88;
     }
     .meeting-title {
-      font-size: 11px;
-      font-weight: 600;
+      font-size: 11.5px;
+      font-weight: 700;
       color: #fff;
       white-space: nowrap;
       overflow: hidden;
@@ -654,12 +693,13 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
     }
     .meeting-time {
       font-size: 10px;
-      color: var(--text-muted);
+      color: #00ff88;
+      font-weight: 600;
       font-family: 'JetBrains Mono', monospace;
     }
     .meeting-patient {
       font-size: 10.5px;
-      color: #e2e8f0;
+      color: #f1f5f9;
       font-weight: 500;
       white-space: nowrap;
       overflow: hidden;
@@ -667,7 +707,7 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
     }
     .meeting-badge {
       font-size: 9.5px;
-      color: var(--text-subtle);
+      color: #94a3b8;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -807,6 +847,101 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
     input:checked + .slider { background-color: var(--emerald); }
     input:checked + .slider:before { transform: translateX(16px); }
 
+    /* Contact Action Buttons */
+    .contact-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 6px;
+    }
+    .contact-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 11.5px;
+      font-weight: 600;
+      text-decoration: none;
+      transition: all 0.15s;
+    }
+    .contact-chip.whatsapp {
+      background: rgba(0, 255, 136, 0.14);
+      color: #00ff88;
+      border: 1px solid rgba(0, 255, 136, 0.35);
+    }
+    .contact-chip.whatsapp:hover {
+      background: rgba(0, 255, 136, 0.25);
+      border-color: #00ff88;
+    }
+    .contact-chip.call {
+      background: rgba(56, 189, 248, 0.14);
+      color: #38bdf8;
+      border: 1px solid rgba(56, 189, 248, 0.35);
+    }
+    .contact-chip.call:hover {
+      background: rgba(56, 189, 248, 0.25);
+      border-color: #38bdf8;
+    }
+
+    /* WhatsApp Conversation Thread in Details Modal */
+    .chat-thread-container {
+      max-height: 180px;
+      overflow-y: auto;
+      background: #090a0d;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .chat-bubble {
+      max-width: 86%;
+      padding: 7px 11px;
+      border-radius: 8px;
+      font-size: 12px;
+      line-height: 1.4;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .chat-bubble.patient {
+      align-self: flex-start;
+      background: #14171f;
+      border: 1px solid #232836;
+      color: #f1f5f9;
+      border-bottom-left-radius: 2px;
+    }
+    .chat-bubble.gemini {
+      align-self: flex-end;
+      background: rgba(0, 255, 136, 0.12);
+      border: 1px solid rgba(0, 255, 136, 0.3);
+      color: #ffffff;
+      border-bottom-right-radius: 2px;
+    }
+    .chat-bubble-sender {
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .chat-bubble.patient .chat-bubble-sender { color: var(--sky); }
+    .chat-bubble.gemini .chat-bubble-sender { color: #00ff88; }
+    .chat-bubble-text { font-size: 11.5px; }
+
+    .day-closed-notice {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      color: var(--text-subtle);
+      font-size: 11px;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      pointer-events: none;
+    }
+
     table { width: 100%; border-collapse: collapse; text-align: left; }
     th { padding: 8px 12px; font-size: 11px; text-transform: uppercase; color: var(--text-subtle); border-bottom: 1px solid var(--border); }
     td { padding: 8px 12px; border-bottom: 1px solid var(--border-subtle); font-size: 12px; }
@@ -846,12 +981,16 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
         <button class="preset-btn" onclick="applyPreset('all')">All 7 Days</button>
       </div>
 
-      <button class="btn btn-secondary" onclick="openWorkHoursModal()">
+      <button class="btn btn-emerald" onclick="openWorkHoursModal()">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
         Weekly Work Hours
       </button>
 
-      <button class="btn btn-emerald" onclick="saveAllWeeklyHours()">
+      <button class="btn btn-secondary" id="toggleHoursBtn" onclick="toggleHoursOverlay()">
+        Show Hours on Calendar
+      </button>
+
+      <button class="btn btn-secondary" onclick="saveAllWeeklyHours()" style="display: none;">
         Save All Weekly Hours
       </button>
 
@@ -874,7 +1013,7 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
 
   <!-- Teams Meeting Details Drawer / Popover Modal -->
   <div id="reservationDetailsModal" class="modal-backdrop">
-    <div class="modal-card">
+    <div class="modal-card" style="max-width: 560px;">
       <div class="modal-header">
         <div style="display: flex; align-items: center; gap: 8px;">
           <span id="detailVisitBadge" class="badge badge-office">IN-OFFICE</span>
@@ -882,53 +1021,65 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
         </div>
         <button onclick="closeReservationModal()" style="background: transparent; border: none; color: var(--text-muted); cursor: pointer; font-size: 18px;">✕</button>
       </div>
-      <div class="modal-body">
-        <!-- Date & Time -->
-        <div style="display: flex; gap: 12px; margin-bottom: 16px;">
-          <div style="color: var(--emerald); padding-top: 2px;">
-            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-          </div>
-          <div>
-            <div id="detailDateTime" style="font-size: 13.5px; font-weight: 600; color: #fff;">-</div>
-            <div id="detailStatusContainer" style="margin-top: 4px;">
-              <span id="detailStatusPill" class="badge badge-paid">CONFIRMED</span>
+      <div class="modal-body" style="max-height: 520px; overflow-y: auto;">
+        <!-- Date & Time + Status & Fee -->
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 14px; background: #0c0e12; border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px;">
+          <div style="display: flex; gap: 10px;">
+            <div style="color: var(--emerald); padding-top: 2px;">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+            </div>
+            <div>
+              <div id="detailDateTime" style="font-size: 13.5px; font-weight: 600; color: #fff;">-</div>
+              <div style="margin-top: 4px; display: flex; align-items: center; gap: 8px;">
+                <span id="detailStatusPill" class="badge badge-paid">CONFIRMED</span>
+                <span id="detailDurationPrice" style="font-size: 12px; color: #00ff88; font-family: 'JetBrains Mono', monospace; font-weight: 600;">$120 • 60 min</span>
+              </div>
             </div>
           </div>
         </div>
 
-        <!-- Patient Info -->
-        <div style="display: flex; gap: 12px; margin-bottom: 16px;">
-          <div style="color: var(--sky); padding-top: 2px;">
-            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-          </div>
-          <div>
-            <div id="detailPatientName" style="font-size: 13.5px; font-weight: 600; color: #fff;">-</div>
-            <div style="display: flex; align-items: center; gap: 8px; margin-top: 4px;">
-              <span id="detailPatientPhone" class="mono" style="font-size: 12px; color: var(--text-muted);">-</span>
-              <a id="detailWhatsAppLink" href="#" target="_blank" style="text-decoration: none;">
-                <span class="badge" style="background: rgba(36, 180, 126, 0.15); color: var(--emerald-text); border: 1px solid var(--emerald-border); cursor: pointer; font-size: 11px;">
-                  Open WhatsApp Chat ↗
-                </span>
+        <!-- Patient Info Card with Direct Contact -->
+        <div style="background: #0c0e12; border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; margin-bottom: 14px;">
+          <div style="font-size: 11px; text-transform: uppercase; color: var(--text-subtle); letter-spacing: 0.05em; margin-bottom: 6px;">Patient Contact Information</div>
+          <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+            <div>
+              <div id="detailPatientName" style="font-size: 15px; font-weight: 700; color: #fff;">-</div>
+              <div id="detailPatientPhone" class="mono" style="font-size: 13px; color: #94a3b8; margin-top: 2px;">-</div>
+            </div>
+            <div class="contact-actions">
+              <a id="detailWhatsAppBtn" href="#" target="_blank" class="contact-chip whatsapp">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.287l-.711 2.598 2.664-.698c.969.585 1.777.893 2.796.893 3.183 0 5.77-2.587 5.77-5.766.001-3.182-2.585-5.78-5.77-5.78zm3.385 8.163c-.145.411-.747.781-1.026.829-.272.046-.622.079-1.921-.458-1.523-.629-2.531-2.164-2.61-2.269-.079-.105-.623-.83-.623-1.583 0-.753.395-1.123.535-1.275.14-.152.307-.19.41-.19.102 0 .204.002.294.006.096.004.225-.036.35.267.129.313.439 1.071.478 1.149.039.078.065.17.013.273-.051.103-.078.167-.154.257-.076.09-.16.2-.229.268-.077.078-.158.163-.068.318.09.155.402.663.864 1.074.595.53 1.096.694 1.251.771.155.077.246.068.338-.039.092-.107.394-.46.5-.618.105-.158.211-.131.353-.078.142.052.902.425 1.057.503.155.078.258.117.296.182.038.065.038.38-.107.791z"/></svg>
+                WhatsApp
+              </a>
+              <a id="detailCallBtn" href="#" class="contact-chip call">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+                Call
               </a>
             </div>
           </div>
         </div>
 
-        <!-- Location / Address -->
-        <div style="display: flex; gap: 12px; margin-bottom: 16px;">
-          <div style="color: #f43f5e; padding-top: 2px;">
-            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
-          </div>
-          <div>
-            <div style="font-size: 11px; text-transform: uppercase; color: var(--text-subtle); letter-spacing: 0.05em;">Location / Address</div>
-            <div id="detailAddress" style="font-size: 13px; color: #e4e4e7; margin-top: 2px;">-</div>
+        <!-- Location / Address Card -->
+        <div style="background: #0c0e12; border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; margin-bottom: 14px;">
+          <div style="font-size: 11px; text-transform: uppercase; color: var(--text-subtle); letter-spacing: 0.05em; margin-bottom: 4px;">Location / Address</div>
+          <div style="display: flex; gap: 10px; align-items: flex-start;">
+            <div style="color: #f43f5e; padding-top: 2px;">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+            </div>
+            <div id="detailAddress" style="font-size: 13px; color: #e4e4e7; line-height: 1.4;">-</div>
           </div>
         </div>
 
-        <!-- Booking Notes / Directives -->
-        <div id="detailNotesContainer" style="background: #0d0e11; border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px; margin-top: 10px;">
-          <div style="font-size: 11px; color: var(--text-subtle);">Booking Notes:</div>
-          <div id="detailNotes" style="font-size: 12.5px; color: var(--text-muted); margin-top: 3px;">-</div>
+        <!-- Booking Symptoms / Notes captured by Gemini -->
+        <div id="detailNotesContainer" style="background: #0c0e12; border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; margin-bottom: 14px;">
+          <div style="font-size: 11px; text-transform: uppercase; color: var(--text-subtle); letter-spacing: 0.05em; margin-bottom: 4px;">Symptoms & Notes (Captured by AI)</div>
+          <div id="detailNotes" style="font-size: 12.5px; color: #f1f5f9; line-height: 1.4;">-</div>
+        </div>
+
+        <!-- WhatsApp Conversation Thread with Gemini -->
+        <div id="detailChatContainer" style="margin-top: 14px; display: none;">
+          <div style="font-size: 11px; text-transform: uppercase; color: var(--text-subtle); letter-spacing: 0.05em; margin-bottom: 6px;">WhatsApp Chat History with AI</div>
+          <div id="detailChatHistory" class="chat-thread-container"></div>
         </div>
       </div>
       <div class="modal-footer" style="display: flex; justify-content: space-between; align-items: center;">
@@ -1054,6 +1205,27 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
     var activeSelectedAppt = null;
     var activeRescheduleApptId = null;
     var dragState = null;
+    var showHoursOverlay = false;
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    function toggleHoursOverlay() {
+      showHoursOverlay = !showHoursOverlay;
+      var btn = document.getElementById('toggleHoursBtn');
+      if (btn) {
+        btn.className = showHoursOverlay ? 'btn btn-emerald' : 'btn btn-secondary';
+        btn.innerText = showHoursOverlay ? 'Hide Hours on Calendar' : 'Show Hours on Calendar';
+      }
+      renderWeeklyGrid();
+    }
 
     var START_HOUR = 7;
     var END_HOUR = 21;
@@ -1200,7 +1372,7 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
 
           apptsHtml += '<div class="teams-meeting-card ' + (isHome ? 'home-visit' : 'in-office') + '" ' +
             'style="top: ' + aTop + 'px; height: ' + aHeight + 'px;" ' +
-            'onclick="openReservationModal(\'' + appt.id + '\')">' +
+            'data-appt-id="' + appt.id + '">' +
             '<div class="meeting-title">' + safeService + '</div>' +
             '<div class="meeting-time">' + timeStr + '</div>' +
             '<div class="meeting-patient">' + safeName + '</div>' +
@@ -1221,8 +1393,8 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
           '<div class="day-col-track ' + (isActive ? '' : 'day-closed') + '" id="track-' + dayOfWeek + '" data-day="' + dayOfWeek + '">';
 
         if (!isActive) {
-          colsHtml += '<button class="closed-overlay-btn" onclick="toggleDayOpen(' + dayOfWeek + ')">+ Open ' + DAY_NAMES[colIdx] + '</button>';
-        } else {
+          colsHtml += '<div class="day-closed-notice">Closed</div>';
+        } else if (showHoursOverlay) {
           colsHtml += '<div class="avail-block" id="availBlock-' + dayOfWeek + '" data-day="' + dayOfWeek + '" style="top: ' + topY + 'px; height: ' + height + 'px;">' +
             '<div class="avail-drag-handle top" data-handle="top" data-day="' + dayOfWeek + '" title="Drag to adjust start time"></div>' +
             '<div class="avail-block-label" data-handle="move" data-day="' + dayOfWeek + '" title="Drag to shift work hours">' +
@@ -1263,29 +1435,44 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
       var timeStr = startDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ' – ' + endDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
       document.getElementById('detailDateTime').innerText = dateStr + ' • ' + timeStr;
 
+      var priceElem = document.getElementById('detailDurationPrice');
+      var priceVal = appt.price ? ('$' + appt.price) : '$120';
+      var durationVal = Math.round((endDate.getTime() - startDate.getTime()) / (60 * 1000)) || 60;
+      if (priceElem) priceElem.innerText = priceVal + ' • ' + durationVal + ' min';
+
       var statusBadge = document.getElementById('detailStatusPill');
       var st = (appt.status || 'confirmed').toLowerCase();
       statusBadge.className = 'badge ' + (st === 'confirmed' ? 'badge-paid' : st === 'rescheduled' ? 'badge-rescheduled' : st === 'completed' ? 'badge-paid' : 'badge-pending');
       statusBadge.innerText = st.toUpperCase();
 
       document.getElementById('detailPatientName').innerText = appt.customer_name || 'Patient';
-      document.getElementById('detailPatientPhone').innerText = appt.customer_phone || '-';
+      
+      var rawPhone = appt.customer_phone || '-';
+      document.getElementById('detailPatientPhone').innerText = rawPhone;
+      var cleanPhone = rawPhone.replace(/[^0-9]/g, '');
 
-      var cleanPhone = (appt.customer_phone || '').replace(/[^0-9]/g, '');
-      var waLink = document.getElementById('detailWhatsAppLink');
+      var waBtn = document.getElementById('detailWhatsAppBtn');
+      var callBtn = document.getElementById('detailCallBtn');
       if (cleanPhone) {
-        waLink.href = 'https://wa.me/' + cleanPhone;
-        waLink.style.display = 'inline-block';
+        if (waBtn) {
+          waBtn.href = 'https://wa.me/' + cleanPhone;
+          waBtn.style.display = 'inline-flex';
+        }
+        if (callBtn) {
+          callBtn.href = 'tel:+' + cleanPhone;
+          callBtn.style.display = 'inline-flex';
+        }
       } else {
-        waLink.style.display = 'none';
+        if (waBtn) waBtn.style.display = 'none';
+        if (callBtn) callBtn.style.display = 'none';
       }
 
       var addrElem = document.getElementById('detailAddress');
       if (isHome) {
         var rawAddr = appt.address || 'Address provided via WhatsApp';
-        addrElem.innerHTML = rawAddr + ' &nbsp;<a href="https://maps.google.com/?q=' + encodeURIComponent(rawAddr) + '" target="_blank" style="color: var(--sky); font-size: 11.5px; text-decoration: underline;">Open in Maps ↗</a>';
+        addrElem.innerHTML = escapeHtml(rawAddr) + ' &nbsp;<a href="https://maps.google.com/?q=' + encodeURIComponent(rawAddr) + '" target="_blank" style="color: var(--sky); font-size: 11.5px; text-decoration: underline;">Open in Google Maps ↗</a>';
       } else {
-        addrElem.innerText = 'Clinic Office (In-Person Patient Visit)';
+        addrElem.innerText = 'Clinic Office (In-Person Patient Consultation)';
       }
 
       var notesElem = document.getElementById('detailNotes');
@@ -1294,7 +1481,30 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
         notesElem.innerText = appt.notes;
         notesBox.style.display = 'block';
       } else {
-        notesBox.style.display = 'none';
+        notesElem.innerText = 'No specific symptoms or directives noted.';
+        notesBox.style.display = 'block';
+      }
+
+      // WhatsApp conversation thread with Gemini
+      var chatContainer = document.getElementById('detailChatContainer');
+      var chatBox = document.getElementById('detailChatHistory');
+      if (chatContainer && chatBox) {
+        if (appt.conversation_history && appt.conversation_history.length > 0) {
+          chatContainer.style.display = 'block';
+          var chatHtml = '';
+          for (var c = 0; c < appt.conversation_history.length; c++) {
+            var m = appt.conversation_history[c];
+            var isInbound = (m.direction === 'inbound');
+            var senderLabel = isInbound ? (appt.customer_name || 'Patient') : 'Gemini AI Receptionist';
+            chatHtml += '<div class="chat-bubble ' + (isInbound ? 'patient' : 'gemini') + '">' +
+              '<div class="chat-bubble-sender">' + escapeHtml(senderLabel) + '</div>' +
+              '<div class="chat-bubble-text">' + escapeHtml(m.body) + '</div>' +
+              '</div>';
+          }
+          chatBox.innerHTML = chatHtml;
+        } else {
+          chatContainer.style.display = 'none';
+        }
       }
 
       document.getElementById('reservationDetailsModal').classList.add('active');
@@ -1542,7 +1752,7 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
             '<td class="mono" style="font-weight: 500; color: #fff;">' + o.date + '</td>' +
             '<td><span class="badge badge-unpaid">' + (o.is_unavailable ? 'Full Day Off' : 'Custom Hours') + '</span></td>' +
             '<td style="color: var(--text-muted);">' + (o.reason || '-') + '</td>' +
-            '<td><button class="btn btn-danger" style="padding: 2px 7px; font-size: 11px;" onclick="deleteOverride(\'' + o.id + '\')">✕</button></td>' +
+            '<td><button class="btn btn-danger" style="padding: 2px 7px; font-size: 11px;" data-delete-override="' + o.id + '">✕</button></td>' +
           '</tr>';
         }
         tbody.innerHTML = overridesHtml;
@@ -1615,6 +1825,177 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
       showToast('Date blockout removed.');
       loadAvailability();
     }
+
+    // Drag and Drop for Working Hours Windows
+    function showDragTooltip(x, y, text) {
+      var tip = document.getElementById('dragTooltip');
+      if (!tip) return;
+      tip.innerText = text;
+      tip.style.left = x + 'px';
+      tip.style.top = (y - 14) + 'px';
+      tip.style.display = 'block';
+    }
+
+    function hideDragTooltip() {
+      var tip = document.getElementById('dragTooltip');
+      if (tip) tip.style.display = 'none';
+    }
+
+    var activeDrag = null;
+
+    document.addEventListener('pointerdown', function(e) {
+      var handle = e.target.closest('[data-handle]');
+      if (!handle) return;
+      e.preventDefault();
+
+      var type = handle.getAttribute('data-handle');
+      var day = parseInt(handle.getAttribute('data-day'), 10);
+      var rule = null;
+      for (var r = 0; r < cachedRules.length; r++) {
+        if (Number(cachedRules[r].day_of_week) === day) {
+          rule = cachedRules[r];
+          break;
+        }
+      }
+      if (!rule) return;
+
+      var blockElem = document.getElementById('availBlock-' + day);
+      if (!blockElem) return;
+
+      var startMins = timeToMinutes(rule.start_time);
+      var endMins = timeToMinutes(rule.end_time);
+
+      activeDrag = {
+        type: type,
+        day: day,
+        rule: rule,
+        startY: e.clientY,
+        initialStartMins: startMins,
+        initialEndMins: endMins,
+        currentStartMins: startMins,
+        currentEndMins: endMins,
+        blockElem: blockElem
+      };
+
+      blockElem.classList.add('is-dragging');
+      showDragTooltip(e.clientX, e.clientY, rule.start_time + ' - ' + rule.end_time);
+    });
+
+    document.addEventListener('pointermove', function(e) {
+      if (!activeDrag) return;
+      e.preventDefault();
+
+      var deltaPx = e.clientY - activeDrag.startY;
+      var deltaMins = Math.round((deltaPx / PX_PER_MIN) / 15) * 15;
+
+      var newStart = activeDrag.initialStartMins;
+      var newEnd = activeDrag.initialEndMins;
+
+      if (activeDrag.type === 'top') {
+        newStart = Math.max(START_HOUR * 60, Math.min(activeDrag.initialEndMins - 30, activeDrag.initialStartMins + deltaMins));
+      } else if (activeDrag.type === 'bottom') {
+        newEnd = Math.min(END_HOUR * 60, Math.max(activeDrag.initialStartMins + 30, activeDrag.initialEndMins + deltaMins));
+      } else if (activeDrag.type === 'move') {
+        var duration = activeDrag.initialEndMins - activeDrag.initialStartMins;
+        newStart = Math.max(START_HOUR * 60, Math.min(END_HOUR * 60 - duration, activeDrag.initialStartMins + deltaMins));
+        newEnd = newStart + duration;
+      }
+
+      activeDrag.currentStartMins = newStart;
+      activeDrag.currentEndMins = newEnd;
+
+      var topY = minutesToY(newStart);
+      var bottomY = minutesToY(newEnd);
+      var height = Math.max(24, bottomY - topY);
+
+      activeDrag.blockElem.style.top = topY + 'px';
+      activeDrag.blockElem.style.height = height + 'px';
+
+      var startTimeStr = minutesToTime(newStart);
+      var endTimeStr = minutesToTime(newEnd);
+      var labelElem = document.getElementById('blockLabel-' + activeDrag.day);
+      if (labelElem) {
+        labelElem.innerText = startTimeStr + ' - ' + endTimeStr;
+      }
+
+      showDragTooltip(e.clientX, e.clientY, startTimeStr + ' - ' + endTimeStr);
+    });
+
+    document.addEventListener('pointerup', async function(e) {
+      if (!activeDrag) return;
+      var drag = activeDrag;
+      activeDrag = null;
+
+      hideDragTooltip();
+      drag.blockElem.classList.remove('is-dragging');
+
+      var finalStart = minutesToTime(drag.currentStartMins);
+      var finalEnd = minutesToTime(drag.currentEndMins);
+
+      drag.rule.start_time = finalStart;
+      drag.rule.end_time = finalEnd;
+
+      var sInp = document.getElementById('start-' + drag.day);
+      var eInp = document.getElementById('end-' + drag.day);
+      if (sInp) sInp.value = finalStart;
+      if (eInp) eInp.value = finalEnd;
+
+      var dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+      try {
+        await fetch('/admin/api/availability/rules?key=' + adminKey, {
+          method: 'POST',
+          headers: headers,
+          body: JSON.stringify({
+            day_of_week: drag.day,
+            start_time: finalStart,
+            end_time: finalEnd,
+            is_active: true
+          })
+        });
+        showToast('Updated ' + dayNames[drag.day] + ' work hours: ' + finalStart + ' - ' + finalEnd);
+        renderWeeklyGrid();
+      } catch (err) {
+        console.error(err);
+      }
+    });
+
+    // Delegated click handler for meeting cards and table buttons
+    document.addEventListener('click', function(e) {
+      var card = e.target.closest('[data-appt-id]');
+      if (card) {
+        var apptId = card.getAttribute('data-appt-id');
+        openReservationModal(apptId);
+      }
+      var delBtn = e.target.closest('[data-delete-override]');
+      if (delBtn) {
+        var oId = delBtn.getAttribute('data-delete-override');
+        deleteOverride(oId);
+      }
+    });
+
+    // Expose all functions to global window
+    window.prevWeek = prevWeek;
+    window.nextWeek = nextWeek;
+    window.todayWeek = todayWeek;
+    window.openWorkHoursModal = openWorkHoursModal;
+    window.closeWorkHoursModal = closeWorkHoursModal;
+    window.openReservationModal = openReservationModal;
+    window.closeReservationModal = closeReservationModal;
+    window.openRescheduleFromDetails = openRescheduleFromDetails;
+    window.completeFromDetails = completeFromDetails;
+    window.cancelFromDetails = cancelFromDetails;
+    window.openRescheduleModal = openRescheduleModal;
+    window.closeRescheduleModal = closeRescheduleModal;
+    window.applyDirective = applyDirective;
+    window.submitAiReschedule = submitAiReschedule;
+    window.toggleDayOpen = toggleDayOpen;
+    window.toggleHoursOverlay = toggleHoursOverlay;
+    window.applyPreset = applyPreset;
+    window.saveSingleDayHours = saveSingleDayHours;
+    window.saveAllWeeklyHours = saveAllWeeklyHours;
+    window.addOverride = addOverride;
+    window.deleteOverride = deleteOverride;
 
     // Initial Load
     loadAppointments();

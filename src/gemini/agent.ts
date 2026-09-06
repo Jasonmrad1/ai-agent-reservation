@@ -474,16 +474,38 @@ CURRENT SYSTEM CONTEXT:
           const serviceItem = CLINIC_SERVICES.find((s) => s.name.toLowerCase() === (args.service || '').toLowerCase()) || CLINIC_SERVICES[0];
           const startTimeIso = new Date(`${args.date}T${args.time}:00.000Z`).toISOString();
 
+          const patientName = args.patient_name || args.customer_name || customer.name;
+          const patientPhone = args.patient_phone || args.customer_phone || customer.phone;
+
+          if (patientName && patientName !== customer.name) {
+            db.customers.updateName(customer.id, patientName);
+            customer.name = patientName;
+          }
+
+          if (args.patient_phone && args.patient_phone !== customer.phone) {
+            try {
+              db.customers.updatePhone(customer.id, args.patient_phone);
+              customer.phone = args.patient_phone;
+            } catch {
+              // ignore phone update collision
+            }
+          }
+
+          let combinedNotes = args.notes || null;
+          if (args.patient_phone && args.patient_phone !== customer.phone) {
+            combinedNotes = combinedNotes ? `${combinedNotes} | Contact Phone: ${args.patient_phone}` : `Contact Phone: ${args.patient_phone}`;
+          }
+
           const appt = await this.scheduler.bookAppointment({
             customerId: customer.id,
-            customerPhone: customer.phone,
-            customerName: args.customer_name || customer.name,
+            customerPhone: patientPhone,
+            customerName: patientName,
             visitType,
             address: args.address || null,
             service: args.service || serviceItem.name,
             price: serviceItem.price,
             startTime: startTimeIso,
-            notes: args.notes || null,
+            notes: combinedNotes,
           });
 
           // Notify admin

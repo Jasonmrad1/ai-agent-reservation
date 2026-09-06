@@ -54,13 +54,21 @@ export const BOOK_APPOINTMENT_TOOL: FunctionDeclaration = {
         type: SchemaType.STRING,
         description: 'Name of the service (e.g. "General Consultation", "Home Visit Care").',
       },
+      patient_name: {
+        type: SchemaType.STRING,
+        description: 'Full name of the patient (e.g. John Doe).',
+      },
+      patient_phone: {
+        type: SchemaType.STRING,
+        description: 'Contact phone number of the patient (e.g. +961 71 123 456 or alternate mobile).',
+      },
       address: {
         type: SchemaType.STRING,
         description: 'Physical address of the patient. MANDATORY if visit_type is "home_visit".',
       },
       notes: {
         type: SchemaType.STRING,
-        description: 'Any special symptoms or notes provided by the customer.',
+        description: 'Any special symptoms, medical notes, or directives provided by the patient.',
       },
     },
     required: ['date', 'time', 'visit_type', 'service'],
