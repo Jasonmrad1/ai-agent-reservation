@@ -7,11 +7,18 @@ import { ReminderRunner } from '../src/reminders/runner.js';
 import { BillingService } from '../src/billing/service.js';
 import { createAdminRouter } from '../src/admin/routes.js';
 
+import { InMemoryCalendarProvider } from '../src/calendar/provider.js';
+import { SchedulingEngine } from '../src/calendar/scheduler.js';
+import { MockGeminiClient } from '../src/gemini/index.js';
+
 describe('Phases 5, 6, 7: Reminders, Billing, & Admin Dashboard', () => {
   let db: DatabaseContext;
   let gateway: MockWhatsAppGateway;
   let reminders: ReminderRunner;
   let billing: BillingService;
+  let calendar: InMemoryCalendarProvider;
+  let scheduler: SchedulingEngine;
+  let geminiClient: MockGeminiClient;
   let app: express.Application;
   const ADMIN_SECRET = 'test_secret_123';
 
@@ -20,10 +27,20 @@ describe('Phases 5, 6, 7: Reminders, Billing, & Admin Dashboard', () => {
     gateway = new MockWhatsAppGateway();
     reminders = new ReminderRunner({ db, gateway });
     billing = new BillingService({ db, gateway });
+    calendar = new InMemoryCalendarProvider();
+    scheduler = new SchedulingEngine({ db, calendar });
+    geminiClient = new MockGeminiClient();
 
     app = express();
     app.use(express.json());
-    app.use('/admin', createAdminRouter({ db, billing, adminSecret: ADMIN_SECRET }));
+    app.use('/admin', createAdminRouter({
+      db,
+      billing,
+      adminSecret: ADMIN_SECRET,
+      scheduler,
+      gateway,
+      geminiClient,
+    }));
   });
 
   describe('Phase 5: Outbound Reminders', () => {
@@ -196,12 +213,82 @@ describe('Phases 5, 6, 7: Reminders, Billing, & Admin Dashboard', () => {
       expect(resolvedList.body.alerts[0].status).toBe('resolved');
     });
 
-    it('renders admin HTML dashboard page', async () => {
+    it('allows the doctor to explicitly set work hours in batch', async () => {
+      const authHeader = `Bearer ${ADMIN_SECRET}`;
+
+      const newHours = [
+        { day_of_week: 1, start_time: '08:00', end_time: '18:00', is_active: true }, // Monday 8-18
+        { day_of_week: 2, start_time: '08:00', end_time: '18:00', is_active: true },
+        { day_of_week: 3, start_time: '08:00', end_time: '18:00', is_active: true },
+        { day_of_week: 4, start_time: '08:00', end_time: '18:00', is_active: true },
+        { day_of_week: 5, start_time: '08:00', end_time: '16:00', is_active: true },
+        { day_of_week: 6, start_time: '10:00', end_time: '14:00', is_active: true }, // Saturday open
+        { day_of_week: 0, start_time: '09:00', end_time: '13:00', is_active: false }, // Sunday closed
+      ];
+
+      const res = await request(app)
+        .post('/admin/api/availability/rules/batch')
+        .set('Authorization', authHeader)
+        .send({ rules: newHours });
+
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+
+      const mon = db.availability.getRuleForDay(1);
+      expect(mon?.start_time).toBe('08:00');
+      expect(mon?.end_time).toBe('18:00');
+
+      const sat = db.availability.getRuleForDay(6);
+      expect(sat?.is_active).toBe(true);
+      expect(sat?.start_time).toBe('10:00');
+    });
+
+    it('prompts the AI from the panel to reschedule an appointment with the client', async () => {
+      const authHeader = `Bearer ${ADMIN_SECRET}`;
+
+      // Create patient and appointment
+      const cust = db.customers.findOrCreate('whatsapp:+15557778888', 'Michael');
+      const appt = db.appointments.create({
+        customer_id: cust.id,
+        visit_type: 'in_office',
+        service: 'General Consultation',
+        price: 120,
+        start_time: '2026-09-08T09:00:00.000Z',
+        end_time: '2026-09-08T10:00:00.000Z',
+      });
+
+      gateway.clear();
+
+      // Doctor triggers AI reschedule request from admin panel with custom directive
+      const res = await request(app)
+        .post(`/admin/api/appointments/${appt.id}/request-reschedule`)
+        .set('Authorization', authHeader)
+        .send({
+          doctorPrompt: 'Doctor called into emergency surgery Tuesday morning. Offer Wednesday or Thursday.',
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(res.body.messageSent).toContain('emergency surgery');
+      expect(res.body.messageSent).toContain('Michael');
+
+      // WhatsApp message was dispatched to the patient
+      expect(gateway.sentMessages.length).toBe(1);
+      expect(gateway.sentMessages[0].to).toBe('whatsapp:+15557778888');
+      expect(gateway.sentMessages[0].body).toContain('emergency surgery');
+
+      // Appointment updated to rescheduled status in DB with notes
+      const updatedAppt = db.appointments.findById(appt.id);
+      expect(updatedAppt?.status).toBe('rescheduled');
+      expect(updatedAppt?.notes).toContain('emergency surgery');
+    });
+
+    it('renders admin HTML dashboard page with work hours controls and AI reschedule button', async () => {
       const res = await request(app).get(`/admin/dashboard?key=${ADMIN_SECRET}`);
       expect(res.status).toBe(200);
-      expect(res.text).toContain('Dr. Robert Smith - Practice Management Dashboard');
-      expect(res.text).toContain('Upcoming Appointments');
-      expect(res.text).toContain('Weekly Availability');
+      expect(res.text).toContain('Weekly Work Hours');
+      expect(res.text).toContain('Save All Weekly Hours');
+      expect(res.text).toContain('🤖 AI Reschedule');
     });
   });
 });

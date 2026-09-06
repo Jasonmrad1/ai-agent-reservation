@@ -36,6 +36,18 @@ export interface GeminiClient {
     toolArgs: any;
     toolResult: any;
   }): Promise<string>;
+
+  generateRescheduleOutreach(params: {
+    customerName: string;
+    appointment: {
+      service: string;
+      start_time: string;
+      visit_type: string;
+      address?: string | null;
+    };
+    doctorPrompt?: string;
+    suggestedSlots?: string[];
+  }): Promise<string>;
 }
 
 export class LiveGeminiClient implements GeminiClient {
@@ -103,6 +115,40 @@ The backend result is:
 ${JSON.stringify(params.toolResult, null, 2)}
 
 Please draft a friendly, professional WhatsApp reply to the user based on this result. Keep it clear, empathetic, and concise. Do NOT hallucinate any details not in the result.
+`;
+
+      const result = await model.generateContent(prompt);
+      return result.response.text();
+    });
+  }
+
+  public async generateRescheduleOutreach(params: {
+    customerName: string;
+    appointment: {
+      service: string;
+      start_time: string;
+      visit_type: string;
+      address?: string | null;
+    };
+    doctorPrompt?: string;
+    suggestedSlots?: string[];
+  }): Promise<string> {
+    return withRetry(async () => {
+      const model = this.genAI.getGenerativeModel({
+        model: this.modelName,
+        systemInstruction: SYSTEM_PROMPT,
+      });
+
+      const prompt = `
+Doctor Robert Smith needs to reschedule an upcoming appointment with a patient.
+Patient Name: ${params.customerName}
+Current Appointment: ${params.appointment.service} at ${params.appointment.start_time} (${params.appointment.visit_type === 'home_visit' ? 'Home Visit' : 'In-Office'})
+Doctor's Directive / Reason: ${params.doctorPrompt || 'Doctor has an unexpected schedule conflict and needs to move this appointment.'}
+Suggested Alternate Slots: ${params.suggestedSlots && params.suggestedSlots.length > 0 ? params.suggestedSlots.join(', ') : 'Ask patient for their preferred days/times'}
+
+Write a polite, warm, and apologetic WhatsApp message from Dr. Smith's medical office to the patient.
+Explain that Dr. Smith needs to reschedule, propose the alternatives or ask when they are free, and invite them to reply directly with what works best for them.
+Keep it natural, professional, and concise for WhatsApp.
 `;
 
       const result = await model.generateContent(prompt);
@@ -252,6 +298,24 @@ export class MockGeminiClient implements GeminiClient {
     }
 
     return JSON.stringify(params.toolResult);
+  }
+
+  public async generateRescheduleOutreach(params: {
+    customerName: string;
+    appointment: {
+      service: string;
+      start_time: string;
+      visit_type: string;
+      address?: string | null;
+    };
+    doctorPrompt?: string;
+    suggestedSlots?: string[];
+  }): Promise<string> {
+    const slots = params.suggestedSlots && params.suggestedSlots.length > 0
+      ? ` Here are suggested open times: ${params.suggestedSlots.join(', ')}.`
+      : '';
+    const reason = params.doctorPrompt ? ` (${params.doctorPrompt})` : '';
+    return `Hello ${params.customerName}, Dr. Smith needs to reschedule your ${params.appointment.service} appointment on ${params.appointment.start_time}${reason}.${slots} Please reply with your preferred day and time!`;
   }
 }
 

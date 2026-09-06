@@ -52,6 +52,12 @@ export class AvailabilityRepository {
     }
   }
 
+  public updateRulesBatch(rules: Array<{ day_of_week: number; start_time: string; end_time: string; is_active: boolean }>): void {
+    for (const rule of rules) {
+      this.updateRule(rule.day_of_week, rule.start_time, rule.end_time, rule.is_active);
+    }
+  }
+
   public getAllOverrides(): AvailabilityOverride[] {
     const rows = this.db.prepare(`
       SELECT * FROM availability_overrides

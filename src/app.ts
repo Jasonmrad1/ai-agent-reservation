@@ -121,6 +121,9 @@ export function createApp(options: CreateAppOptions = {}): AppInstance {
     db,
     billing,
     adminSecret: cfg.adminSessionSecret,
+    scheduler,
+    gateway,
+    geminiClient,
   });
   app.use('/admin', adminRouter);
 
