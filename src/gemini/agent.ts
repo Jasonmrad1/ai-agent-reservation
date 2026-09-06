@@ -109,12 +109,19 @@ export class LiveGeminiClient implements GeminiClient {
       });
 
       const prompt = `
-The user sent: "${params.userQuery}"
+The patient sent: "${params.userQuery}"
 You executed the tool "${params.toolName}" with arguments: ${JSON.stringify(params.toolArgs)}.
 The backend result is:
 ${JSON.stringify(params.toolResult, null, 2)}
 
-Please draft a friendly, professional WhatsApp reply to the user based on this result. Keep it clear, empathetic, and concise. Do NOT hallucinate any details not in the result.
+Draft a natural, warm, and concise WhatsApp reply to the patient based on this result.
+Guidelines:
+- Sound like a real clinic receptionist texting on WhatsApp.
+- Keep it concise (1 to 3 short sentences).
+- If slots are available, suggest 2 or 3 convenient open times naturally and ask which one works best.
+- If an appointment was confirmed, state the confirmed day, time, service, and location clearly.
+- If it's a home visit and their full address is missing, politely ask for their full street address, building, and area.
+- NEVER sound like an AI. Avoid robotic bulleted questionnaires.
 `;
 
       const result = await model.generateContent(prompt);
@@ -353,46 +360,82 @@ export class AgentCore {
       return this.executeEscalation(customer, conversation, db, 'Customer asked for human explicitly', 'medium');
     }
 
-    // 2. Build conversation history for context
-    const recentMessages = db.messages.getRecentMessages(conversation.id, 6);
-    const conversationHistory: Array<{ role: 'user' | 'model'; parts: Array<{ text?: string }> }> = [];
+    // 2. Dynamic Calendar & Time Context
+    const now = new Date();
+    const todayStr = now.toISOString().split('T')[0];
+    const dayOfWeek = now.toLocaleDateString('en-US', { weekday: 'long' });
+    const timeStr = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+    const contextSystemPrompt = `${SYSTEM_PROMPT}
+
+CURRENT SYSTEM CONTEXT:
+- Today's date: ${todayStr} (${dayOfWeek})
+- Current time: ${timeStr}
+- Patient Name: ${customer.name || 'Patient'}
+- Patient Phone: ${customer.phone}`;
+
+    // 3. Build sanitized, alternating conversation history
+    const recentMessages = db.messages.getRecentMessages(conversation.id, 16);
+    const rawHistory: Array<{ role: 'user' | 'model'; text: string }> = [];
 
     for (const msg of recentMessages) {
       if (msg.body === incomingText) continue; // skip current
-      conversationHistory.push({
+      rawHistory.push({
         role: msg.direction === 'inbound' ? 'user' : 'model',
-        parts: [{ text: msg.body }],
+        text: msg.body,
       });
     }
 
-    // 3. Request Gemini classification / tool call
+    const conversationHistory: Array<{ role: 'user' | 'model'; parts: Array<{ text?: string }> }> = [];
+    let lastRole: 'user' | 'model' | null = null;
+
+    for (const item of rawHistory) {
+      if (item.role === lastRole && conversationHistory.length > 0) {
+        // Merge consecutive messages from same role
+        const prev = conversationHistory[conversationHistory.length - 1];
+        if (prev.parts[0]?.text) {
+          prev.parts[0].text += `\n${item.text}`;
+        }
+      } else {
+        // Conversation history must begin with 'user' for Gemini API
+        if (conversationHistory.length === 0 && item.role === 'model') {
+          continue;
+        }
+        conversationHistory.push({
+          role: item.role,
+          parts: [{ text: item.text }],
+        });
+        lastRole = item.role;
+      }
+    }
+
+    // 4. Request Gemini classification / tool call
     console.log(`[Agent] 🤖 Calling Gemini LLM for intent & tool calling...`);
     const geminiRes = await this.client.generateResponse({
-      systemPrompt: SYSTEM_PROMPT,
+      systemPrompt: contextSystemPrompt,
       conversationHistory,
       incomingMessage: incomingText,
       tools: AGENT_TOOLS,
     });
 
     if (geminiRes.text && (!geminiRes.toolCalls || geminiRes.toolCalls.length === 0)) {
-      console.log(`[Agent] 💬 Gemini responded with direct text (no tool needed)`);
+      console.log(`[Agent] 💬 Gemini responded with direct text: "${geminiRes.text}"`);
       return geminiRes.text;
     }
 
     if (!geminiRes.toolCalls || geminiRes.toolCalls.length === 0) {
-      return "I'm here to help with your appointments and clinic questions. How may I help you today?";
+      return "Hi! How can our medical practice help you today? Would you like to book an in-office or home visit?";
     }
 
-    // 4. Deterministic tool execution
+    // 5. Deterministic tool execution
     const toolCall = geminiRes.toolCalls[0];
     console.log(`[Agent] 🛠️ Tool invoked: ${toolCall.name} | Args:`, JSON.stringify(toolCall.args));
     const toolResult = await this.executeTool(toolCall, customer, conversation, db);
     console.log(`[Agent] 📋 Tool result:`, JSON.stringify(toolResult));
 
-    // 5. Draft grounded reply from backend tool result
+    // 6. Draft grounded reply from backend tool result
     console.log(`[Agent] ✍️ Drafting grounded reply from tool result...`);
     const reply = await this.client.generateReplyFromToolResult({
-      systemPrompt: SYSTEM_PROMPT,
+      systemPrompt: contextSystemPrompt,
       userQuery: incomingText,
       toolName: toolCall.name,
       toolArgs: toolCall.args,
