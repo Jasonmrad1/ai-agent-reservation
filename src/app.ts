@@ -114,7 +114,9 @@ export function createApp(options: CreateAppOptions = {}): AppInstance {
   });
 
   app.post('/api/webhook/whatsapp', webhookRouter.handleInboundMessage);
+  app.post('/webhook/whatsapp', webhookRouter.handleInboundMessage);
   app.post('/api/webhook/whatsapp/status', webhookRouter.handleStatusCallback);
+  app.post('/webhook/whatsapp/status', webhookRouter.handleStatusCallback);
 
   // Admin Dashboard & API
   const adminRouter = createAdminRouter({
