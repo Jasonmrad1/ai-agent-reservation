@@ -159,7 +159,7 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
     } else {
       const slotText = suggestedSlots.length > 0 ? ` Suggested open times: ${suggestedSlots.join('; ')}.` : '';
       const reasonText = doctorPrompt ? ` (${doctorPrompt})` : '';
-      outreachMessage = `Hello ${customer.name || 'Patient'}, Dr. Smith needs to reschedule your ${appt.service} appointment originally scheduled for ${new Date(appt.start_time).toLocaleString()}${reasonText}.${slotText} Please reply with your preferred day and time!`;
+      outreachMessage = `Hello ${customer.name || 'Patient'}, we need to reschedule your ${appt.service} appointment originally scheduled for ${new Date(appt.start_time).toLocaleString()}${reasonText}.${slotText} Please reply with your preferred day and time!`;
     }
 
     // Dispatch via WhatsApp Gateway
@@ -217,31 +217,31 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Dr. Robert Smith - Practice Management Dashboard</title>
+  <title>Practice Management Dashboard</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg: #121212;
-      --bg-surface: #181818;
-      --bg-surface-elevated: #1e1e1e;
-      --bg-surface-hover: #262626;
-      --border: #2e2e2e;
-      --border-focus: #3ecf8e;
-      --emerald: #3ecf8e;
-      --emerald-dark: #1e4e3b;
-      --emerald-hover: #34b27b;
-      --emerald-glow: rgba(62, 207, 142, 0.18);
-      --text: #ededed;
-      --text-muted: #9ca3af;
-      --text-subtle: #71717a;
+      --bg: #090a0c;
+      --bg-surface: #111317;
+      --bg-surface-elevated: #181b20;
+      --bg-surface-hover: #1f232a;
+      --border: #232730;
+      --border-focus: #00ff87;
+      --emerald: #00ff87;
+      --emerald-dark: rgba(0, 255, 135, 0.12);
+      --emerald-hover: #05e57b;
+      --emerald-glow: rgba(0, 255, 135, 0.35);
+      --text: #f4f4f6;
+      --text-muted: #9ba1ad;
+      --text-subtle: #6b7280;
       --warning: #facc15;
-      --warning-bg: rgba(234, 179, 8, 0.12);
-      --warning-border: rgba(234, 179, 8, 0.28);
-      --danger: #f87171;
-      --danger-bg: rgba(239, 68, 68, 0.12);
+      --warning-bg: rgba(250, 204, 21, 0.12);
+      --warning-border: rgba(250, 204, 21, 0.28);
+      --danger: #ff5c5c;
+      --danger-bg: rgba(255, 92, 92, 0.12);
       --purple: #c084fc;
       --purple-bg: rgba(192, 132, 252, 0.12);
       --cyan: #38bdf8;
@@ -249,11 +249,12 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
-      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-family: 'Outfit', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       background: var(--bg);
       color: var(--text);
       line-height: 1.5;
       padding-bottom: 60px;
+      letter-spacing: -0.2px;
     }
     .mono { font-family: 'JetBrains Mono', monospace; }
     
@@ -261,56 +262,53 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
     .top-nav {
       background: var(--bg-surface);
       border-bottom: 1px solid var(--border);
-      padding: 14px 28px;
+      padding: 16px 32px;
       display: flex;
       justify-content: space-between;
       align-items: center;
       position: sticky;
       top: 0;
       z-index: 50;
-      backdrop-filter: blur(8px);
+      backdrop-filter: blur(12px);
     }
     .brand {
       display: flex;
-      align-items: center;
-      gap: 12px;
+      flex-direction: column;
+      gap: 2px;
     }
-    .brand-logo {
-      width: 34px;
-      height: 34px;
-      background: linear-gradient(135deg, #3ecf8e 0%, #1e4e3b 100%);
-      border-radius: 8px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: #121212;
-      font-weight: 800;
+    .brand-title {
       font-size: 18px;
-      box-shadow: 0 0 12px var(--emerald-glow);
+      font-weight: 700;
+      color: #fff;
+      letter-spacing: -0.4px;
     }
-    .brand-title { font-size: 16px; font-weight: 700; color: #fff; letter-spacing: -0.3px; }
-    .brand-subtitle { font-size: 12px; color: var(--text-muted); }
+    .brand-subtitle {
+      font-size: 12.5px;
+      color: var(--text-muted);
+      font-weight: 400;
+    }
     .status-pill {
       display: flex;
       align-items: center;
       gap: 8px;
-      background: rgba(62, 207, 142, 0.08);
-      border: 1px solid rgba(62, 207, 142, 0.25);
-      padding: 6px 12px;
+      background: var(--emerald-dark);
+      border: 1px solid rgba(0, 255, 135, 0.3);
+      padding: 6px 14px;
       border-radius: 9999px;
       font-size: 12px;
       color: var(--emerald);
       font-weight: 600;
+      box-shadow: 0 0 14px var(--emerald-glow);
     }
     .pulse-dot {
       width: 8px;
       height: 8px;
       background: var(--emerald);
       border-radius: 50%;
-      box-shadow: 0 0 8px var(--emerald);
+      box-shadow: 0 0 10px var(--emerald);
       animation: pulse 2s infinite ease-in-out;
     }
-    @keyframes pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.4; transform: scale(0.8); } }
+    @keyframes pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.3; transform: scale(0.7); } }
 
     /* Layout */
     .container { max-width: 1240px; margin: 28px auto; padding: 0 20px; }

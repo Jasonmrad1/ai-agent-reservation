@@ -140,14 +140,14 @@ Please draft a friendly, professional WhatsApp reply to the user based on this r
       });
 
       const prompt = `
-Doctor Robert Smith needs to reschedule an upcoming appointment with a patient.
+We need to reschedule an upcoming appointment with a patient.
 Patient Name: ${params.customerName}
 Current Appointment: ${params.appointment.service} at ${params.appointment.start_time} (${params.appointment.visit_type === 'home_visit' ? 'Home Visit' : 'In-Office'})
-Doctor's Directive / Reason: ${params.doctorPrompt || 'Doctor has an unexpected schedule conflict and needs to move this appointment.'}
+Reason / Context: ${params.doctorPrompt || 'There is an unexpected schedule conflict and we need to move this appointment.'}
 Suggested Alternate Slots: ${params.suggestedSlots && params.suggestedSlots.length > 0 ? params.suggestedSlots.join(', ') : 'Ask patient for their preferred days/times'}
 
-Write a polite, warm, and apologetic WhatsApp message from Dr. Smith's medical office to the patient.
-Explain that Dr. Smith needs to reschedule, propose the alternatives or ask when they are free, and invite them to reply directly with what works best for them.
+Write a polite, warm, and apologetic WhatsApp message to the patient.
+Explain the need to reschedule, propose the alternatives or ask when they are free, and invite them to reply directly with what works best for them.
 Keep it natural, professional, and concise for WhatsApp.
 `;
 
@@ -315,7 +315,7 @@ export class MockGeminiClient implements GeminiClient {
       ? ` Here are suggested open times: ${params.suggestedSlots.join(', ')}.`
       : '';
     const reason = params.doctorPrompt ? ` (${params.doctorPrompt})` : '';
-    return `Hello ${params.customerName}, Dr. Smith needs to reschedule your ${params.appointment.service} appointment on ${params.appointment.start_time}${reason}.${slots} Please reply with your preferred day and time!`;
+    return `Hello ${params.customerName}, we need to reschedule your ${params.appointment.service} appointment on ${params.appointment.start_time}${reason}.${slots} Please reply with your preferred day and time!`;
   }
 }
 

@@ -184,6 +184,6 @@ describe('Phase 8: End-to-End System Lifecycle Flow', () => {
     // 8. Admin reviews Dashboard HTML
     const dashRes = await request(app).get(`/admin/dashboard?key=${ADMIN_SECRET}`);
     expect(dashRes.status).toBe(200);
-    expect(dashRes.text).toContain('Dr. Robert Smith - Practice Management Dashboard');
+    expect(dashRes.text).toContain('Practice Management Dashboard');
   });
 });
