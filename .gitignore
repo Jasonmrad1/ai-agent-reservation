@@ -1,0 +1,8 @@
+node_modules/
+dist/
+.env
+*.log
+data/
+*.sqlite
+*.sqlite3
+coverage/
