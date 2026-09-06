@@ -506,6 +506,268 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
       border-color: var(--border-focus);
     }
 
+    /* Teams-Style Visual Week Calendar Grid */
+    .calendar-week-container {
+      background: #0f1013;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+      margin-bottom: 20px;
+    }
+    .calendar-week-header-bar {
+      padding: 12px 18px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: var(--surface);
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    .preset-pills {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+    .preset-btn {
+      background: var(--surface-elevated);
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      border-radius: 4px;
+      padding: 4px 10px;
+      font-size: 11.5px;
+      cursor: pointer;
+      font-family: inherit;
+      transition: all 0.15s;
+    }
+    .preset-btn:hover {
+      color: #fff;
+      border-color: #3f414d;
+      background: var(--surface-hover);
+    }
+    .calendar-week-body {
+      display: flex;
+      overflow-x: auto;
+      position: relative;
+      user-select: none;
+    }
+    .time-axis {
+      width: 54px;
+      flex-shrink: 0;
+      border-right: 1px solid var(--border);
+      background: #0d0e11;
+      padding-top: 50px; /* aligns with day column headers */
+    }
+    .time-axis-slot {
+      height: 36px;
+      font-size: 10px;
+      color: var(--text-subtle);
+      font-family: 'JetBrains Mono', monospace;
+      text-align: right;
+      padding-right: 8px;
+      transform: translateY(-6px);
+      box-sizing: border-box;
+    }
+    .days-columns-grid {
+      display: flex;
+      flex: 1;
+      min-width: 680px;
+    }
+    .day-column {
+      flex: 1;
+      border-right: 1px solid var(--border-subtle);
+      display: flex;
+      flex-direction: column;
+      position: relative;
+    }
+    .day-column:last-child {
+      border-right: none;
+    }
+    .day-col-header {
+      height: 50px;
+      border-bottom: 1px solid var(--border);
+      background: #111215;
+      padding: 6px 8px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      gap: 3px;
+    }
+    .day-col-name {
+      font-size: 12px;
+      font-weight: 600;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+    .day-col-status {
+      font-size: 10.5px;
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--emerald-text);
+      cursor: pointer;
+      background: var(--emerald-subtle);
+      border: 1px solid var(--emerald-border);
+      padding: 1px 6px;
+      border-radius: 3px;
+    }
+    .day-col-status.closed {
+      color: var(--text-subtle);
+      background: rgba(255,255,255,0.03);
+      border-color: var(--border-subtle);
+    }
+    .day-col-track {
+      height: 504px; /* 14 hours (07:00-21:00) * 36px = 504px */
+      position: relative;
+      background:
+        repeating-linear-gradient(
+          to bottom,
+          transparent,
+          transparent 35px,
+          rgba(255, 255, 255, 0.03) 35px,
+          rgba(255, 255, 255, 0.03) 36px
+        );
+    }
+    .day-col-track.day-closed {
+      background:
+        repeating-linear-gradient(
+          45deg,
+          rgba(255, 255, 255, 0.015),
+          rgba(255, 255, 255, 0.015) 10px,
+          transparent 10px,
+          transparent 20px
+        );
+      cursor: pointer;
+    }
+    .closed-overlay-btn {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: var(--surface-elevated);
+      border: 1px solid var(--border);
+      color: var(--text-subtle);
+      font-size: 11px;
+      padding: 5px 9px;
+      border-radius: 4px;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all 0.15s;
+    }
+    .closed-overlay-btn:hover {
+      color: #fff;
+      border-color: var(--emerald);
+      background: var(--surface-hover);
+    }
+
+    /* Availability Draggable Block */
+    .avail-block {
+      position: absolute;
+      left: 4px;
+      right: 4px;
+      background: var(--emerald-subtle);
+      border: 1.5px solid var(--emerald);
+      border-radius: 6px;
+      z-index: 10;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      overflow: hidden;
+      cursor: grab;
+      touch-action: none;
+      transition: background-color 0.15s, border-color 0.15s;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    }
+    .avail-block:active {
+      cursor: grabbing;
+      background: rgba(36, 180, 126, 0.22);
+    }
+    .avail-drag-handle {
+      height: 9px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: ns-resize;
+      background: rgba(36, 180, 126, 0.2);
+      touch-action: none;
+    }
+    .avail-drag-handle::after {
+      content: "";
+      width: 22px;
+      height: 2px;
+      background: var(--emerald-text);
+      border-radius: 1px;
+    }
+    .avail-drag-handle.top {
+      border-bottom: 1px solid rgba(36, 180, 126, 0.2);
+    }
+    .avail-drag-handle.bottom {
+      border-top: 1px solid rgba(36, 180, 126, 0.2);
+    }
+    .avail-block-label {
+      padding: 3px 5px;
+      font-size: 10.5px;
+      font-weight: 600;
+      color: #fff;
+      text-align: center;
+      font-family: 'JetBrains Mono', monospace;
+      pointer-events: none;
+    }
+    .avail-block-sub {
+      font-size: 9px;
+      color: var(--emerald-text);
+      font-weight: 500;
+      display: block;
+      opacity: 0.9;
+    }
+
+    /* Booked Appointment Badge on Timeline */
+    .cal-appt-badge {
+      position: absolute;
+      left: 3px;
+      right: 3px;
+      background: rgba(56, 189, 248, 0.2);
+      border: 1px solid rgba(56, 189, 248, 0.45);
+      border-radius: 4px;
+      padding: 3px 5px;
+      font-size: 10px;
+      color: #e0f2fe;
+      z-index: 15;
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+      cursor: pointer;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.4);
+    }
+    .cal-appt-badge:hover {
+      background: rgba(56, 189, 248, 0.35);
+      border-color: #38bdf8;
+    }
+    .cal-appt-badge.in-office {
+      background: rgba(192, 132, 252, 0.2);
+      border-color: rgba(192, 132, 252, 0.45);
+      color: #f3e8ff;
+    }
+
+    /* Floating Drag Tooltip */
+    .drag-tooltip {
+      position: fixed;
+      z-index: 999;
+      background: #18191f;
+      border: 1px solid var(--emerald);
+      color: #fff;
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-family: 'JetBrains Mono', monospace;
+      pointer-events: none;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.6);
+      display: none;
+      transform: translate(-50%, -130%);
+    }
+
     /* Day Schedule Cards */
     .day-item {
       display: flex;
@@ -764,11 +1026,51 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
         <div class="card-header">
           <div>
             <h2>Weekly Work Hours</h2>
-            <p>Set which days and hours you are available for patients to book via WhatsApp.</p>
+            <p>Interactive week schedule. Drag green handles or blocks to set your bookable hours, or use presets.</p>
           </div>
-          <button class="btn btn-emerald" onclick="saveAllWeeklyHours()">Save All Weekly Hours</button>
+          <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+            <div class="preset-pills">
+              <button class="preset-btn" onclick="applyPreset('standard')">Standard 9-5 (M-F)</button>
+              <button class="preset-btn" onclick="applyPreset('extended')">Extended 8-6 (M-Sat)</button>
+              <button class="preset-btn" onclick="applyPreset('all')">All 7 Days</button>
+            </div>
+            <button class="btn btn-emerald" onclick="saveAllWeeklyHours()">Save All Weekly Hours</button>
+          </div>
         </div>
-        <div class="card-body">
+
+        <div style="padding: 18px 20px 0;">
+          <!-- Visual Teams-Style Week Calendar Grid -->
+          <div class="calendar-week-container">
+            <div class="calendar-week-header-bar">
+              <div style="font-size: 12px; font-weight: 600; color: #fff; display: flex; align-items: center; gap: 8px;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--emerald)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                  <line x1="16" y1="2" x2="16" y2="6"></line>
+                  <line x1="8" y1="2" x2="8" y2="6"></line>
+                  <line x1="3" y1="10" x2="21" y2="10"></line>
+                </svg>
+                <span>Week Availability & Appointments Overview</span>
+              </div>
+              <div style="display: flex; align-items: center; gap: 14px; font-size: 11px; color: var(--text-subtle);">
+                <span style="display: flex; align-items: center; gap: 5px;">
+                  <span style="width: 10px; height: 10px; border-radius: 2px; background: var(--emerald-subtle); border: 1px solid var(--emerald);"></span>
+                  Bookable Window (Drag to Adjust)
+                </span>
+                <span style="display: flex; align-items: center; gap: 5px;">
+                  <span style="width: 10px; height: 10px; border-radius: 2px; background: rgba(56, 189, 248, 0.25); border: 1px solid rgba(56, 189, 248, 0.5);"></span>
+                  Booked Patient Visits
+                </span>
+              </div>
+            </div>
+            <div class="calendar-week-body">
+              <div class="time-axis" id="timeAxis"></div>
+              <div class="days-columns-grid" id="daysColumnsGrid"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card-body" style="border-top: 1px solid var(--border); padding-top: 18px;">
+          <div style="font-size: 12.5px; font-weight: 600; color: var(--text-muted); margin-bottom: 10px;">Exact Hours & Single Day Controls</div>
           <div id="weeklyRulesList"></div>
         </div>
       </div>
@@ -916,6 +1218,8 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
     </div>
   </div>
 
+  <div id="dragTooltip" class="drag-tooltip"></div>
+
   <script>
     const adminKey = "${key}";
     const headers = {
@@ -924,6 +1228,9 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
     };
 
     let activeRescheduleApptId = null;
+    let cachedRules = [];
+    let cachedAppointments = [];
+    let dragState = null;
 
     function showToast(msg) {
       const toast = document.getElementById('statusToast');
@@ -945,6 +1252,9 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
         const res = await fetch('/admin/api/appointments?key=' + adminKey, { headers });
         const data = await res.json();
         const tbody = document.querySelector('#appointmentsTable tbody');
+        
+        cachedAppointments = data.appointments || [];
+        renderWeeklyGrid();
         
         let homeCount = 0;
         let officeCount = 0;
@@ -1145,55 +1455,397 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
       loadAlerts();
     }
 
+    const START_HOUR = 7;
+    const END_HOUR = 21;
+    const TOTAL_MINUTES = (END_HOUR - START_HOUR) * 60;
+    const TRACK_HEIGHT = 504;
+    const PX_PER_MIN = TRACK_HEIGHT / TOTAL_MINUTES;
+
+    function timeToMinutes(tStr) {
+      if (!tStr) return START_HOUR * 60;
+      const parts = tStr.split(':');
+      const h = parseInt(parts[0], 10) || 0;
+      const m = parseInt(parts[1], 10) || 0;
+      return h * 60 + m;
+    }
+
+    function minutesToTime(mins) {
+      const clamped = Math.max(START_HOUR * 60, Math.min(END_HOUR * 60, mins));
+      const h = Math.floor(clamped / 60);
+      const m = clamped % 60;
+      return String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0');
+    }
+
+    function minutesToY(mins) {
+      const clamped = Math.max(START_HOUR * 60, Math.min(END_HOUR * 60, mins));
+      return (clamped - (START_HOUR * 60)) * PX_PER_MIN;
+    }
+
+    function renderTimeAxis() {
+      const axis = document.getElementById('timeAxis');
+      if (!axis || axis.children.length > 0) return;
+      let html = '';
+      for (let h = START_HOUR; h <= END_HOUR; h++) {
+        const label = String(h).padStart(2, '0') + ':00';
+        html += '<div class="time-axis-slot">' + label + '</div>';
+      }
+      axis.innerHTML = html;
+    }
+
+    const WEEK_DAYS = [
+      { day: 1, name: 'Mon', full: 'Monday' },
+      { day: 2, name: 'Tue', full: 'Tuesday' },
+      { day: 3, name: 'Wed', full: 'Wednesday' },
+      { day: 4, name: 'Thu', full: 'Thursday' },
+      { day: 5, name: 'Fri', full: 'Friday' },
+      { day: 6, name: 'Sat', full: 'Saturday' },
+      { day: 0, name: 'Sun', full: 'Sunday' }
+    ];
+
+    function renderWeeklyGrid() {
+      renderTimeAxis();
+      var grid = document.getElementById('daysColumnsGrid');
+      if (!grid) return;
+
+      var colsHtml = '';
+      for (var i = 0; i < WEEK_DAYS.length; i++) {
+        var d = WEEK_DAYS[i];
+        var rule = null;
+        for (var r = 0; r < cachedRules.length; r++) {
+          if (Number(cachedRules[r].day_of_week) === d.day) {
+            rule = cachedRules[r];
+            break;
+          }
+        }
+        if (!rule) {
+          rule = { day_of_week: d.day, start_time: '09:00', end_time: '17:00', is_active: false };
+        }
+
+        var isActive = Boolean(rule.is_active);
+        var startMins = timeToMinutes(rule.start_time);
+        var endMins = timeToMinutes(rule.end_time);
+        var topY = minutesToY(startMins);
+        var bottomY = minutesToY(endMins);
+        var height = Math.max(24, bottomY - topY);
+
+        var apptsHtml = '';
+        for (var aIdx = 0; aIdx < cachedAppointments.length; aIdx++) {
+          var a = cachedAppointments[aIdx];
+          if (a.status === 'cancelled') continue;
+          var aDate = new Date(a.start_time);
+          if (aDate.getDay() !== d.day) continue;
+          var aStartMins = aDate.getHours() * 60 + aDate.getMinutes();
+          var aEndMins = aStartMins + 45;
+          var aTop = minutesToY(aStartMins);
+          var aHeight = Math.max(22, (aEndMins - aStartMins) * PX_PER_MIN);
+          var isHome = (a.visit_type === 'home_visit');
+          var timeDisplay = aDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+          var safeName = (a.customer_name || 'Patient').replace(/"/g, '&quot;');
+          apptsHtml += '<div class="cal-appt-badge ' + (isHome ? 'home' : 'in-office') + '" ' +
+            'style="top: ' + aTop + 'px; height: ' + aHeight + 'px;" ' +
+            'title="' + safeName + ' - ' + a.service + ' (' + (isHome ? 'Home Visit' : 'In-Office') + ')" ' +
+            'onclick="openRescheduleModal(\'' + a.id + '\', \'' + safeName + '\', \'' + a.start_time + '\')">' +
+            '<strong>' + timeDisplay + '</strong> ' + safeName +
+            '</div>';
+        }
+
+        colsHtml += '<div class="day-column" data-day="' + d.day + '">' +
+          '<div class="day-col-header">' +
+            '<span class="day-col-name">' + d.name + '</span>' +
+            '<span class="day-col-status ' + (isActive ? '' : 'closed') + '" onclick="toggleDayOpen(' + d.day + ')" title="Click to toggle bookable/closed">' +
+              (isActive ? (rule.start_time + ' - ' + rule.end_time) : 'Closed') +
+            '</span>' +
+          '</div>' +
+          '<div class="day-col-track ' + (isActive ? '' : 'day-closed') + '" id="track-' + d.day + '" data-day="' + d.day + '">';
+
+        if (!isActive) {
+          colsHtml += '<button class="closed-overlay-btn" onclick="toggleDayOpen(' + d.day + ')">+ Open ' + d.name + '</button>';
+        } else {
+          colsHtml += '<div class="avail-block" id="availBlock-' + d.day + '" data-day="' + d.day + '" style="top: ' + topY + 'px; height: ' + height + 'px;">' +
+            '<div class="avail-drag-handle top" data-handle="top" data-day="' + d.day + '" title="Drag to adjust start time"></div>' +
+            '<div class="avail-block-label" data-handle="move" data-day="' + d.day + '" title="Drag whole block to shift hours">' +
+              '<div id="blockLabel-' + d.day + '">' + rule.start_time + ' - ' + rule.end_time + '</div>' +
+              '<span class="avail-block-sub">Bookable (Drag to move)</span>' +
+            '</div>' +
+            '<div class="avail-drag-handle bottom" data-handle="bottom" data-day="' + d.day + '" title="Drag to adjust end time"></div>' +
+          '</div>';
+        }
+
+        colsHtml += apptsHtml + '</div></div>';
+      }
+
+      grid.innerHTML = colsHtml;
+    }
+
+    function showDragTooltip(x, y, text) {
+      var tip = document.getElementById('dragTooltip');
+      if (!tip) return;
+      tip.innerText = text;
+      tip.style.left = x + 'px';
+      tip.style.top = y + 'px';
+      tip.style.display = 'block';
+    }
+
+    function hideDragTooltip() {
+      var tip = document.getElementById('dragTooltip');
+      if (tip) tip.style.display = 'none';
+    }
+
+    document.addEventListener('pointerdown', function(e) {
+      var handle = e.target.closest('[data-handle]');
+      if (!handle) return;
+      var day = Number(handle.getAttribute('data-day'));
+      var mode = handle.getAttribute('data-handle');
+      var block = document.getElementById('availBlock-' + day);
+      var track = document.getElementById('track-' + day);
+      if (!block || !track) return;
+
+      var rule = null;
+      for (var i = 0; i < cachedRules.length; i++) {
+        if (Number(cachedRules[i].day_of_week) === day) {
+          rule = cachedRules[i];
+          break;
+        }
+      }
+      var origStartMin = timeToMinutes(rule ? rule.start_time : '09:00');
+      var origEndMin = timeToMinutes(rule ? rule.end_time : '17:00');
+
+      dragState = {
+        mode: mode,
+        day: day,
+        startY: e.clientY,
+        origStartMin: origStartMin,
+        origEndMin: origEndMin,
+        currStartMin: origStartMin,
+        currEndMin: origEndMin,
+        block: block,
+        label: document.getElementById('blockLabel-' + day)
+      };
+
+      try {
+        handle.setPointerCapture(e.pointerId);
+      } catch (err) {}
+
+      showDragTooltip(e.clientX, e.clientY, minutesToTime(origStartMin) + ' - ' + minutesToTime(origEndMin));
+      e.preventDefault();
+    });
+
+    document.addEventListener('pointermove', function(e) {
+      if (!dragState) return;
+
+      var deltaY = e.clientY - dragState.startY;
+      var deltaMin = Math.round((deltaY / PX_PER_MIN) / 15) * 15;
+
+      var newStart = dragState.origStartMin;
+      var newEnd = dragState.origEndMin;
+
+      if (dragState.mode === 'top') {
+        newStart = Math.max(START_HOUR * 60, Math.min(dragState.origEndMin - 30, dragState.origStartMin + deltaMin));
+      } else if (dragState.mode === 'bottom') {
+        newEnd = Math.min(END_HOUR * 60, Math.max(dragState.origStartMin + 30, dragState.origEndMin + deltaMin));
+      } else if (dragState.mode === 'move') {
+        var duration = dragState.origEndMin - dragState.origStartMin;
+        newStart = Math.max(START_HOUR * 60, Math.min(END_HOUR * 60 - duration, dragState.origStartMin + deltaMin));
+        newEnd = newStart + duration;
+      }
+
+      dragState.currStartMin = newStart;
+      dragState.currEndMin = newEnd;
+
+      var topY = minutesToY(newStart);
+      var height = Math.max(24, minutesToY(newEnd) - topY);
+
+      dragState.block.style.top = topY + 'px';
+      dragState.block.style.height = height + 'px';
+      if (dragState.label) {
+        dragState.label.innerText = minutesToTime(newStart) + ' - ' + minutesToTime(newEnd);
+      }
+
+      showDragTooltip(e.clientX, e.clientY, minutesToTime(newStart) + ' - ' + minutesToTime(newEnd));
+    });
+
+    document.addEventListener('pointerup', async function(e) {
+      if (!dragState) return;
+      var day = dragState.day;
+      var currStartMin = dragState.currStartMin;
+      var currEndMin = dragState.currEndMin;
+      dragState = null;
+      hideDragTooltip();
+
+      var finalStart = minutesToTime(currStartMin);
+      var finalEnd = minutesToTime(currEndMin);
+
+      var startInput = document.getElementById('start-' + day);
+      var endInput = document.getElementById('end-' + day);
+      var activeInput = document.getElementById('active-' + day);
+      if (startInput) startInput.value = finalStart;
+      if (endInput) endInput.value = finalEnd;
+      if (activeInput) activeInput.checked = true;
+
+      var rule = null;
+      for (var i = 0; i < cachedRules.length; i++) {
+        if (Number(cachedRules[i].day_of_week) === day) {
+          rule = cachedRules[i];
+          break;
+        }
+      }
+      if (rule) {
+        rule.start_time = finalStart;
+        rule.end_time = finalEnd;
+        rule.is_active = true;
+      } else {
+        cachedRules.push({ day_of_week: day, start_time: finalStart, end_time: finalEnd, is_active: true });
+      }
+
+      await saveSingleDayHours(day);
+    });
+
+    async function toggleDayOpen(day) {
+      var rule = null;
+      for (var i = 0; i < cachedRules.length; i++) {
+        if (Number(cachedRules[i].day_of_week) === day) {
+          rule = cachedRules[i];
+          break;
+        }
+      }
+      var newActive = rule ? !rule.is_active : true;
+      var startTime = (rule && rule.start_time) ? rule.start_time : '09:00';
+      var endTime = (rule && rule.end_time) ? rule.end_time : '17:00';
+
+      if (rule) {
+        rule.is_active = newActive;
+      } else {
+        cachedRules.push({ day_of_week: day, start_time: startTime, end_time: endTime, is_active: newActive });
+      }
+
+      var activeInput = document.getElementById('active-' + day);
+      if (activeInput) activeInput.checked = newActive;
+
+      var res = await fetch('/admin/api/availability/rules?key=' + adminKey, {
+        method: 'POST',
+        headers: headers,
+        body: JSON.stringify({
+          day_of_week: day,
+          start_time: startTime,
+          end_time: endTime,
+          is_active: newActive
+        })
+      });
+      if (res.ok) {
+        showToast(newActive ? 'Day marked as bookable.' : 'Day marked as closed.');
+        loadAvailability();
+      }
+    }
+
+    async function applyPreset(type) {
+      var days = [0, 1, 2, 3, 4, 5, 6];
+      var rules = days.map(function(day) {
+        var isActive = false;
+        var start = '09:00';
+        var end = '17:00';
+
+        if (type === 'standard') {
+          isActive = (day >= 1 && day <= 5);
+          start = '09:00';
+          end = '17:00';
+        } else if (type === 'extended') {
+          isActive = (day >= 1 && day <= 6);
+          start = '08:00';
+          end = '18:00';
+        } else if (type === 'all') {
+          isActive = true;
+          start = '09:00';
+          end = '18:00';
+        }
+
+        var check = document.getElementById('active-' + day);
+        var startIn = document.getElementById('start-' + day);
+        var endIn = document.getElementById('end-' + day);
+        if (check) check.checked = isActive;
+        if (startIn) startIn.value = start;
+        if (endIn) endIn.value = end;
+
+        return {
+          day_of_week: day,
+          is_active: isActive,
+          start_time: start,
+          end_time: end
+        };
+      });
+
+      var res = await fetch('/admin/api/availability/rules/batch?key=' + adminKey, {
+        method: 'POST',
+        headers: headers,
+        body: JSON.stringify({ rules: rules })
+      });
+
+      if (res.ok) {
+        showToast('Applied ' + type.toUpperCase() + ' schedule preset.');
+        loadAvailability();
+      } else {
+        alert('Failed to apply preset.');
+      }
+    }
+
     async function loadAvailability() {
       try {
-        const res = await fetch('/admin/api/availability?key=' + adminKey, { headers });
-        const data = await res.json();
-        const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-        const rulesContainer = document.getElementById('weeklyRulesList');
+        var res = await fetch('/admin/api/availability?key=' + adminKey, { headers: headers });
+        var data = await res.json();
+        var days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+        var rulesContainer = document.getElementById('weeklyRulesList');
 
-        const activeDaysCount = (data.rules || []).filter(r => r.is_active).length;
+        cachedRules = data.rules || [];
+        renderWeeklyGrid();
+
+        var activeDaysCount = 0;
+        for (var i = 0; i < (data.rules || []).length; i++) {
+          if (data.rules[i].is_active) activeDaysCount++;
+        }
         document.getElementById('kpiDaysOpen').innerText = activeDaysCount + ' / 7 Days';
 
-        rulesContainer.innerHTML = (data.rules || []).map(r => \`
-          <div class="day-item" data-day="\${r.day_of_week}">
-            <div class="day-meta">\${days[r.day_of_week]}</div>
-            
-            <label class="switch-wrap">
-              <div class="switch">
-                <input type="checkbox" id="active-\${r.day_of_week}" \${r.is_active ? 'checked' : ''}>
-                <span class="slider"></span>
-              </div>
-              <span style="font-size: 12.5px; font-weight: 500; color: \${r.is_active ? 'var(--emerald)' : 'var(--text-subtle)'};">
-                \${r.is_active ? 'Bookable' : 'Closed'}
-              </span>
-            </label>
+        var rulesHtml = '';
+        for (var rIdx = 0; rIdx < (data.rules || []).length; rIdx++) {
+          var r = data.rules[rIdx];
+          rulesHtml += '<div class="day-item" data-day="' + r.day_of_week + '">' +
+            '<div class="day-meta">' + days[r.day_of_week] + '</div>' +
+            '<label class="switch-wrap">' +
+              '<div class="switch">' +
+                '<input type="checkbox" id="active-' + r.day_of_week + '" ' + (r.is_active ? 'checked' : '') + '>' +
+                '<span class="slider"></span>' +
+              '</div>' +
+              '<span style="font-size: 12.5px; font-weight: 500; color: ' + (r.is_active ? 'var(--emerald)' : 'var(--text-subtle)') + ';">' +
+                (r.is_active ? 'Bookable' : 'Closed') +
+              '</span>' +
+            '</label>' +
+            '<div style="display: flex; align-items: center; gap: 8px;">' +
+              '<span style="font-size: 12px; color: var(--text-subtle);">From</span>' +
+              '<input type="time" id="start-' + r.day_of_week + '" value="' + r.start_time + '" style="width: 110px;">' +
+              '<span style="font-size: 12px; color: var(--text-subtle);">To</span>' +
+              '<input type="time" id="end-' + r.day_of_week + '" value="' + r.end_time + '" style="width: 110px;">' +
+            '</div>' +
+            '<button class="btn btn-secondary" onclick="saveSingleDayHours(' + r.day_of_week + ')">Save Day</button>' +
+          '</div>';
+        }
+        rulesContainer.innerHTML = rulesHtml;
 
-            <div style="display: flex; align-items: center; gap: 8px;">
-              <span style="font-size: 12px; color: var(--text-subtle);">From</span>
-              <input type="time" id="start-\${r.day_of_week}" value="\${r.start_time}" style="width: 110px;">
-              <span style="font-size: 12px; color: var(--text-subtle);">To</span>
-              <input type="time" id="end-\${r.day_of_week}" value="\${r.end_time}" style="width: 110px;">
-            </div>
-
-            <button class="btn btn-secondary" onclick="saveSingleDayHours(\${r.day_of_week})">Save Day</button>
-          </div>
-        \`).join('');
-
-        const tbody = document.querySelector('#overridesTable tbody');
+        var tbody = document.querySelector('#overridesTable tbody');
         if (!data.overrides || data.overrides.length === 0) {
           tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--text-subtle); padding: 24px;">No date blockouts configured.</td></tr>';
           return;
         }
-        tbody.innerHTML = data.overrides.map(o => \`
-          <tr>
-            <td class="mono" style="font-weight: 500; color: #fff;">\${o.date}</td>
-            <td><span class="badge badge-unpaid">\${o.is_unavailable ? 'Full Day Off' : 'Custom Hours'}</span></td>
-            <td>\${o.start_time || 'All Day'} \${o.end_time ? ' - ' + o.end_time : ''}</td>
-            <td style="color: var(--text-muted);">\${o.reason || '-'}</td>
-            <td><button class="btn btn-danger" onclick="deleteOverride('\${o.id}')">Remove</button></td>
-          </tr>
-        \`).join('');
+
+        var overridesHtml = '';
+        for (var oIdx = 0; oIdx < data.overrides.length; oIdx++) {
+          var o = data.overrides[oIdx];
+          overridesHtml += '<tr>' +
+            '<td class="mono" style="font-weight: 500; color: #fff;">' + o.date + '</td>' +
+            '<td><span class="badge badge-unpaid">' + (o.is_unavailable ? 'Full Day Off' : 'Custom Hours') + '</span></td>' +
+            '<td>' + (o.start_time || 'All Day') + (o.end_time ? ' - ' + o.end_time : '') + '</td>' +
+            '<td style="color: var(--text-muted);">' + (o.reason || '-') + '</td>' +
+            '<td><button class="btn btn-danger" onclick="deleteOverride(\'' + o.id + '\')">Remove</button></td>' +
+          '</tr>';
+        }
+        tbody.innerHTML = overridesHtml;
       } catch (e) {
         console.error(e);
       }
