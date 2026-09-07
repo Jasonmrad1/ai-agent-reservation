@@ -46,7 +46,10 @@ export interface GeminiClient {
       address?: string | null;
     };
     doctorPrompt?: string;
+    proposedDate?: string;
+    proposedTime?: string;
     suggestedSlots?: string[];
+    language?: string;
   }): Promise<string>;
 }
 
@@ -138,7 +141,10 @@ Guidelines:
       address?: string | null;
     };
     doctorPrompt?: string;
+    proposedDate?: string;
+    proposedTime?: string;
     suggestedSlots?: string[];
+    language?: string;
   }): Promise<string> {
     return withRetry(async () => {
       const model = this.genAI.getGenerativeModel({
@@ -146,16 +152,38 @@ Guidelines:
         systemInstruction: SYSTEM_PROMPT,
       });
 
+      let slotDirective = '';
+      if (params.proposedDate && params.proposedTime) {
+        slotDirective = `The doctor specifically proposes moving the appointment to: ${params.proposedDate} at ${params.proposedTime}. Inform the patient and ask if this specific time works for them.`;
+      } else if (params.suggestedSlots && params.suggestedSlots.length > 0) {
+        slotDirective = `Available openings from the doctor's calendar to offer: ${params.suggestedSlots.join(', ')}. Invite the patient to pick one or suggest what suits them.`;
+      } else {
+        slotDirective = `Ask the patient what upcoming days and hours would suit them best.`;
+      }
+
+      let langDirective = '';
+      if (params.language === 'lebanese_arabic') {
+        langDirective = 'Write the message in natural, polite Lebanese Arabic (in Arabic script, e.g. "مرحبا... منعتذر كتير بس مضطرين نأجل الموعد...").';
+      } else if (params.language === 'arabizi') {
+        langDirective = 'Write the message in natural Lebanese Arabizi / Franco-Arabic (e.g. "Marhaba... mnet3ezir ktir bas medtarrin n2ajjel l maw3ad...").';
+      } else if (params.language === 'french') {
+        langDirective = 'Write the message in natural French.';
+      } else if (params.language === 'english') {
+        langDirective = 'Write the message in natural English.';
+      } else {
+        langDirective = 'Write the message in the language the patient usually speaks (default to Lebanese Arabic if in Lebanon, or friendly English).';
+      }
+
       const prompt = `
 We need to reschedule an upcoming appointment with a patient.
 Patient Name: ${params.customerName}
 Current Appointment: ${params.appointment.service} at ${params.appointment.start_time} (${params.appointment.visit_type === 'home_visit' ? 'Home Visit' : 'In-Office'})
-Reason / Context: ${params.doctorPrompt || 'There is an unexpected schedule conflict and we need to move this appointment.'}
-Suggested Alternate Slots: ${params.suggestedSlots && params.suggestedSlots.length > 0 ? params.suggestedSlots.join(', ') : 'Ask patient for their preferred days/times'}
+Reason / Directive: ${params.doctorPrompt || 'Unexpected clinic schedule conflict'}
+${slotDirective}
+${langDirective}
 
-Write a polite, warm, and apologetic WhatsApp message to the patient.
-Explain the need to reschedule, propose the alternatives or ask when they are free, and invite them to reply directly with what works best for them.
-Keep it natural, professional, and concise for WhatsApp.
+Write a polite, warm, and professional WhatsApp message to the patient.
+Keep it natural and concise (1 to 3 short sentences) suitable for a WhatsApp text from a clinic.
 `;
 
       const result = await model.generateContent(prompt);
@@ -316,13 +344,19 @@ export class MockGeminiClient implements GeminiClient {
       address?: string | null;
     };
     doctorPrompt?: string;
+    proposedDate?: string;
+    proposedTime?: string;
     suggestedSlots?: string[];
+    language?: string;
   }): Promise<string> {
-    const slots = params.suggestedSlots && params.suggestedSlots.length > 0
+    const specific = (params.proposedDate && params.proposedTime)
+      ? ` Doctor proposes moving it to ${params.proposedDate} at ${params.proposedTime}.`
+      : '';
+    const slots = (!specific && params.suggestedSlots && params.suggestedSlots.length > 0)
       ? ` Here are suggested open times: ${params.suggestedSlots.join(', ')}.`
       : '';
     const reason = params.doctorPrompt ? ` (${params.doctorPrompt})` : '';
-    return `Hello ${params.customerName}, we need to reschedule your ${params.appointment.service} appointment on ${params.appointment.start_time}${reason}.${slots} Please reply with your preferred day and time!`;
+    return `Hello ${params.customerName}, we need to reschedule your ${params.appointment.service} appointment on ${params.appointment.start_time}${reason}.${specific}${slots} Please reply with your preferred day and time!`;
   }
 }
 

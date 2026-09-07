@@ -117,7 +117,7 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
   // Doctor prompts AI to reschedule with client over WhatsApp
   router.post('/api/appointments/:id/request-reschedule', requireAdminAuth, async (req: Request, res: Response) => {
     const appointmentId = String(req.params.id);
-    const { doctorPrompt } = req.body;
+    const { doctorPrompt, proposedDate, proposedTime, language } = req.body;
 
     const appt = db.appointments.findById(appointmentId);
     if (!appt) {
@@ -141,22 +141,24 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
       return;
     }
 
-    // Get 2-3 upcoming candidate slots using scheduler if available
+    // Get 2-3 upcoming candidate slots using scheduler if doctor didn't specify exact date & time
     let suggestedSlots: string[] = [];
-    if (scheduler) {
-      try {
-        const apptDate = new Date(appt.start_time);
-        for (let i = 1; i <= 3; i++) {
-          const nextDay = new Date(apptDate.getTime() + i * 24 * 60 * 60 * 1000);
-          const nextDayStr = nextDay.toISOString().split('T')[0];
-          const openSlots = await scheduler.getAvailableSlots(nextDayStr, appt.visit_type);
-          if (openSlots.length > 0) {
-            suggestedSlots.push(`${nextDayStr} at ${openSlots.slice(0, 2).join(' or ')}`);
+    if (!proposedDate || !proposedTime) {
+      if (scheduler) {
+        try {
+          const apptDate = new Date(appt.start_time);
+          for (let i = 1; i <= 4; i++) {
+            const nextDay = new Date(apptDate.getTime() + i * 24 * 60 * 60 * 1000);
+            const nextDayStr = nextDay.toISOString().split('T')[0];
+            const openSlots = await scheduler.getAvailableSlots(nextDayStr, appt.visit_type);
+            if (openSlots.length > 0) {
+              suggestedSlots.push(`${nextDayStr} at ${openSlots.slice(0, 2).join(' or ')}`);
+            }
+            if (suggestedSlots.length >= 3) break;
           }
-          if (suggestedSlots.length >= 2) break;
+        } catch {
+          // Fallback gracefully
         }
-      } catch {
-        // Fallback gracefully
       }
     }
 
@@ -172,12 +174,17 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
           address: appt.address,
         },
         doctorPrompt,
+        proposedDate,
+        proposedTime,
         suggestedSlots,
+        language,
       });
     } else {
-      const slotText = suggestedSlots.length > 0 ? ` Suggested open times: ${suggestedSlots.join('; ')}.` : '';
+      const specificText = (proposedDate && proposedTime)
+        ? ` We would like to move your visit to ${proposedDate} at ${proposedTime}. Does this time work for you?`
+        : (suggestedSlots.length > 0 ? ` Suggested open times: ${suggestedSlots.join('; ')}. Please reply with your preferred time!` : ' Please reply with your preferred day and time!');
       const reasonText = doctorPrompt ? ` (${doctorPrompt})` : '';
-      outreachMessage = `Hello ${customer.name || 'Patient'}, we need to reschedule your ${appt.service} appointment originally scheduled for ${new Date(appt.start_time).toLocaleString()}${reasonText}.${slotText} Please reply with your preferred day and time!`;
+      outreachMessage = `Hello ${customer.name || 'Patient'}, we need to reschedule your ${appt.service} appointment originally scheduled for ${new Date(appt.start_time).toLocaleString()}${reasonText}.${specificText}`;
     }
 
     // Dispatch via WhatsApp Gateway
@@ -186,9 +193,10 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
     db.messages.create(conv.id, 'outbound', outreachMessage, sendRes.messageSid, 'sent');
 
     // Update appointment status and notes
+    const logDetails = proposedDate && proposedTime ? `proposing ${proposedDate} at ${proposedTime}` : `prompt: "${doctorPrompt || 'flexible slots'}"`;
     const updatedNotes = [
       appt.notes || '',
-      `[Doctor AI Reschedule Prompt Sent at ${new Date().toISOString()}: "${doctorPrompt || 'Reschedule requested'}"]`,
+      `[Doctor AI Reschedule Sent at ${new Date().toISOString()} (${logDetails})]`,
     ].filter(Boolean).join('\n');
 
     db.appointments.updateStatus(appt.id, 'rescheduled');
@@ -199,6 +207,50 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
       messageSent: outreachMessage,
       suggestedSlots,
       appointment: db.appointments.findById(appt.id),
+    });
+  });
+
+  // Doctor dispatches direct quick automated message to patient on WhatsApp
+  router.post('/api/appointments/:id/send-message', requireAdminAuth, async (req: Request, res: Response) => {
+    const appointmentId = String(req.params.id);
+    const { messageText } = req.body;
+
+    if (!messageText || !String(messageText).trim()) {
+      res.status(400).json({ error: 'Message text is required' });
+      return;
+    }
+
+    const appt = db.appointments.findById(appointmentId);
+    if (!appt) {
+      res.status(404).json({ error: 'Appointment not found' });
+      return;
+    }
+
+    const customer = db.customers.findById(appt.customer_id);
+    if (!customer) {
+      res.status(404).json({ error: 'Customer not found' });
+      return;
+    }
+
+    if (customer.opted_out) {
+      res.status(400).json({ error: 'Customer has opted out of WhatsApp messages' });
+      return;
+    }
+
+    if (!gateway) {
+      res.status(500).json({ error: 'WhatsApp gateway not configured' });
+      return;
+    }
+
+    const trimmed = String(messageText).trim();
+    const sendRes = await gateway.sendMessage(customer.phone, trimmed, customer.id);
+    const conv = db.conversations.getOrCreateActive(customer.id);
+    db.messages.create(conv.id, 'outbound', trimmed, sendRes.messageSid, 'sent');
+
+    res.json({
+      success: true,
+      messageSid: sendRes.messageSid,
+      sentText: trimmed,
     });
   });
 
@@ -1118,9 +1170,13 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
           <div id="detailChatHistory" class="chat-thread-container"></div>
         </div>
       </div>
-      <div class="modal-footer" style="display: flex; justify-content: space-between; align-items: center;">
+      <div class="modal-footer" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
         <button class="btn btn-danger" id="detailCancelBtn" onclick="cancelFromDetails()">Cancel Visit</button>
-        <div style="display: flex; gap: 8px;">
+        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+          <button class="btn btn-secondary" id="detailQuickMsgBtn" onclick="openQuickMessageFromDetails()" style="display: inline-flex; align-items: center; gap: 5px;">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.287l-.711 2.598 2.664-.698c.969.585 1.777.893 2.796.893 3.183 0 5.77-2.587 5.77-5.766.001-3.182-2.585-5.78-5.77-5.78zm3.385 8.163c-.145.411-.747.781-1.026.829-.272.046-.622.079-1.921-.458-1.523-.629-2.531-2.164-2.61-2.269-.079-.105-.623-.83-.623-1.583 0-.753.395-1.123.535-1.275.14-.152.307-.19.41-.19.102 0 .204.002.294.006.096.004.225-.036.35.267.129.313.439 1.071.478 1.149.039.078.065.17.013.273-.051.103-.078.167-.154.257-.076.09-.16.2-.229.268-.077.078-.158.163-.068.318.09.155.402.663.864 1.074.595.53 1.096.694 1.251.771.155.077.246.068.338-.039.092-.107.394-.46.5-.618.105-.158.211-.131.353-.078.142.052.902.425 1.057.503.155.078.258.117.296.182.038.065.038.38-.107.791z"/></svg>
+            Quick WhatsApp
+          </button>
           <button class="btn btn-purple" id="detailRescheduleBtn" onclick="openRescheduleFromDetails()">
             AI Reschedule
           </button>
@@ -1183,36 +1239,103 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
 
   <!-- AI Reschedule Modal Dialog -->
   <div id="aiRescheduleModal" class="modal-backdrop">
-    <div class="modal-card">
+    <div class="modal-card" style="max-width: 540px;">
       <div class="modal-header">
         <h3 style="font-size: 15px; color: #fff;">Prompt AI to Reschedule</h3>
         <button onclick="closeRescheduleModal()" style="background: transparent; border: none; color: var(--text-muted); cursor: pointer; font-size: 16px;">✕</button>
       </div>
       <div class="modal-body">
-        <div style="background: #0d0e11; border: 1px solid var(--border); border-radius: 6px; padding: 12px 14px; margin-bottom: 16px;">
+        <div style="background: #0d0e11; border: 1px solid var(--border); border-radius: 6px; padding: 12px 14px; margin-bottom: 14px;">
           <div style="font-size: 13.5px; font-weight: 600; color: #fff;" id="modalPatientName">-</div>
           <div style="font-size: 12px; color: var(--text-muted); margin-top: 2px;" id="modalApptTime">-</div>
         </div>
         
+        <!-- Doctor's Concrete New Date & Time Slot (Optional) -->
+        <div style="background: rgba(0, 255, 136, 0.05); border: 1px solid rgba(0, 255, 136, 0.2); border-radius: 6px; padding: 12px 14px; margin-bottom: 14px;">
+          <div style="font-size: 12px; font-weight: 600; color: #00ff88; margin-bottom: 4px;">Specific Proposed Slot (Optional)</div>
+          <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 10px;">
+            Specify a target date & time you prefer. If left blank, AI will query your weekly work hours and offer candidate open slots for the patient to pick.
+          </div>
+          <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+            <div style="flex: 1; min-width: 140px;">
+              <label style="font-size: 11px; color: var(--text-subtle); display: block; margin-bottom: 3px;">Proposed Date</label>
+              <input type="date" id="rescheduleNewDate" style="width: 100%;">
+            </div>
+            <div style="flex: 1; min-width: 120px;">
+              <label style="font-size: 11px; color: var(--text-subtle); display: block; margin-bottom: 3px;">Proposed Time</label>
+              <input type="time" id="rescheduleNewTime" style="width: 100%;">
+            </div>
+          </div>
+        </div>
+
+        <div style="margin-bottom: 14px;">
+          <label style="font-size: 12px; font-weight: 500; color: var(--text-muted); display: block; margin-bottom: 4px;">
+            Language & Dialect for WhatsApp Outreach:
+          </label>
+          <select id="rescheduleLanguage" style="width: 100%; background: #0d0e11; border: 1px solid var(--border); border-radius: 6px; color: #f4f4f6; padding: 7px 11px; font-size: 12.5px;">
+            <option value="auto">Auto (Match Patient / Lebanese Clinic)</option>
+            <option value="lebanese_arabic">Lebanese Arabic (عربي لبناني)</option>
+            <option value="arabizi">Lebanese Arabizi (Franco-Arabe e.g. Marhaba)</option>
+            <option value="english">English</option>
+            <option value="french">Français</option>
+          </select>
+        </div>
+
         <label style="font-size: 12px; font-weight: 500; color: var(--text-muted); display: block; margin-bottom: 6px;">
-          Directive / Reason for Rescheduling:
+          Doctor Directive / Reason for Rescheduling:
         </label>
         
         <div class="chip-group">
-          <span class="chip" onclick="applyDirective('Hospital emergency, please pick another day')">Hospital Emergency</span>
+          <span class="chip" onclick="applyDirective('Hospital emergency, doctor called into urgent case')">Hospital Emergency</span>
           <span class="chip" onclick="applyDirective('Doctor unavailable this morning, suggest afternoon slots')">Morning Conflict</span>
-          <span class="chip" onclick="applyDirective('Suggest Wednesday 2pm or Thursday 11am')">Offer Wed / Thu</span>
+          <span class="chip" onclick="applyDirective('Offer Wednesday 2pm or Thursday 11am')">Suggest Wed / Thu</span>
+          <span class="chip" onclick="applyDirective('ظرف طارئ بالمستشفى، يرجى اختيار موعد آخر')">🇱🇧 طارئ (عربي)</span>
         </div>
 
-        <textarea id="modalDoctorPrompt" rows="3" style="width: 100%; max-width: 100%;" placeholder="e.g. Doctor called into surgery. Propose alternative slots on Thursday or Friday."></textarea>
-        <p style="font-size: 11.5px; color: var(--text-subtle); margin-top: 6px;">
-          The AI will compose a natural WhatsApp message with candidate slots from your working hours and dispatch it to the patient.
-        </p>
+        <textarea id="modalDoctorPrompt" rows="2" style="width: 100%; max-width: 100%;" placeholder="e.g. Doctor in urgent surgery. Propose alternative slots or ask patient for preferred hours."></textarea>
       </div>
       <div class="modal-footer">
         <button class="btn btn-secondary" onclick="closeRescheduleModal()">Cancel</button>
         <button class="btn btn-emerald" id="modalSubmitBtn" onclick="submitAiReschedule()">
           Dispatch WhatsApp Request
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Quick Automated WhatsApp Message Modal -->
+  <div id="quickMessageModal" class="modal-backdrop">
+    <div class="modal-card" style="max-width: 520px;">
+      <div class="modal-header">
+        <h3 style="font-size: 15px; color: #fff;">Send Quick WhatsApp Message</h3>
+        <button onclick="closeQuickMessageModal()" style="background: transparent; border: none; color: var(--text-muted); cursor: pointer; font-size: 16px;">✕</button>
+      </div>
+      <div class="modal-body">
+        <div style="background: #0d0e11; border: 1px solid var(--border); border-radius: 6px; padding: 12px 14px; margin-bottom: 14px;">
+          <div style="font-size: 13.5px; font-weight: 600; color: #fff;" id="quickMsgPatientName">-</div>
+          <div style="font-size: 12px; color: var(--text-muted); margin-top: 2px;" id="quickMsgPatientPhone">-</div>
+        </div>
+
+        <label style="font-size: 11px; text-transform: uppercase; color: var(--text-subtle); display: block; margin-bottom: 6px; letter-spacing: 0.04em;">
+          One-Click Templates
+        </label>
+        <div class="chip-group">
+          <span class="chip" onclick="applyQuickTemplate('late')">⏱️ Running 15 Mins Late</span>
+          <span class="chip" onclick="applyQuickTemplate('pin')">📍 Request Google Maps Pin</span>
+          <span class="chip" onclick="applyQuickTemplate('arrived')">🚗 Doctor Has Arrived</span>
+          <span class="chip" onclick="applyQuickTemplate('rx')">💊 Prescription / Lab Ready</span>
+          <span class="chip" onclick="applyQuickTemplate('lebanese_late')">🇱🇧 دقيقة وواصل (عربي)</span>
+        </div>
+
+        <label style="font-size: 12px; font-weight: 500; color: var(--text-muted); display: block; margin-bottom: 6px;">
+          WhatsApp Message Text:
+        </label>
+        <textarea id="quickMessageText" rows="3" style="width: 100%;" placeholder="Type message to send directly to patient over WhatsApp..."></textarea>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeQuickMessageModal()">Cancel</button>
+        <button class="btn btn-emerald" id="quickMsgSubmitBtn" onclick="submitQuickMessage()">
+          Send via WhatsApp
         </button>
       </div>
     </div>
@@ -1718,6 +1841,12 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
       document.getElementById('modalPatientName').innerText = 'Patient: ' + name;
       document.getElementById('modalApptTime').innerText = 'Scheduled: ' + new Date(startTime).toLocaleString();
       document.getElementById('modalDoctorPrompt').value = '';
+      var dInp = document.getElementById('rescheduleNewDate');
+      var tInp = document.getElementById('rescheduleNewTime');
+      if (dInp) dInp.value = '';
+      if (tInp) tInp.value = '';
+      var langSelect = document.getElementById('rescheduleLanguage');
+      if (langSelect) langSelect.value = 'auto';
       document.getElementById('aiRescheduleModal').classList.add('active');
     }
 
@@ -1733,6 +1862,9 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
     async function submitAiReschedule() {
       if (!activeRescheduleApptId) return;
       var promptText = document.getElementById('modalDoctorPrompt').value;
+      var newDate = document.getElementById('rescheduleNewDate') ? document.getElementById('rescheduleNewDate').value : '';
+      var newTime = document.getElementById('rescheduleNewTime') ? document.getElementById('rescheduleNewTime').value : '';
+      var language = document.getElementById('rescheduleLanguage') ? document.getElementById('rescheduleLanguage').value : 'auto';
       var btn = document.getElementById('modalSubmitBtn');
       btn.innerText = 'Dispatching...';
       btn.disabled = true;
@@ -1741,7 +1873,12 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
         var res = await fetch('/admin/api/appointments/' + activeRescheduleApptId + '/request-reschedule?key=' + adminKey, {
           method: 'POST',
           headers: headers,
-          body: JSON.stringify({ doctorPrompt: promptText })
+          body: JSON.stringify({
+            doctorPrompt: promptText,
+            proposedDate: newDate || undefined,
+            proposedTime: newTime || undefined,
+            language: language || 'auto'
+          })
         });
         var data = await res.json();
         closeRescheduleModal();
@@ -1756,6 +1893,69 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
         alert('Network error: ' + err.message);
       } finally {
         btn.innerText = 'Dispatch WhatsApp Request';
+        btn.disabled = false;
+      }
+    }
+
+    // Quick Automated WhatsApp Message Modal
+    function openQuickMessageFromDetails() {
+      if (!activeSelectedAppt) return;
+      var a = activeSelectedAppt;
+      closeReservationModal();
+      document.getElementById('quickMsgPatientName').innerText = 'Patient: ' + (a.customer_name || 'Patient');
+      document.getElementById('quickMsgPatientPhone').innerText = 'Phone: ' + formatPhoneNumber(a.customer_phone || '-');
+      document.getElementById('quickMessageText').value = '';
+      document.getElementById('quickMessageModal').classList.add('active');
+    }
+
+    function closeQuickMessageModal() {
+      document.getElementById('quickMessageModal').classList.remove('active');
+    }
+
+    function applyQuickTemplate(type) {
+      var txt = document.getElementById('quickMessageText');
+      if (!txt) return;
+      var name = activeSelectedAppt ? (activeSelectedAppt.customer_name || 'Patient') : 'Patient';
+      if (type === 'late') {
+        txt.value = 'Hello ' + name + ', the doctor is running about 15 minutes behind schedule due to a prior case. Thank you for your patience!';
+      } else if (type === 'pin') {
+        txt.value = 'Hello ' + name + ', please share your live WhatsApp location pin with us so the doctor can navigate directly to your address for the home visit. Thank you!';
+      } else if (type === 'arrived') {
+        txt.value = 'Hello ' + name + ', the doctor has arrived at your address / building for your appointment!';
+      } else if (type === 'rx') {
+        txt.value = 'Hello ' + name + ', your medical prescription and treatment notes are prepared. Please let us know if you have any questions.';
+      } else if (type === 'lebanese_late') {
+        txt.value = 'أهلاً ' + name + '، الحكيم متأخر حوالي ١٥ دقيقة بسبب حالة طارئة بالمستشفى، منعتذر عالإزعاج وتكرم عينك.';
+      }
+    }
+
+    async function submitQuickMessage() {
+      if (!activeSelectedAppt) return;
+      var text = document.getElementById('quickMessageText').value;
+      if (!text || !text.trim()) return alert('Please enter message text to send.');
+      var btn = document.getElementById('quickMsgSubmitBtn');
+      btn.innerText = 'Sending...';
+      btn.disabled = true;
+
+      try {
+        var res = await fetch('/admin/api/appointments/' + activeSelectedAppt.id + '/send-message?key=' + adminKey, {
+          method: 'POST',
+          headers: headers,
+          body: JSON.stringify({ messageText: text.trim() })
+        });
+        var data = await res.json();
+        closeQuickMessageModal();
+
+        if (data.success) {
+          showToast('WhatsApp message dispatched to patient.');
+          loadAppointments();
+        } else {
+          alert('Error: ' + (data.error || 'Failed to dispatch message'));
+        }
+      } catch (err) {
+        alert('Network error: ' + err.message);
+      } finally {
+        btn.innerText = 'Send via WhatsApp';
         btn.disabled = false;
       }
     }
@@ -2126,12 +2326,15 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
       } catch (err) {
         console.error(err);
       }
+    });
+
     // Close modals on Escape key or backdrop click
     document.addEventListener('keydown', function(e) {
       if (e.key === 'Escape') {
         closeReservationModal();
         closeWorkHoursModal();
         closeRescheduleModal();
+        closeQuickMessageModal();
       }
     });
 
@@ -2140,6 +2343,7 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
         closeReservationModal();
         closeWorkHoursModal();
         closeRescheduleModal();
+        closeQuickMessageModal();
       }
     });
 
@@ -2170,6 +2374,10 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
     window.cancelFromDetails = cancelFromDetails;
     window.openRescheduleModal = openRescheduleModal;
     window.closeRescheduleModal = closeRescheduleModal;
+    window.openQuickMessageFromDetails = openQuickMessageFromDetails;
+    window.closeQuickMessageModal = closeQuickMessageModal;
+    window.applyQuickTemplate = applyQuickTemplate;
+    window.submitQuickMessage = submitQuickMessage;
     window.applyDirective = applyDirective;
     window.submitAiReschedule = submitAiReschedule;
     window.toggleDayOpen = toggleDayOpen;
