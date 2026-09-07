@@ -37,10 +37,10 @@ describe('Phase 4: Gemini AI Integration & Tool-Calling Agent Core', () => {
     const cust = db.customers.findOrCreate('whatsapp:+1234567890', 'Alice');
     const conv = db.conversations.getOrCreateActive(cust.id);
 
-    // 2026-09-07 is Monday
+    // 2026-09-14 is Monday
     geminiClient.mockToolCall = {
       name: 'check_availability',
-      args: { date: '2026-09-07', visit_type: 'in_office' },
+      args: { date: '2026-09-14', visit_type: 'in_office' },
     };
 
     const reply = await agent.processMessage({
@@ -50,7 +50,7 @@ describe('Phase 4: Gemini AI Integration & Tool-Calling Agent Core', () => {
       db,
     });
 
-    expect(reply).toContain('Available slots on 2026-09-07');
+    expect(reply).toContain('Available slots on 2026-09-14');
     expect(reply).toContain('09:00');
   });
 
@@ -61,7 +61,7 @@ describe('Phase 4: Gemini AI Integration & Tool-Calling Agent Core', () => {
     geminiClient.mockToolCall = {
       name: 'book_appointment',
       args: {
-        date: '2026-09-07',
+        date: '2026-09-14',
         time: '11:00',
         visit_type: 'in_office',
         service: 'General Consultation',
@@ -98,7 +98,7 @@ describe('Phase 4: Gemini AI Integration & Tool-Calling Agent Core', () => {
     geminiClient.mockToolCall = {
       name: 'book_appointment',
       args: {
-        date: '2026-09-07',
+        date: '2026-09-14',
         time: '13:00',
         visit_type: 'home_visit',
         service: 'Home Visit Care',
@@ -119,7 +119,7 @@ describe('Phase 4: Gemini AI Integration & Tool-Calling Agent Core', () => {
     geminiClient.mockToolCall = {
       name: 'book_appointment',
       args: {
-        date: '2026-09-07',
+        date: '2026-09-14',
         time: '13:00',
         visit_type: 'home_visit',
         service: 'Home Visit Care',
@@ -152,13 +152,13 @@ describe('Phase 4: Gemini AI Integration & Tool-Calling Agent Core', () => {
       visit_type: 'in_office',
       service: 'General Consultation',
       price: 120,
-      start_time: '2026-09-07T09:00:00.000Z',
-      end_time: '2026-09-07T10:00:00.000Z',
+      start_time: '2026-09-14T09:00:00.000Z',
+      end_time: '2026-09-14T10:00:00.000Z',
     });
 
     geminiClient.mockToolCall = {
       name: 'reschedule_appointment',
-      args: { new_date: '2026-09-07', new_time: '15:00' },
+      args: { new_date: '2026-09-14', new_time: '15:00' },
     };
 
     const reply = await agent.processMessage({
@@ -185,8 +185,8 @@ describe('Phase 4: Gemini AI Integration & Tool-Calling Agent Core', () => {
       visit_type: 'in_office',
       service: 'General Consultation',
       price: 120,
-      start_time: '2026-09-07T11:00:00.000Z',
-      end_time: '2026-09-07T12:00:00.000Z',
+      start_time: '2026-09-14T11:00:00.000Z',
+      end_time: '2026-09-14T12:00:00.000Z',
     });
 
     geminiClient.mockToolCall = {

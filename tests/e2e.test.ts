@@ -46,10 +46,10 @@ describe('Phase 8: End-to-End System Lifecycle Flow', () => {
     expect(healthRes.status).toBe(200);
     expect(healthRes.body.status).toBe('ok');
 
-    // 1. Customer asks for availability for a home visit on Monday (2026-09-07)
+    // 1. Customer asks for availability for a home visit on Monday (2026-09-14)
     geminiClient.mockToolCall = {
       name: 'check_availability',
-      args: { date: '2026-09-07', visit_type: 'home_visit' },
+      args: { date: '2026-09-14', visit_type: 'home_visit' },
     };
 
     const availReq = await request(app)
@@ -65,14 +65,14 @@ describe('Phase 8: End-to-End System Lifecycle Flow', () => {
     // Verify WhatsApp reply to patient
     expect(gateway.sentMessages.length).toBe(1);
     expect(gateway.sentMessages[0].to).toBe(CUSTOMER_PHONE);
-    expect(gateway.sentMessages[0].body).toContain('Available slots on 2026-09-07 (home_visit)');
+    expect(gateway.sentMessages[0].body).toContain('Available slots on 2026-09-14 (home_visit)');
 
     // 2. Customer chooses 10:00 and provides their home address
     gateway.clear();
     geminiClient.mockToolCall = {
       name: 'book_appointment',
       args: {
-        date: '2026-09-07',
+        date: '2026-09-14',
         time: '10:00',
         visit_type: 'home_visit',
         service: 'Home Visit Care',
@@ -103,8 +103,8 @@ describe('Phase 8: End-to-End System Lifecycle Flow', () => {
 
     // Verify Calendar Event was created
     const calEvents = await calendar.listEvents(
-      new Date('2026-09-07T08:00:00.000Z'),
-      new Date('2026-09-07T14:00:00.000Z')
+      new Date('2026-09-14T08:00:00.000Z'),
+      new Date('2026-09-14T14:00:00.000Z')
     );
     expect(calEvents.length).toBe(1);
     expect(calEvents[0].location).toBe('42 Cyberdyne Blvd, Los Angeles');
@@ -117,7 +117,7 @@ describe('Phase 8: End-to-End System Lifecycle Flow', () => {
 
     // 3. 24-Hour Reminder Job triggers
     gateway.clear();
-    const mock24hReference = new Date(new Date('2026-09-07T10:00:00.000Z').getTime() - 24 * 60 * 60 * 1000);
+    const mock24hReference = new Date(new Date('2026-09-14T10:00:00.000Z').getTime() - 24 * 60 * 60 * 1000);
     const sent24Count = await reminders.send24HourReminders(mock24hReference);
     expect(sent24Count).toBe(1);
 
@@ -146,7 +146,7 @@ describe('Phase 8: End-to-End System Lifecycle Flow', () => {
 
     // 5. 1-Hour Reminder Job triggers
     gateway.clear();
-    const mock1hReference = new Date(new Date('2026-09-07T10:00:00.000Z').getTime() - 60 * 60 * 1000);
+    const mock1hReference = new Date(new Date('2026-09-14T10:00:00.000Z').getTime() - 60 * 60 * 1000);
     const sent1Count = await reminders.send1HourReminders(mock1hReference);
     expect(sent1Count).toBe(1);
     expect(gateway.sentMessages[0].body).toContain('in about 1 hour');

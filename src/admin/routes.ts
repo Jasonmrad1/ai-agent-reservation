@@ -451,21 +451,25 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
       user-select: none;
     }
     .time-axis {
-      width: 58px;
+      width: 62px;
       flex-shrink: 0;
       border-right: 1px solid var(--border);
-      background: #0d0e11;
+      background: #07080a;
       padding-top: 60px; /* aligns with day headers */
     }
     .time-axis-slot {
-      height: 36px;
-      font-size: 10.5px;
+      height: 48px;
+      font-size: 11px;
       color: var(--text-subtle);
       font-family: 'JetBrains Mono', monospace;
       text-align: right;
-      padding-right: 10px;
+      padding-right: 12px;
       transform: translateY(-6px);
       box-sizing: border-box;
+      line-height: 1;
+    }
+    .time-axis-slot.last-slot {
+      height: 0;
     }
     .days-columns-grid {
       display: flex;
@@ -519,8 +523,9 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
     }
     .day-num.today {
       background: var(--emerald);
-      color: #fff;
-      box-shadow: 0 0 10px rgba(36, 180, 126, 0.4);
+      color: #000000;
+      font-weight: 700;
+      box-shadow: 0 0 10px rgba(0, 255, 136, 0.4);
     }
     .day-col-status {
       font-size: 10.5px;
@@ -534,7 +539,7 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
       transition: all 0.15s;
     }
     .day-col-status:hover {
-      background: rgba(36, 180, 126, 0.22);
+      background: rgba(0, 255, 136, 0.22);
     }
     .day-col-status.closed {
       color: var(--text-subtle);
@@ -543,23 +548,23 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
     }
 
     .day-col-track {
-      height: 504px; /* 14 hours (07:00-21:00) * 36px */
+      height: 672px; /* 14 hours (07:00-21:00) * 48px */
       position: relative;
       background:
         repeating-linear-gradient(
           to bottom,
           transparent,
-          transparent 35px,
-          rgba(255, 255, 255, 0.03) 35px,
-          rgba(255, 255, 255, 0.03) 36px
+          transparent 47px,
+          rgba(255, 255, 255, 0.04) 47px,
+          rgba(255, 255, 255, 0.04) 48px
         );
     }
     .day-col-track.day-closed {
       background:
         repeating-linear-gradient(
           45deg,
-          rgba(255, 255, 255, 0.02),
-          rgba(255, 255, 255, 0.02) 10px,
+          rgba(255, 255, 255, 0.015),
+          rgba(255, 255, 255, 0.015) 10px,
           transparent 10px,
           transparent 20px
         );
@@ -649,29 +654,29 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
     /* Microsoft Teams Meeting Cards - Low Opacity Neon Green */
     .teams-meeting-card {
       position: absolute;
-      left: 4px;
-      right: 4px;
       background: rgba(0, 255, 136, 0.12);
       border: 1px solid rgba(0, 255, 136, 0.28);
       border-left: 4px solid #00ff88;
       border-radius: 6px;
-      padding: 5px 8px;
+      padding: 6px 8px;
       cursor: pointer;
       z-index: 20;
       overflow: hidden;
       display: flex;
       flex-direction: column;
+      justify-content: flex-start;
       gap: 2px;
       backdrop-filter: blur(4px);
       box-shadow: 0 2px 8px rgba(0,0,0,0.5);
       transition: transform 0.1s ease, box-shadow 0.15s ease, background-color 0.15s ease, border-color 0.15s ease;
+      box-sizing: border-box;
     }
     .teams-meeting-card:hover {
       transform: translateY(-1px);
-      background: rgba(0, 255, 136, 0.19);
-      box-shadow: 0 4px 14px rgba(0, 255, 136, 0.22);
-      border-color: rgba(0, 255, 136, 0.6);
-      z-index: 25;
+      background: rgba(0, 255, 136, 0.20);
+      box-shadow: 0 4px 16px rgba(0, 255, 136, 0.28);
+      border-color: rgba(0, 255, 136, 0.65);
+      z-index: 30;
     }
     .teams-meeting-card.home-visit {
       background: rgba(0, 255, 136, 0.11);
@@ -683,29 +688,66 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
       border-color: rgba(0, 255, 136, 0.32);
       border-left: 4px solid #00ff88;
     }
-    .meeting-title {
+    .meeting-row-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 4px;
+      min-width: 0;
+    }
+    .meeting-patient {
       font-size: 11.5px;
       font-weight: 700;
-      color: #fff;
+      color: #ffffff;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
+      flex: 1;
     }
     .meeting-time {
       font-size: 10px;
       color: #00ff88;
       font-weight: 600;
       font-family: 'JetBrains Mono', monospace;
+      white-space: nowrap;
+      flex-shrink: 0;
     }
-    .meeting-patient {
+    .meeting-row-bottom {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 4px;
+      min-width: 0;
+    }
+    .meeting-title {
       font-size: 10.5px;
-      color: #f1f5f9;
-      font-weight: 500;
+      color: #cbd5e1;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
+      flex: 1;
     }
-    .meeting-badge {
+    .meeting-chip {
+      font-size: 9px;
+      padding: 1px 5px;
+      border-radius: 3px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .meeting-chip.home {
+      background: rgba(56, 189, 248, 0.2);
+      color: #38bdf8;
+      border: 1px solid rgba(56, 189, 248, 0.35);
+    }
+    .meeting-chip.office {
+      background: rgba(0, 255, 136, 0.18);
+      color: #00ff88;
+      border: 1px solid rgba(0, 255, 136, 0.3);
+    }
+    .meeting-card-addr {
       font-size: 9.5px;
       color: #94a3b8;
       white-space: nowrap;
@@ -975,12 +1017,6 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
     </div>
 
     <div class="teams-right">
-      <div class="preset-pills">
-        <button class="preset-btn" onclick="applyPreset('standard')">Standard 9-5</button>
-        <button class="preset-btn" onclick="applyPreset('extended')">Extended 8-6</button>
-        <button class="preset-btn" onclick="applyPreset('all')">All 7 Days</button>
-      </div>
-
       <button class="btn btn-emerald" onclick="openWorkHoursModal()">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
         Weekly Work Hours
@@ -1229,9 +1265,53 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
 
     var START_HOUR = 7;
     var END_HOUR = 21;
-    var TOTAL_MINUTES = (END_HOUR - START_HOUR) * 60;
-    var TRACK_HEIGHT = 504;
-    var PX_PER_MIN = TRACK_HEIGHT / TOTAL_MINUTES;
+    var TOTAL_MINUTES = (END_HOUR - START_HOUR) * 60; // 14 * 60 = 840
+    var TRACK_HEIGHT = 672; // 14 hours * 48px
+    var PX_PER_MIN = TRACK_HEIGHT / TOTAL_MINUTES; // 0.8 px/min
+
+    function parseTimeInfo(isoStr) {
+      if (!isoStr) return { year: 2026, month: 0, date: 1, hours: 9, minutes: 0, totalMinutes: 540, timeStr12: '09:00 AM', timeStr24: '09:00', dateKey: '2026-01-01' };
+      var parts = String(isoStr).split(/[T\s]/);
+      var datePart = parts[0] || '';
+      var timePart = parts[1] || '00:00:00';
+
+      var dComps = datePart.split('-');
+      var y = parseInt(dComps[0], 10) || 2026;
+      var m = (parseInt(dComps[1], 10) || 1) - 1;
+      var d = parseInt(dComps[2], 10) || 1;
+
+      var tComps = timePart.split(':');
+      var h = parseInt(tComps[0], 10) || 0;
+      var min = parseInt(tComps[1], 10) || 0;
+
+      var h12 = h % 12 || 12;
+      var ampm = h >= 12 ? 'PM' : 'AM';
+      var minStr = String(min).padStart(2, '0');
+      var timeStr12 = h12 + ':' + minStr + ' ' + ampm;
+      var timeStr24 = String(h).padStart(2, '0') + ':' + minStr;
+      var dateKey = y + '-' + String(m + 1).padStart(2, '0') + '-' + String(d).padStart(2, '0');
+
+      return {
+        year: y,
+        month: m,
+        date: d,
+        hours: h,
+        minutes: min,
+        totalMinutes: h * 60 + min,
+        timeStr12: timeStr12,
+        timeStr24: timeStr24,
+        dateKey: dateKey
+      };
+    }
+
+    function formatPhoneNumber(phone) {
+      if (!phone) return '-';
+      var cleaned = String(phone).replace(/^whatsapp:/i, '').trim();
+      if (cleaned.startsWith('+961') && cleaned.length === 12) {
+        return '+961 ' + cleaned.slice(4, 6) + ' ' + cleaned.slice(6, 9) + ' ' + cleaned.slice(9);
+      }
+      return cleaned;
+    }
 
     function getMonday(d) {
       var date = new Date(d);
@@ -1293,7 +1373,8 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
       var html = '';
       for (var h = START_HOUR; h <= END_HOUR; h++) {
         var label = String(h).padStart(2, '0') + ':00';
-        html += '<div class="time-axis-slot">' + label + '</div>';
+        var isLast = (h === END_HOUR);
+        html += '<div class="time-axis-slot' + (isLast ? ' last-slot' : '') + '">' + label + '</div>';
       }
       axis.innerHTML = html;
     }
@@ -1319,13 +1400,15 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
       var monthYearElem = document.getElementById('currentMonthYear');
       if (monthYearElem) monthYearElem.innerText = rangeStr;
 
-      var todayStr = new Date().toDateString();
+      var todayObj = new Date();
+      var todayKey = todayObj.getFullYear() + '-' + String(todayObj.getMonth() + 1).padStart(2, '0') + '-' + String(todayObj.getDate()).padStart(2, '0');
       var colsHtml = '';
 
       for (var colIdx = 0; colIdx < 7; colIdx++) {
         var colDate = weekDates[colIdx];
         var dayOfWeek = colDate.getDay();
-        var isToday = (colDate.toDateString() === todayStr);
+        var colDateKey = colDate.getFullYear() + '-' + String(colDate.getMonth() + 1).padStart(2, '0') + '-' + String(colDate.getDate()).padStart(2, '0');
+        var isToday = (colDateKey === todayKey);
 
         var rule = null;
         for (var r = 0; r < cachedRules.length; r++) {
@@ -1345,39 +1428,113 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
         var bottomY = minutesToY(endMins);
         var height = Math.max(24, bottomY - topY);
 
-        var dayAppts = cachedAppointments.filter(function(a) {
-          if (a.status === 'cancelled') return false;
-          var aDate = new Date(a.start_time);
-          return aDate.getFullYear() === colDate.getFullYear() &&
-                 aDate.getMonth() === colDate.getMonth() &&
-                 aDate.getDate() === colDate.getDate();
+        // Match appointments to this day column using timezone-safe parseTimeInfo
+        var dayItems = [];
+        for (var a = 0; a < cachedAppointments.length; a++) {
+          var appt = cachedAppointments[a];
+          if (appt.status === 'cancelled') continue;
+          var sInfo = parseTimeInfo(appt.start_time);
+          if (sInfo.dateKey !== colDateKey) continue;
+
+          var eInfo = appt.end_time ? parseTimeInfo(appt.end_time) : null;
+          var startMin = sInfo.totalMinutes;
+          var endMin = (eInfo && eInfo.dateKey === sInfo.dateKey) ? eInfo.totalMinutes : (startMin + 45);
+          if (endMin <= startMin) endMin = startMin + 45;
+
+          dayItems.push({
+            appt: appt,
+            sInfo: sInfo,
+            eInfo: eInfo,
+            startMin: startMin,
+            endMin: endMin,
+            subCol: 0,
+            totalCols: 1
+          });
+        }
+
+        // Sort by startMin asc, duration desc
+        dayItems.sort(function(x, y) {
+          return x.startMin - y.startMin || (y.endMin - y.startMin) - (x.endMin - x.startMin);
         });
 
-        var apptsHtml = '';
-        for (var aIdx = 0; aIdx < dayAppts.length; aIdx++) {
-          var appt = dayAppts[aIdx];
-          var aStart = new Date(appt.start_time);
-          var aEnd = appt.end_time ? new Date(appt.end_time) : new Date(aStart.getTime() + 45*60*1000);
-          var aStartMin = aStart.getHours() * 60 + aStart.getMinutes();
-          var aEndMin = aEnd.getHours() * 60 + aEnd.getMinutes();
-          if (aEndMin <= aStartMin) aEndMin = aStartMin + 45;
+        // Group overlapping appointments into clusters
+        var clusters = [];
+        var curCluster = [];
+        var clusterEnd = -1;
 
-          var aTop = minutesToY(aStartMin);
-          var aHeight = Math.max(36, (aEndMin - aStartMin) * PX_PER_MIN);
-          var isHome = (appt.visit_type === 'home_visit');
-          var timeStr = aStart.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-          var safeName = (appt.customer_name || 'Patient').replace(/"/g, '&quot;');
-          var safeService = (appt.service || 'Consultation').replace(/"/g, '&quot;');
-          var locLabel = isHome ? ('Home: ' + (appt.address || 'Address provided')) : 'In-Office Clinic';
+        for (var dI = 0; dI < dayItems.length; dI++) {
+          var item = dayItems[dI];
+          if (curCluster.length === 0) {
+            curCluster.push(item);
+            clusterEnd = item.endMin;
+          } else {
+            if (item.startMin < clusterEnd) {
+              curCluster.push(item);
+              if (item.endMin > clusterEnd) clusterEnd = item.endMin;
+            } else {
+              clusters.push(curCluster);
+              curCluster = [item];
+              clusterEnd = item.endMin;
+            }
+          }
+        }
+        if (curCluster.length > 0) clusters.push(curCluster);
+
+        // Assign sub-columns within each cluster
+        for (var c = 0; c < clusters.length; c++) {
+          var cluster = clusters[c];
+          var subCols = [];
+          for (var k = 0; k < cluster.length; k++) {
+            var it = cluster[k];
+            var placed = false;
+            for (var sc = 0; sc < subCols.length; sc++) {
+              if (subCols[sc] <= it.startMin) {
+                subCols[sc] = it.endMin;
+                it.subCol = sc;
+                placed = true;
+                break;
+              }
+            }
+            if (!placed) {
+              it.subCol = subCols.length;
+              subCols.push(it.endMin);
+            }
+          }
+          var totalSubCols = subCols.length;
+          for (var k = 0; k < cluster.length; k++) {
+            cluster[k].totalCols = totalSubCols;
+          }
+        }
+
+        var apptsHtml = '';
+        for (var itIdx = 0; itIdx < dayItems.length; itIdx++) {
+          var di = dayItems[itIdx];
+          var aTop = minutesToY(di.startMin);
+          var aHeight = Math.max(36, (di.endMin - di.startMin) * PX_PER_MIN);
+          var isHome = (di.appt.visit_type === 'home_visit');
+          var timeStr = di.sInfo.timeStr12;
+          var safeName = escapeHtml(di.appt.customer_name || 'Patient');
+          var safeService = escapeHtml(di.appt.service || 'Consultation');
+          var locLabel = isHome ? ('Home: ' + (di.appt.address || 'Address provided')) : 'In-Office Clinic';
+
+          var widthPct = 100 / di.totalCols;
+          var leftPct = di.subCol * widthPct;
+          var leftStyle = 'left: calc(' + leftPct + '% + 3px);';
+          var widthStyle = 'width: calc(' + widthPct + '% - 5px);';
 
           apptsHtml += '<div class="teams-meeting-card ' + (isHome ? 'home-visit' : 'in-office') + '" ' +
-            'style="top: ' + aTop + 'px; height: ' + aHeight + 'px;" ' +
-            'data-appt-id="' + appt.id + '">' +
-            '<div class="meeting-title">' + safeService + '</div>' +
-            '<div class="meeting-time">' + timeStr + '</div>' +
-            '<div class="meeting-patient">' + safeName + '</div>' +
-            '<div class="meeting-badge">' + locLabel + '</div>' +
-            '</div>';
+            'style="top: ' + aTop + 'px; height: ' + aHeight + 'px; ' + leftStyle + ' ' + widthStyle + '" ' +
+            'data-appt-id="' + di.appt.id + '" title="' + safeName + ' - ' + safeService + '">' +
+            '<div class="meeting-row-top">' +
+              '<span class="meeting-patient">' + safeName + '</span>' +
+              '<span class="meeting-time">' + timeStr + '</span>' +
+            '</div>' +
+            '<div class="meeting-row-bottom">' +
+              '<span class="meeting-title">' + safeService + '</span>' +
+              '<span class="meeting-chip ' + (isHome ? 'home' : 'office') + '">' + (isHome ? 'HOME' : 'OFFICE') + '</span>' +
+            '</div>' +
+            (isHome && aHeight >= 64 && di.appt.address ? '<div class="meeting-card-addr">📍 ' + escapeHtml(di.appt.address) + '</div>' : '') +
+          '</div>';
         }
 
         colsHtml += '<div class="day-column" data-day="' + dayOfWeek + '">' +
@@ -1429,15 +1586,20 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
 
       document.getElementById('detailServiceTitle').innerText = appt.service || 'Medical Consultation';
 
-      var startDate = new Date(appt.start_time);
-      var endDate = appt.end_time ? new Date(appt.end_time) : new Date(startDate.getTime() + 60*60*1000);
-      var dateStr = startDate.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric' });
-      var timeStr = startDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ' – ' + endDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      var sInfo = parseTimeInfo(appt.start_time);
+      var eInfo = appt.end_time ? parseTimeInfo(appt.end_time) : null;
+      var daysFull = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+      var monthsFull = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+      var dObj = new Date(sInfo.year, sInfo.month, sInfo.date);
+      var dayName = daysFull[dObj.getDay()];
+      var monthName = monthsFull[sInfo.month];
+      var dateStr = dayName + ', ' + monthName + ' ' + sInfo.date + ', ' + sInfo.year;
+      var timeStr = sInfo.timeStr12 + (eInfo ? (' – ' + eInfo.timeStr12) : '');
       document.getElementById('detailDateTime').innerText = dateStr + ' • ' + timeStr;
 
       var priceElem = document.getElementById('detailDurationPrice');
       var priceVal = appt.price ? ('$' + appt.price) : '$120';
-      var durationVal = Math.round((endDate.getTime() - startDate.getTime()) / (60 * 1000)) || 60;
+      var durationVal = (eInfo && eInfo.totalMinutes > sInfo.totalMinutes) ? (eInfo.totalMinutes - sInfo.totalMinutes) : 60;
       if (priceElem) priceElem.innerText = priceVal + ' • ' + durationVal + ' min';
 
       var statusBadge = document.getElementById('detailStatusPill');
@@ -1448,7 +1610,8 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
       document.getElementById('detailPatientName').innerText = appt.customer_name || 'Patient';
       
       var rawPhone = appt.customer_phone || '-';
-      document.getElementById('detailPatientPhone').innerText = rawPhone;
+      var formattedPhone = formatPhoneNumber(rawPhone);
+      document.getElementById('detailPatientPhone').innerText = formattedPhone;
       var cleanPhone = rawPhone.replace(/[^0-9]/g, '');
 
       var waBtn = document.getElementById('detailWhatsAppBtn');
@@ -1715,9 +1878,14 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
         cachedRules = data.rules || [];
         renderWeeklyGrid();
 
+        var order = [1, 2, 3, 4, 5, 6, 0];
+        var sortedRules = (data.rules || []).slice().sort(function(a, b) {
+          return order.indexOf(Number(a.day_of_week)) - order.indexOf(Number(b.day_of_week));
+        });
+
         var rulesHtml = '';
-        for (var rIdx = 0; rIdx < (data.rules || []).length; rIdx++) {
-          var r = data.rules[rIdx];
+        for (var rIdx = 0; rIdx < sortedRules.length; rIdx++) {
+          var r = sortedRules[rIdx];
           rulesHtml += '<div class="day-item" data-day="' + r.day_of_week + '">' +
             '<div style="font-weight: 500; font-size: 13px; color: #fff; width: 90px;">' + days[r.day_of_week] + '</div>' +
             '<label class="switch-wrap">' +
@@ -1957,6 +2125,21 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
         renderWeeklyGrid();
       } catch (err) {
         console.error(err);
+      }
+    // Close modals on Escape key or backdrop click
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') {
+        closeReservationModal();
+        closeWorkHoursModal();
+        closeRescheduleModal();
+      }
+    });
+
+    document.addEventListener('click', function(e) {
+      if (e.target.classList && e.target.classList.contains('modal-backdrop')) {
+        closeReservationModal();
+        closeWorkHoursModal();
+        closeRescheduleModal();
       }
     });
 
