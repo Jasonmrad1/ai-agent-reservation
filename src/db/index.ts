@@ -7,6 +7,7 @@ export * from './repositories/appointment.repo.js';
 export * from './repositories/availability.repo.js';
 export * from './repositories/invoice.repo.js';
 export * from './repositories/alert.repo.js';
+export * from './repositories/settings.repo.js';
 
 import { AppDatabase } from './database.js';
 import { CustomerRepository } from './repositories/customer.repo.js';
@@ -16,6 +17,7 @@ import { AppointmentRepository } from './repositories/appointment.repo.js';
 import { AvailabilityRepository } from './repositories/availability.repo.js';
 import { InvoiceRepository } from './repositories/invoice.repo.js';
 import { AdminAlertRepository } from './repositories/alert.repo.js';
+import { SettingsRepository } from './repositories/settings.repo.js';
 
 export interface DatabaseContext {
   appDb: AppDatabase;
@@ -26,6 +28,7 @@ export interface DatabaseContext {
   availability: AvailabilityRepository;
   invoices: InvoiceRepository;
   alerts: AdminAlertRepository;
+  settings: SettingsRepository;
 }
 
 export function createDatabaseContext(dbPath: string = ':memory:'): DatabaseContext {
@@ -39,5 +42,6 @@ export function createDatabaseContext(dbPath: string = ':memory:'): DatabaseCont
     availability: new AvailabilityRepository(appDb.db),
     invoices: new InvoiceRepository(appDb.db),
     alerts: new AdminAlertRepository(appDb.db),
+    settings: new SettingsRepository(appDb.db),
   };
 }

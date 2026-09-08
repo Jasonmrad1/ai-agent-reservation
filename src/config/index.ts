@@ -24,6 +24,11 @@ export interface AppConfig {
   // Optional Stripe
   stripeSecretKey?: string;
 
+  // Supabase
+  supabaseUrl?: string;
+  supabaseAnonKey?: string;
+  supabaseServiceRoleKey?: string;
+
   // Mode
   nodeEnv: string;
 }
@@ -47,5 +52,10 @@ export const config: AppConfig = {
 
   stripeSecretKey: process.env.STRIPE_SECRET_KEY,
 
+  supabaseUrl: process.env.SUPABASE_URL,
+  supabaseAnonKey: process.env.SUPABASE_ANON_KEY,
+  supabaseServiceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY,
+
   nodeEnv: process.env.NODE_ENV || 'development',
 };
+

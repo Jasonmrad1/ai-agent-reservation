@@ -1,6 +1,7 @@
 import { DatabaseSync } from 'node:sqlite';
 import crypto from 'node:crypto';
 import { Appointment, AppointmentStatus, VisitType } from '../../types/index.js';
+import { SupabaseSync } from '../supabase.js';
 
 export class AppointmentRepository {
   constructor(private db: DatabaseSync) {}
@@ -24,7 +25,7 @@ export class AppointmentRepository {
       visit_type: data.visit_type,
       address: data.address || null,
       service: data.service,
-      price: data.price,
+      price: data.price ?? 0,
       start_time: data.start_time,
       end_time: data.end_time,
       status: data.status || 'booked',
@@ -60,6 +61,7 @@ export class AppointmentRepository {
       appt.updated_at
     );
 
+    SupabaseSync.syncAppointment(appt).catch(() => {});
     return appt;
   }
 
@@ -70,25 +72,47 @@ export class AppointmentRepository {
   }
 
   public findLatestActiveByCustomerId(customerId: string): Appointment | null {
-    const now = new Date().toISOString();
     const row = this.db.prepare(`
       SELECT * FROM appointments
-      WHERE customer_id = ? AND status IN ('booked', 'confirmed', 'rescheduled') AND end_time >= ?
+      WHERE customer_id = ? AND status IN ('booked', 'confirmed', 'rescheduled')
       ORDER BY start_time ASC
       LIMIT 1
-    `).get(customerId, now) as any;
+    `).get(customerId) as any;
+
+    if (!row) return null;
+    return this.mapRow(row);
+  }
+
+  public findLatestActiveByCustomerOrPhone(customerId: string, phone?: string): Appointment | null {
+    let row = this.db.prepare(`
+      SELECT * FROM appointments
+      WHERE customer_id = ? AND status IN ('booked', 'confirmed', 'rescheduled')
+      ORDER BY start_time ASC
+      LIMIT 1
+    `).get(customerId) as any;
+
+    if (!row && phone) {
+      const digits = phone.replace(/\D/g, '');
+      row = this.db.prepare(`
+        SELECT a.* FROM appointments a
+        JOIN customers c ON a.customer_id = c.id
+        WHERE (c.phone = ? OR c.phone LIKE ? OR replace(replace(replace(c.phone, '+', ''), 'whatsapp:', ''), ' ', '') = ?)
+          AND a.status IN ('booked', 'confirmed', 'rescheduled')
+        ORDER BY a.start_time ASC
+        LIMIT 1
+      `).get(phone, `%${digits}%`, digits) as any;
+    }
 
     if (!row) return null;
     return this.mapRow(row);
   }
 
   public findUpcomingByCustomerId(customerId: string): Appointment[] {
-    const now = new Date().toISOString();
     const rows = this.db.prepare(`
       SELECT * FROM appointments
-      WHERE customer_id = ? AND status IN ('booked', 'confirmed', 'rescheduled') AND end_time >= ?
+      WHERE customer_id = ? AND status IN ('booked', 'confirmed', 'rescheduled')
       ORDER BY start_time ASC
-    `).all(customerId, now) as any[];
+    `).all(customerId) as any[];
 
     return rows.map(this.mapRow);
   }
@@ -126,6 +150,9 @@ export class AppointmentRepository {
     this.db.prepare(`
       UPDATE appointments SET status = ?, updated_at = ? WHERE id = ?
     `).run(status, now, id);
+
+    const appt = this.findById(id);
+    if (appt) SupabaseSync.syncAppointment(appt).catch(() => {});
   }
 
   public reschedule(
@@ -152,6 +179,9 @@ export class AppointmentRepository {
       now,
       id
     );
+
+    const updated = this.findById(id);
+    if (updated) SupabaseSync.syncAppointment(updated).catch(() => {});
   }
 
   public cancel(id: string, notes?: string): void {
@@ -159,6 +189,9 @@ export class AppointmentRepository {
     this.db.prepare(`
       UPDATE appointments SET status = 'cancelled', notes = ?, updated_at = ? WHERE id = ?
     `).run(notes || 'Cancelled by customer', now, id);
+
+    const appt = this.findById(id);
+    if (appt) SupabaseSync.syncAppointment(appt).catch(() => {});
   }
 
   public setGoogleEventId(id: string, googleEventId: string): void {

@@ -23,6 +23,21 @@ export class AppDatabase {
     this.db.exec('PRAGMA foreign_keys = ON;');
     this.db.exec(SCHEMA_SQL);
 
+    // Safe column migrations for existing SQLite databases
+    try {
+      this.db.exec('ALTER TABLE availability_rules ADD COLUMN shifts TEXT;');
+    } catch {}
+    try {
+      this.db.exec('ALTER TABLE availability_overrides ADD COLUMN shifts TEXT;');
+    } catch {}
+
+    // Ensure default settings
+    try {
+      this.db.prepare(`
+        INSERT OR IGNORE INTO settings (key, value) VALUES ('home_visit_buffer_minutes', '30')
+      `).run();
+    } catch {}
+
     // Seed default weekly availability if table is empty
     const countRow = this.db.prepare('SELECT COUNT(*) as cnt FROM availability_rules').get() as { cnt: number };
     if (countRow.cnt === 0) {

@@ -1,5 +1,7 @@
+import path from 'path';
 import express from 'express';
 import { DatabaseContext, createDatabaseContext } from './db/index.js';
+import { SupabaseSync } from './db/supabase.js';
 import { CalendarProvider, InMemoryCalendarProvider, GoogleCalendarProvider } from './calendar/provider.js';
 import { SchedulingEngine } from './calendar/scheduler.js';
 import { WhatsAppGateway, MockWhatsAppGateway, TwilioWhatsAppGateway } from './twilio/client.js';
@@ -37,6 +39,7 @@ export function createApp(options: CreateAppOptions = {}): AppInstance {
 
   // 1. Database
   const db = options.db || createDatabaseContext(cfg.databaseUrl);
+  SupabaseSync.hydrateFromSupabase(db).catch(() => {});
 
   // 2. Gateway
   const gateway = options.gateway || (
@@ -90,13 +93,14 @@ export function createApp(options: CreateAppOptions = {}): AppInstance {
   });
 
   // 7. Reminders & Billing
-  const reminders = new ReminderRunner({ db, gateway });
+  const reminders = new ReminderRunner({ db, gateway, scheduler, notifier });
   const billing = new BillingService({ db, gateway });
 
   // 8. Express App
   const app = express();
   app.use(express.urlencoded({ extended: true }));
   app.use(express.json());
+  app.use(express.static(path.resolve(process.cwd(), 'public')));
 
   // Health check
   app.get('/health', (_req, res) => {

@@ -52,7 +52,7 @@ export class ConversationRepository {
     return newConv;
   }
 
-  public updateStatus(id: string, status: 'active' | 'escalated' | 'closed'): void {
+  public updateStatus(id: string, status: 'active' | 'escalated' | 'doctor_active' | 'closed'): void {
     const now = new Date().toISOString();
     this.db.prepare(`
       UPDATE conversations SET status = ?, updated_at = ? WHERE id = ?

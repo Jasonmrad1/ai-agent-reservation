@@ -218,7 +218,7 @@ describe('Phase 4: Gemini AI Integration & Tool-Calling Agent Core', () => {
       db,
     });
 
-    expect(reply).toContain('informed Dr. Smith and our clinic team');
+    expect(reply).toContain('informed Dr. Ziad and our clinic team');
     const updatedConv = db.conversations.findActiveByCustomerId(cust.id);
     expect(updatedConv?.status).toBe('escalated');
 

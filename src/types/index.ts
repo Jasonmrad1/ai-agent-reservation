@@ -6,7 +6,7 @@ export type MessageDirection = 'inbound' | 'outbound';
 
 export type InvoiceStatus = 'unpaid' | 'paid';
 
-export type AlertType = 'delivery_failure' | 'human_handoff' | 'system_error';
+export type AlertType = 'delivery_failure' | 'human_handoff' | 'system_error' | 'schedule_conflict' | 'booking_alert';
 
 export type AlertStatus = 'pending' | 'resolved';
 
@@ -23,7 +23,7 @@ export interface Conversation {
   id: string;
   customer_id: string;
   channel: 'whatsapp';
-  status: 'active' | 'escalated' | 'closed';
+  status: 'active' | 'escalated' | 'doctor_active' | 'closed';
   created_at: string;
   updated_at: string;
 }
@@ -57,12 +57,18 @@ export interface Appointment {
   updated_at: string;
 }
 
+export interface TimeInterval {
+  start_time: string; // "09:00" in 24-hour format
+  end_time: string;   // "13:00" in 24-hour format
+}
+
 export interface AvailabilityRule {
   id: string;
   day_of_week: number; // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
-  start_time: string;  // "09:00" in 24-hour format
-  end_time: string;    // "17:00" in 24-hour format
+  start_time: string;  // "09:00" in 24-hour format (earliest shift start)
+  end_time: string;    // "17:00" in 24-hour format (latest shift end)
   is_active: boolean;
+  shifts?: TimeInterval[]; // non-continuous shift intervals (e.g. 09:00-13:00 and 16:00-20:00)
 }
 
 export interface AvailabilityOverride {
@@ -72,6 +78,7 @@ export interface AvailabilityOverride {
   start_time?: string | null; // override start time if partial day
   end_time?: string | null;   // override end time if partial day
   reason?: string | null;
+  shifts?: TimeInterval[];
 }
 
 export interface Invoice {

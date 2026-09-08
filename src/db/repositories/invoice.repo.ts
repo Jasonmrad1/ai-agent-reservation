@@ -1,6 +1,7 @@
 import { DatabaseSync } from 'node:sqlite';
 import crypto from 'node:crypto';
 import { Invoice, InvoiceStatus } from '../../types/index.js';
+import { SupabaseSync } from '../supabase.js';
 
 export class InvoiceRepository {
   constructor(private db: DatabaseSync) {}
@@ -45,6 +46,7 @@ export class InvoiceRepository {
       invoice.paid_at ?? null
     );
 
+    SupabaseSync.syncInvoice(invoice).catch(() => {});
     return invoice;
   }
 
@@ -81,6 +83,9 @@ export class InvoiceRepository {
     this.db.prepare(`
       UPDATE invoices SET status = 'paid', paid_at = ? WHERE id = ?
     `).run(now, id);
+
+    const inv = this.findById(id);
+    if (inv) SupabaseSync.syncInvoice(inv).catch(() => {});
   }
 
   private mapRow(row: any): Invoice {

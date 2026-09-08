@@ -8,24 +8,28 @@ export const CLINIC_SERVICES = [
 ];
 
 export const CLINIC_POLICIES = {
-  hours: 'Monday to Friday, 09:00 to 17:00. Closed on weekends and official holidays.',
+  hours: 'Custom clinic schedule configured weekly by Dr. Ziad.',
   cancellationPolicy: 'Appointments can be cancelled or rescheduled up to 2 hours before the scheduled time with no penalty.',
-  emergencyPolicy: 'In case of severe acute medical emergencies, please call emergency services (911) or visit the nearest ER immediately.',
+  emergencyPolicy: 'In case of severe acute medical emergencies, please call emergency services (112) or visit the nearest ER immediately.',
 };
 
 export const CHECK_AVAILABILITY_TOOL: FunctionDeclaration = {
   name: 'check_availability',
-  description: 'Checks available appointment time slots for a specific date and visit type (in_office or home_visit).',
+  description: 'Checks available appointment time slots for a specific date or across upcoming days and weeks for in-office or home visits.',
   parameters: {
     type: SchemaType.OBJECT,
     properties: {
       date: {
         type: SchemaType.STRING,
-        description: 'The date to check in YYYY-MM-DD format (e.g. 2026-09-10).',
+        description: 'Target date in YYYY-MM-DD format (e.g. 2026-09-15). If the customer asks for next week or general availability, provide the starting date.',
       },
       visit_type: {
         type: SchemaType.STRING,
         description: 'Either "in_office" or "home_visit". Defaults to "in_office".',
+      },
+      days_ahead: {
+        type: SchemaType.NUMBER,
+        description: 'Number of upcoming days to check for open slots (e.g. 7 or 14 for next week inquiries). Default is 7.',
       },
     },
     required: ['date'],

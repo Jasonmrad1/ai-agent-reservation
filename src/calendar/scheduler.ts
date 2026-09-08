@@ -30,6 +30,13 @@ export interface RescheduleAppointmentParams {
   address?: string | null;
 }
 
+export interface ActiveShift {
+  startMs: number;
+  endMs: number;
+  startStr: string;
+  endStr: string;
+}
+
 export class SchedulingEngine {
   private db: DatabaseContext;
   private calendar: CalendarProvider;
@@ -44,7 +51,20 @@ export class SchedulingEngine {
   }
 
   /**
-   * Helper to parse date string YYYY-MM-DD into a UTC or local Day of Week
+   * Dynamically retrieves the configured home visit travel/commute buffer in minutes.
+   */
+  public getHomeVisitBufferMinutes(): number {
+    if (this.db?.settings) {
+      const val = parseInt(this.db.settings.get('home_visit_buffer_minutes', ''), 10);
+      if (!isNaN(val) && val >= 0) {
+        return val;
+      }
+    }
+    return this.homeVisitBufferMinutes;
+  }
+
+  /**
+   * Helper to parse date string YYYY-MM-DD into a UTC Day of Week (0 = Sunday, 1 = Monday, ...)
    */
   private getDayOfWeek(dateStr: string): number {
     const [year, month, day] = dateStr.split('-').map(Number);
@@ -53,42 +73,76 @@ export class SchedulingEngine {
   }
 
   /**
-   * Returns list of available start times (HH:mm) for a given date and visit type.
+   * Calculates active working shift segments for a given date, supporting split/non-continuous hours.
+   */
+  public getActiveShiftsForDate(dateStr: string): ActiveShift[] {
+    const override = this.db.availability.getOverrideForDate(dateStr);
+    if (override && override.is_unavailable) {
+      return []; // Doctor is completely off/vacation
+    }
+
+    const dayOfWeek = this.getDayOfWeek(dateStr);
+    const rule = this.db.availability.getRuleForDay(dayOfWeek);
+    if (!rule || !rule.is_active) {
+      // If day is normally off, only proceed if an override explicitly opened it
+      if (!override || override.is_unavailable) {
+        return [];
+      }
+    }
+
+    let intervals: Array<{ start_time: string; end_time: string }> = [];
+
+    if (override?.shifts && override.shifts.length > 0) {
+      intervals = override.shifts;
+    } else if (override?.start_time && override?.end_time) {
+      intervals = [{ start_time: override.start_time, end_time: override.end_time }];
+    } else if (rule?.shifts && rule.shifts.length > 0) {
+      intervals = rule.shifts;
+    } else {
+      intervals = [{
+        start_time: rule?.start_time || '09:00',
+        end_time: rule?.end_time || '17:00',
+      }];
+    }
+
+    const [year, month, day] = dateStr.split('-').map(Number);
+
+    return intervals.map((int) => {
+      const [sH, sM] = int.start_time.split(':').map(Number);
+      const [eH, eM] = int.end_time.split(':').map(Number);
+      return {
+        startMs: Date.UTC(year, month - 1, day, sH, sM),
+        endMs: Date.UTC(year, month - 1, day, eH, eM),
+        startStr: int.start_time,
+        endStr: int.end_time,
+      };
+    }).sort((a, b) => a.startMs - b.startMs);
+  }
+
+  /**
+   * Returns list of available start times (HH:mm) for a given date and visit type,
+   * fully supporting split shifts and commute travel buffer.
    */
   public async getAvailableSlots(
     dateStr: string,
     visitType: VisitType,
     durationMinutes: number = this.defaultSlotDurationMinutes
   ): Promise<string[]> {
-    // 1. Check overrides
-    const override = this.db.availability.getOverrideForDate(dateStr);
-    if (override && override.is_unavailable) {
-      return []; // Doctor is completely unavailable/vacation
+    const shifts = this.getActiveShiftsForDate(dateStr);
+    if (shifts.length === 0) {
+      return [];
     }
 
-    // 2. Check weekly rule
-    const dayOfWeek = this.getDayOfWeek(dateStr);
-    const rule = this.db.availability.getRuleForDay(dayOfWeek);
-    if (!rule || !rule.is_active) {
-      // Unless an override explicitly opened this date
-      if (!override || override.is_unavailable) {
-        return [];
-      }
-    }
+    const bufferMinutes = this.getHomeVisitBufferMinutes();
+    const bufferMs = (visitType === 'home_visit' ? bufferMinutes : 0) * 60 * 1000;
+    const slotDurationMs = durationMinutes * 60 * 1000;
+    const stepMinutes = 30; // Check slots every 30 mins
 
-    const startWindow = override?.start_time || rule?.start_time || '09:00';
-    const endWindow = override?.end_time || rule?.end_time || '17:00';
-
-    const [startH, startM] = startWindow.split(':').map(Number);
-    const [endH, endM] = endWindow.split(':').map(Number);
-
-    const dayStart = new Date(`${dateStr}T00:00:00.000Z`);
-    const windowStartMs = Date.UTC(dayStart.getUTCFullYear(), dayStart.getUTCMonth(), dayStart.getUTCDate(), startH, startM);
-    const windowEndMs = Date.UTC(dayStart.getUTCFullYear(), dayStart.getUTCMonth(), dayStart.getUTCDate(), endH, endM);
-
-    // Fetch existing appointments and calendar events for this day + surrounding buffers
-    const searchStart = new Date(windowStartMs - 2 * 60 * 60 * 1000);
-    const searchEnd = new Date(windowEndMs + 2 * 60 * 60 * 1000);
+    // Search range for existing appointments and events across the entire day
+    const firstShiftStart = shifts[0].startMs;
+    const lastShiftEnd = shifts[shifts.length - 1].endMs;
+    const searchStart = new Date(firstShiftStart - 2 * 60 * 60 * 1000);
+    const searchEnd = new Date(lastShiftEnd + 2 * 60 * 60 * 1000);
 
     const dbAppointments = this.db.appointments.getAppointmentsInRange(
       searchStart.toISOString(),
@@ -98,67 +152,81 @@ export class SchedulingEngine {
     const calEvents = await this.calendar.listEvents(searchStart, searchEnd);
 
     const availableSlots: string[] = [];
-    const stepMinutes = 30; // Check slots every 30 mins
-    const slotDurationMs = durationMinutes * 60 * 1000;
-    const bufferMs = (visitType === 'home_visit' ? this.homeVisitBufferMinutes : 0) * 60 * 1000;
 
-    let currentStartMs = windowStartMs;
+    for (const shift of shifts) {
+      let currentStartMs = shift.startMs;
 
-    while (currentStartMs + slotDurationMs <= windowEndMs) {
-      const candidateStart = new Date(currentStartMs);
-      const candidateEnd = new Date(currentStartMs + slotDurationMs);
+      while (currentStartMs + slotDurationMs <= shift.endMs) {
+        const candidateStart = new Date(currentStartMs);
+        const candidateEnd = new Date(currentStartMs + slotDurationMs);
 
-      // Travel buffer window needed for the candidate appointment
-      const candidateRequiredStart = new Date(currentStartMs - bufferMs);
-      const candidateRequiredEnd = new Date(currentStartMs + slotDurationMs + bufferMs);
-
-      // Verify the required start and end fit reasonably within business hours
-      if (candidateRequiredStart.getTime() < windowStartMs || candidateRequiredEnd.getTime() > windowEndMs) {
-        currentStartMs += stepMinutes * 60 * 1000;
-        continue;
-      }
-
-      // Check conflict with DB appointments
-      let conflict = false;
-      for (const appt of dbAppointments) {
-        const apptStartMs = new Date(appt.start_time).getTime();
-        const apptEndMs = new Date(appt.end_time).getTime();
-        const apptBufferMs = (appt.visit_type === 'home_visit' ? this.homeVisitBufferMinutes : 0) * 60 * 1000;
-
-        const effectiveApptStart = apptStartMs - apptBufferMs;
-        const effectiveApptEnd = apptEndMs + apptBufferMs;
-
-        // Overlap if candidateRequiredStart < effectiveApptEnd && candidateRequiredEnd > effectiveApptStart
-        if (candidateRequiredStart.getTime() < effectiveApptEnd && candidateRequiredEnd.getTime() > effectiveApptStart) {
-          conflict = true;
-          break;
+        // For home visits: doctor must have travel buffer within working shift hours
+        if (visitType === 'home_visit') {
+          if (currentStartMs - bufferMs < shift.startMs || currentStartMs + slotDurationMs + bufferMs > shift.endMs) {
+            currentStartMs += stepMinutes * 60 * 1000;
+            continue;
+          }
         }
-      }
 
-      // Check conflict with Google Calendar events
-      if (!conflict) {
-        for (const ev of calEvents) {
-          if (candidateRequiredStart < ev.end && candidateRequiredEnd > ev.start) {
+        // Check conflict with DB appointments + commute buffer
+        let conflict = false;
+        for (const appt of dbAppointments) {
+          const apptStartMs = new Date(appt.start_time).getTime();
+          const apptEndMs = new Date(appt.end_time).getTime();
+
+          // Direct overlap
+          if (currentStartMs < apptEndMs && (currentStartMs + slotDurationMs) > apptStartMs) {
             conflict = true;
             break;
           }
+
+          // Commute buffer between appointments
+          const needsCommute = visitType === 'home_visit' || appt.visit_type === 'home_visit';
+          const requiredGapMs = needsCommute ? bufferMinutes * 60 * 1000 : 0;
+
+          if (needsCommute) {
+            // Previous appointment -> candidate
+            if (apptEndMs <= currentStartMs && (currentStartMs - apptEndMs) < requiredGapMs) {
+              conflict = true;
+              break;
+            }
+            // Candidate -> subsequent appointment
+            if (apptStartMs >= (currentStartMs + slotDurationMs) && (apptStartMs - (currentStartMs + slotDurationMs)) < requiredGapMs) {
+              conflict = true;
+              break;
+            }
+          }
         }
-      }
 
-      if (!conflict) {
-        const hh = String(candidateStart.getUTCHours()).padStart(2, '0');
-        const mm = String(candidateStart.getUTCMinutes()).padStart(2, '0');
-        availableSlots.push(`${hh}:${mm}`);
-      }
+        // Check conflict with external Google Calendar events + travel buffer
+        if (!conflict) {
+          const commuteGap = (visitType === 'home_visit' ? bufferMinutes : 0) * 60 * 1000;
+          for (const ev of calEvents) {
+            const evStartMs = ev.start.getTime();
+            const evEndMs = ev.end.getTime();
 
-      currentStartMs += stepMinutes * 60 * 1000;
+            if (currentStartMs - commuteGap < evEndMs && (currentStartMs + slotDurationMs + commuteGap) > evStartMs) {
+              conflict = true;
+              break;
+            }
+          }
+        }
+
+        if (!conflict) {
+          const hh = String(candidateStart.getUTCHours()).padStart(2, '0');
+          const mm = String(candidateStart.getUTCMinutes()).padStart(2, '0');
+          availableSlots.push(`${hh}:${mm}`);
+        }
+
+        currentStartMs += stepMinutes * 60 * 1000;
+      }
     }
 
     return availableSlots;
   }
 
   /**
-   * Books an appointment deterministically after validating against conflicts.
+   * Books an appointment deterministically after validating against shifts and commute travel buffer.
    */
   public async bookAppointment(params: BookAppointmentParams): Promise<Appointment> {
     if (params.visitType === 'home_visit' && !params.address) {
@@ -169,30 +237,58 @@ export class SchedulingEngine {
     const durationMs = this.defaultSlotDurationMinutes * 60 * 1000;
     const endTime = params.endTime ? new Date(params.endTime) : new Date(startTime.getTime() + durationMs);
 
-    const bufferMs = (params.visitType === 'home_visit' ? this.homeVisitBufferMinutes : 0) * 60 * 1000;
-    const requiredStart = new Date(startTime.getTime() - bufferMs);
-    const requiredEnd = new Date(endTime.getTime() + bufferMs);
+    const bufferMinutes = this.getHomeVisitBufferMinutes();
+    const bufferMs = (params.visitType === 'home_visit' ? bufferMinutes : 0) * 60 * 1000;
+
+    // Check if slot falls inside one of the active shifts for the day
+    const dateStr = startTime.toISOString().split('T')[0];
+    const shifts = this.getActiveShiftsForDate(dateStr);
+    if (shifts.length > 0) {
+      const fitsInShift = shifts.some((s) => {
+        if (params.visitType === 'home_visit') {
+          return (startTime.getTime() - bufferMs >= s.startMs && endTime.getTime() + bufferMs <= s.endMs);
+        }
+        return (startTime.getTime() >= s.startMs && endTime.getTime() <= s.endMs);
+      });
+      if (!fitsInShift) {
+        throw new Error(`Time slot conflict: Requested time is outside doctor's active working hours or travel buffer.`);
+      }
+    }
 
     // Conflict check with existing DB appointments
-    const searchStart = new Date(requiredStart.getTime() - 2 * 60 * 60 * 1000).toISOString();
-    const searchEnd = new Date(requiredEnd.getTime() + 2 * 60 * 60 * 1000).toISOString();
+    const searchStart = new Date(startTime.getTime() - 2 * 60 * 60 * 1000).toISOString();
+    const searchEnd = new Date(endTime.getTime() + 2 * 60 * 60 * 1000).toISOString();
     const existingAppointments = this.db.appointments.getAppointmentsInRange(searchStart, searchEnd);
 
     for (const appt of existingAppointments) {
       const apptStartMs = new Date(appt.start_time).getTime();
       const apptEndMs = new Date(appt.end_time).getTime();
-      const apptBufferMs = (appt.visit_type === 'home_visit' ? this.homeVisitBufferMinutes : 0) * 60 * 1000;
 
-      const effectiveApptStart = apptStartMs - apptBufferMs;
-      const effectiveApptEnd = apptEndMs + apptBufferMs;
-
-      if (requiredStart.getTime() < effectiveApptEnd && requiredEnd.getTime() > effectiveApptStart) {
+      // Direct overlap
+      if (startTime.getTime() < apptEndMs && endTime.getTime() > apptStartMs) {
         throw new Error(`Time slot conflict: Doctor already has an appointment or travel buffer at this time.`);
+      }
+
+      // Commute buffer check
+      const needsCommute = params.visitType === 'home_visit' || appt.visit_type === 'home_visit';
+      const requiredGapMs = needsCommute ? bufferMinutes * 60 * 1000 : 0;
+
+      if (needsCommute) {
+        if (apptEndMs <= startTime.getTime() && (startTime.getTime() - apptEndMs) < requiredGapMs) {
+          throw new Error(`Time slot conflict: Doctor already has an appointment or travel buffer at this time.`);
+        }
+        if (apptStartMs >= endTime.getTime() && (apptStartMs - endTime.getTime()) < requiredGapMs) {
+          throw new Error(`Time slot conflict: Doctor already has an appointment or travel buffer at this time.`);
+        }
       }
     }
 
     // Conflict check with Calendar events
-    const calEvents = await this.calendar.listEvents(requiredStart, requiredEnd);
+    const calCommuteGap = (params.visitType === 'home_visit' ? bufferMinutes : 0) * 60 * 1000;
+    const calEvents = await this.calendar.listEvents(
+      new Date(startTime.getTime() - calCommuteGap),
+      new Date(endTime.getTime() + calCommuteGap)
+    );
     if (calEvents.length > 0) {
       throw new Error(`Time slot conflict: Google Calendar has an existing event at this time.`);
     }
@@ -234,7 +330,7 @@ export class SchedulingEngine {
   }
 
   /**
-   * Reschedules an existing appointment to a new time.
+   * Reschedules an existing appointment to a new time with commute and shift validation.
    */
   public async rescheduleAppointment(params: RescheduleAppointmentParams): Promise<Appointment> {
     const existing = this.db.appointments.findById(params.appointmentId);
@@ -253,14 +349,28 @@ export class SchedulingEngine {
     const durationMs = (new Date(existing.end_time).getTime() - new Date(existing.start_time).getTime()) || (60 * 60 * 1000);
     const newEnd = params.newEndTime ? new Date(params.newEndTime) : new Date(newStart.getTime() + durationMs);
 
-    const bufferMs = (visitType === 'home_visit' ? this.homeVisitBufferMinutes : 0) * 60 * 1000;
-    const requiredStart = new Date(newStart.getTime() - bufferMs);
-    const requiredEnd = new Date(newEnd.getTime() + bufferMs);
+    const bufferMinutes = this.getHomeVisitBufferMinutes();
+    const bufferMs = (visitType === 'home_visit' ? bufferMinutes : 0) * 60 * 1000;
+
+    // Check shifts
+    const dateStr = newStart.toISOString().split('T')[0];
+    const shifts = this.getActiveShiftsForDate(dateStr);
+    if (shifts.length > 0) {
+      const fitsInShift = shifts.some((s) => {
+        if (visitType === 'home_visit') {
+          return (newStart.getTime() - bufferMs >= s.startMs && newEnd.getTime() + bufferMs <= s.endMs);
+        }
+        return (newStart.getTime() >= s.startMs && newEnd.getTime() <= s.endMs);
+      });
+      if (!fitsInShift) {
+        throw new Error(`Time slot conflict: Requested time is outside doctor's active working hours or travel buffer.`);
+      }
+    }
 
     // Conflict check (excluding the current appointment itself)
     const existingAppointments = this.db.appointments.getAppointmentsInRange(
-      new Date(requiredStart.getTime() - 2 * 60 * 60 * 1000).toISOString(),
-      new Date(requiredEnd.getTime() + 2 * 60 * 60 * 1000).toISOString()
+      new Date(newStart.getTime() - 2 * 60 * 60 * 1000).toISOString(),
+      new Date(newEnd.getTime() + 2 * 60 * 60 * 1000).toISOString()
     );
 
     for (const appt of existingAppointments) {
@@ -268,13 +378,21 @@ export class SchedulingEngine {
 
       const apptStartMs = new Date(appt.start_time).getTime();
       const apptEndMs = new Date(appt.end_time).getTime();
-      const apptBufferMs = (appt.visit_type === 'home_visit' ? this.homeVisitBufferMinutes : 0) * 60 * 1000;
 
-      const effectiveApptStart = apptStartMs - apptBufferMs;
-      const effectiveApptEnd = apptEndMs + apptBufferMs;
-
-      if (requiredStart.getTime() < effectiveApptEnd && requiredEnd.getTime() > effectiveApptStart) {
+      if (newStart.getTime() < apptEndMs && newEnd.getTime() > apptStartMs) {
         throw new Error(`Time slot conflict: Doctor already has an appointment or travel buffer at this time.`);
+      }
+
+      const needsCommute = visitType === 'home_visit' || appt.visit_type === 'home_visit';
+      const requiredGapMs = needsCommute ? bufferMinutes * 60 * 1000 : 0;
+
+      if (needsCommute) {
+        if (apptEndMs <= newStart.getTime() && (newStart.getTime() - apptEndMs) < requiredGapMs) {
+          throw new Error(`Time slot conflict: Doctor already has an appointment or travel buffer at this time.`);
+        }
+        if (apptStartMs >= newEnd.getTime() && (apptStartMs - newEnd.getTime()) < requiredGapMs) {
+          throw new Error(`Time slot conflict: Doctor already has an appointment or travel buffer at this time.`);
+        }
       }
     }
 
@@ -302,6 +420,133 @@ export class SchedulingEngine {
     );
 
     return this.db.appointments.findById(existing.id)!;
+  }
+
+  /**
+   * Searches available slots across a range of days (e.g. next 14 days),
+   * providing multi-week availability for customer inquiries.
+   */
+  public async getAvailableSlotsAcrossRange(
+    startDateStr: string,
+    daysCount: number = 7,
+    visitType: VisitType = 'in_office',
+    maxOpenDays: number = 7
+  ): Promise<Array<{ date: string; day_name: string; is_closed: boolean; hours?: string; available_slots: string[] }>> {
+    const results: Array<{ date: string; day_name: string; is_closed: boolean; hours?: string; available_slots: string[] }> = [];
+    const [year, month, day] = startDateStr.split('-').map(Number);
+    const startUtc = new Date(Date.UTC(year, month - 1, day));
+    const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+    for (let i = 0; i < daysCount; i++) {
+      const curDate = new Date(startUtc.getTime() + i * 24 * 60 * 60 * 1000);
+      const curDateStr = curDate.toISOString().split('T')[0];
+      const dayName = dayNames[curDate.getUTCDay()];
+
+      const shifts = this.getActiveShiftsForDate(curDateStr);
+      const slots = await this.getAvailableSlots(curDateStr, visitType);
+
+      if (shifts.length === 0 || slots.length === 0) {
+        results.push({
+          date: curDateStr,
+          day_name: dayName,
+          is_closed: true,
+          available_slots: [],
+        });
+      } else {
+        const hoursSummary = shifts.map((s) => `${s.startStr} to ${s.endStr}`).join(', ');
+        results.push({
+          date: curDateStr,
+          day_name: dayName,
+          is_closed: false,
+          hours: hoursSummary,
+          available_slots: slots,
+        });
+      }
+    }
+
+    return results;
+  }
+
+  /**
+   * Finds all upcoming active appointments on a specific date that conflict with updated shifts or blockout.
+   */
+  public getConflictingAppointmentsForDate(dateStr: string): Appointment[] {
+    const shifts = this.getActiveShiftsForDate(dateStr);
+    const [year, month, day] = dateStr.split('-').map(Number);
+    const dayStartIso = new Date(Date.UTC(year, month - 1, day, 0, 0, 0)).toISOString();
+    const dayEndIso = new Date(Date.UTC(year, month - 1, day, 23, 59, 59)).toISOString();
+
+    const appts = this.db.appointments.getAppointmentsInRange(dayStartIso, dayEndIso);
+    const conflicts: Appointment[] = [];
+
+    for (const appt of appts) {
+      if (appt.status === 'cancelled' || appt.status === 'completed') continue;
+
+      const apptStartMs = new Date(appt.start_time).getTime();
+      const apptEndMs = new Date(appt.end_time).getTime();
+
+      // If doctor is completely closed, all appointments conflict
+      if (shifts.length === 0) {
+        conflicts.push(appt);
+        continue;
+      }
+
+      // Check if appointment fits within any shift
+      const fits = shifts.some((s) => apptStartMs >= s.startMs && apptEndMs <= s.endMs);
+      if (!fits) {
+        conflicts.push(appt);
+      }
+    }
+
+    return conflicts;
+  }
+
+  /**
+   * Finds all upcoming active appointments on a given day-of-week that conflict with newly updated weekly shifts.
+   */
+  public getConflictingAppointmentsForWeeklyChange(
+    dayOfWeek: number,
+    newShifts: Array<{ start_time: string; end_time: string }>,
+    isActive: boolean
+  ): Appointment[] {
+    const upcoming = this.db.appointments.listUpcoming(100);
+    const conflicts: Appointment[] = [];
+
+    for (const appt of upcoming) {
+      if (appt.status === 'cancelled' || appt.status === 'completed') continue;
+
+      const apptDate = new Date(appt.start_time);
+      if (apptDate.getUTCDay() !== dayOfWeek) continue;
+
+      const dateStr = apptDate.toISOString().split('T')[0];
+      const override = this.db.availability.getOverrideForDate(dateStr);
+      if (override) continue; // specific override takes precedence
+
+      if (!isActive || !newShifts || newShifts.length === 0) {
+        conflicts.push(appt);
+        continue;
+      }
+
+      const [y, m, d] = dateStr.split('-').map(Number);
+      const shiftIntervals = newShifts.map((s) => {
+        const [sH, sM] = s.start_time.split(':').map(Number);
+        const [eH, eM] = s.end_time.split(':').map(Number);
+        return {
+          startMs: Date.UTC(y, m - 1, d, sH, sM),
+          endMs: Date.UTC(y, m - 1, d, eH, eM),
+        };
+      });
+
+      const apptStartMs = apptDate.getTime();
+      const apptEndMs = new Date(appt.end_time).getTime();
+      const fits = shiftIntervals.some((s) => apptStartMs >= s.startMs && apptEndMs <= s.endMs);
+
+      if (!fits) {
+        conflicts.push(appt);
+      }
+    }
+
+    return conflicts;
   }
 
   /**

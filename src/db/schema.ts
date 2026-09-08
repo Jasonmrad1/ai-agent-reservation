@@ -60,7 +60,8 @@ CREATE TABLE IF NOT EXISTS availability_rules (
   day_of_week INTEGER NOT NULL,
   start_time TEXT NOT NULL,
   end_time TEXT NOT NULL,
-  is_active INTEGER DEFAULT 1
+  is_active INTEGER DEFAULT 1,
+  shifts TEXT
 );
 
 CREATE TABLE IF NOT EXISTS availability_overrides (
@@ -69,10 +70,16 @@ CREATE TABLE IF NOT EXISTS availability_overrides (
   is_unavailable INTEGER DEFAULT 1,
   start_time TEXT,
   end_time TEXT,
-  reason TEXT
+  reason TEXT,
+  shifts TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_overrides_date ON availability_overrides(date);
+
+CREATE TABLE IF NOT EXISTS settings (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL
+);
 
 CREATE TABLE IF NOT EXISTS invoices (
   id TEXT PRIMARY KEY,
