@@ -128,7 +128,7 @@ export const WorkHoursView: React.FC<WorkHoursViewProps> = ({
   onAddOverride,
   onDeleteOverride,
 }) => {
-  const [scopeMode, setScopeMode] = useState<'default' | 'week'>('default');
+  const [scopeMode, setScopeMode] = useState<'default' | 'week'>('week');
   const [selectedWeekMonday, setSelectedWeekMonday] = useState<Date>(() => getMonday(new Date()));
   const [viewMode, setViewMode] = useState<'visual' | 'form'>('visual');
   const [localRules, setLocalRules] = useState<AvailabilityRule[]>([]);
@@ -541,6 +541,13 @@ export const WorkHoursView: React.FC<WorkHoursViewProps> = ({
     }
   };
 
+  const handleSaveAsDefault = () => {
+    onSaveAllRules(localRules);
+    if (selectedBuffer !== commuteBufferMinutes) {
+      onUpdateCommuteBuffer(selectedBuffer);
+    }
+  };
+
   const handleAddOverrideSubmit = () => {
     if (!newDate) return alert('Please choose a date to block out.');
     onAddOverride(newDate, newReason);
@@ -566,7 +573,19 @@ export const WorkHoursView: React.FC<WorkHoursViewProps> = ({
     timeLabels.push(`${String(h).padStart(2, '0')}:00`);
   }
 
+  const currentMonday = getMonday(new Date());
   const weekEndSunday = addDays(selectedWeekMonday, 6);
+  const diffDays = Math.round((selectedWeekMonday.getTime() - currentMonday.getTime()) / 86400000);
+  const weekDiff = Math.round(diffDays / 7);
+
+  let weekRelativeLabel = 'This Week (Current)';
+  if (weekDiff === 1) weekRelativeLabel = 'Next Week (+1)';
+  else if (weekDiff === 2) weekRelativeLabel = 'In 2 Weeks (+2)';
+  else if (weekDiff === 3) weekRelativeLabel = 'In 3 Weeks (+3)';
+  else if (weekDiff === 4) weekRelativeLabel = 'In 4 Weeks (+4)';
+  else if (weekDiff === -1) weekRelativeLabel = 'Last Week (-1)';
+  else if (weekDiff < -1) weekRelativeLabel = `${Math.abs(weekDiff)} Weeks Ago`;
+  else if (weekDiff > 4) weekRelativeLabel = `In ${weekDiff} Weeks`;
 
   return (
     <main className="work-hours-page-container">
@@ -580,7 +599,9 @@ export const WorkHoursView: React.FC<WorkHoursViewProps> = ({
             <div>
               <h2 className="work-hours-heading">Weekly Work Hours & Availability</h2>
               <p className="work-hours-subheading">
-                Configure your all-time recurring template or customize hours for any specific week.
+                {scopeMode === 'week'
+                  ? `Editing specific schedule for ${weekRelativeLabel} (${selectedWeekMonday.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} – ${weekEndSunday.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}).`
+                  : 'Editing the all-time recurring template applied to all future weeks by default.'}
               </p>
             </div>
           </div>
@@ -608,20 +629,41 @@ export const WorkHoursView: React.FC<WorkHoursViewProps> = ({
               </button>
             </div>
 
+            {scopeMode === 'week' && (
+              <button
+                type="button"
+                className="btn btn-secondary"
+                style={{ borderColor: 'rgba(0, 255, 136, 0.35)', color: '#00ff88', display: 'flex', alignItems: 'center', gap: '6px' }}
+                onClick={handleSaveAsDefault}
+                title="Save this week's hours as the all-time recurring template for all weeks in the future"
+              >
+                <IconSliders size={14} />
+                <span>Apply as Default for All Future Weeks</span>
+              </button>
+            )}
+
             <button className="btn btn-emerald save-all-btn" onClick={handleSaveAll}>
               <IconCheck size={16} />
               <span>
                 {scopeMode === 'default'
                   ? 'Save All-Time Default Hours'
-                  : `Save Schedule for Week (${formatDateIso(selectedWeekMonday)})`}
+                  : `Save Schedule for ${weekRelativeLabel}`}
               </span>
             </button>
           </div>
         </div>
 
-        {/* Scope Selector: All-Time Default vs Specific Week Override */}
+        {/* Scope Selector: Specific Week Override (Default) vs All-Time Default Template */}
         <div className="schedule-scope-bar">
           <div className="scope-tabs-group">
+            <button
+              type="button"
+              className={`scope-tab-btn ${scopeMode === 'week' ? 'active' : ''}`}
+              onClick={() => setScopeMode('week')}
+            >
+              <IconCalendar size={14} />
+              <span>Specific Week Schedule</span>
+            </button>
             <button
               type="button"
               className={`scope-tab-btn ${scopeMode === 'default' ? 'active' : ''}`}
@@ -630,62 +672,107 @@ export const WorkHoursView: React.FC<WorkHoursViewProps> = ({
               <IconSliders size={14} />
               <span>All-Time Default Template</span>
             </button>
-            <button
-              type="button"
-              className={`scope-tab-btn ${scopeMode === 'week' ? 'active' : ''}`}
-              onClick={() => setScopeMode('week')}
-            >
-              <IconCalendar size={14} />
-              <span>Specific Week Override</span>
-            </button>
           </div>
 
           {scopeMode === 'week' && (
-            <div className="week-scope-navigator">
-              <button
-                type="button"
-                className="btn btn-secondary week-nav-arrow"
-                onClick={() => setSelectedWeekMonday(addDays(selectedWeekMonday, -7))}
-                title="Previous Week"
-              >
-                <IconChevronLeft size={14} />
-                <span>Prev Week</span>
-              </button>
-              <span className="week-scope-badge">
-                <IconCalendar size={13} style={{ marginRight: '6px' }} />
-                <span>Week of {selectedWeekMonday.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} – {weekEndSunday.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
-              </span>
-              <button
-                type="button"
-                className="btn btn-secondary week-nav-arrow"
-                onClick={() => setSelectedWeekMonday(addDays(selectedWeekMonday, 7))}
-                title="Next Week"
-              >
-                <span>Next Week</span>
-                <IconChevronRight size={14} />
-              </button>
-              <button
-                type="button"
-                className="btn btn-secondary week-nav-today"
-                onClick={() => setSelectedWeekMonday(getMonday(new Date()))}
-              >
-                This Week
-              </button>
-              {onResetWeekOverrides && (
-                <button
-                  type="button"
-                  className="btn btn-secondary week-reset-btn"
-                  onClick={() => {
-                    const start = formatDateIso(selectedWeekMonday);
-                    const end = formatDateIso(weekEndSunday);
-                    onResetWeekOverrides(start, end);
-                  }}
-                  title="Clear overrides for this week and restore default template"
-                >
-                  <IconRotateCcw size={13} style={{ marginRight: '5px' }} />
-                  <span>Reset Week to Default</span>
-                </button>
-              )}
+            <div className="week-scope-navigator" style={{ display: 'flex', flexDirection: 'column', gap: '10px', alignItems: 'stretch' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <button
+                    type="button"
+                    className="btn btn-secondary week-nav-arrow"
+                    onClick={() => setSelectedWeekMonday(addDays(selectedWeekMonday, -7))}
+                    title="Previous Week"
+                  >
+                    <IconChevronLeft size={14} />
+                    <span>Prev Week</span>
+                  </button>
+                  <span className="week-scope-badge" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontWeight: 600 }}>
+                    <IconCalendar size={14} color="#00ff88" />
+                    <span>
+                      <strong>{weekRelativeLabel}:</strong> {selectedWeekMonday.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} – {weekEndSunday.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                    </span>
+                  </span>
+                  <button
+                    type="button"
+                    className="btn btn-secondary week-nav-arrow"
+                    onClick={() => setSelectedWeekMonday(addDays(selectedWeekMonday, 7))}
+                    title="Next Week"
+                  >
+                    <span>Next Week</span>
+                    <IconChevronRight size={14} />
+                  </button>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                  <button
+                    type="button"
+                    className={`btn ${weekDiff === 0 ? 'btn-emerald' : 'btn-secondary'}`}
+                    style={{ fontSize: '11px', padding: '4px 9px' }}
+                    onClick={() => setSelectedWeekMonday(currentMonday)}
+                  >
+                    This Week
+                  </button>
+                  <button
+                    type="button"
+                    className={`btn ${weekDiff === 1 ? 'btn-emerald' : 'btn-secondary'}`}
+                    style={{ fontSize: '11px', padding: '4px 9px' }}
+                    onClick={() => setSelectedWeekMonday(addDays(currentMonday, 7))}
+                  >
+                    Next Week (+1)
+                  </button>
+                  <button
+                    type="button"
+                    className={`btn ${weekDiff === 2 ? 'btn-emerald' : 'btn-secondary'}`}
+                    style={{ fontSize: '11px', padding: '4px 9px' }}
+                    onClick={() => setSelectedWeekMonday(addDays(currentMonday, 14))}
+                  >
+                    In 2 Weeks (+2)
+                  </button>
+                  <button
+                    type="button"
+                    className={`btn ${weekDiff === 3 ? 'btn-emerald' : 'btn-secondary'}`}
+                    style={{ fontSize: '11px', padding: '4px 9px' }}
+                    onClick={() => setSelectedWeekMonday(addDays(currentMonday, 21))}
+                  >
+                    In 3 Weeks (+3)
+                  </button>
+
+                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', marginLeft: '6px' }}>
+                    <span style={{ fontSize: '11px', color: 'var(--text-subtle)' }}>Jump to:</span>
+                    <input
+                      type="date"
+                      className="override-date-input"
+                      style={{ padding: '3px 8px', fontSize: '11.5px', height: '28px' }}
+                      value={formatDateIso(selectedWeekMonday)}
+                      onChange={(e) => {
+                        if (e.target.value) {
+                          const [y, m, d] = e.target.value.split('-').map(Number);
+                          const picked = new Date(y, m - 1, d);
+                          setSelectedWeekMonday(getMonday(picked));
+                        }
+                      }}
+                    />
+                  </div>
+
+                  {onResetWeekOverrides && (
+                    <button
+                      type="button"
+                      className="btn btn-secondary week-reset-btn"
+                      style={{ marginLeft: '4px' }}
+                      onClick={() => {
+                        const start = formatDateIso(selectedWeekMonday);
+                        const end = formatDateIso(weekEndSunday);
+                        onResetWeekOverrides(start, end);
+                      }}
+                      title="Clear overrides for this week and restore default template"
+                    >
+                      <IconRotateCcw size={13} style={{ marginRight: '4px' }} />
+                      <span>Reset to Default</span>
+                    </button>
+                  )}
+                </div>
+              </div>
             </div>
           )}
         </div>
@@ -1170,13 +1257,25 @@ export const WorkHoursView: React.FC<WorkHoursViewProps> = ({
         </div>
 
         {/* Bottom Save Bar */}
-        <div className="work-hours-bottom-bar">
+        <div className="work-hours-bottom-bar" style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', alignItems: 'center', flexWrap: 'wrap' }}>
+          {scopeMode === 'week' && (
+            <button
+              type="button"
+              className="btn btn-secondary"
+              style={{ borderColor: 'rgba(0, 255, 136, 0.35)', color: '#00ff88', padding: '10px 18px', fontSize: '13px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+              onClick={handleSaveAsDefault}
+              title="Save this week's hours as the all-time recurring template for all weeks in the future"
+            >
+              <IconSliders size={15} />
+              <span>Apply as Default for All Future Weeks</span>
+            </button>
+          )}
           <button className="btn btn-emerald save-all-btn-large" onClick={handleSaveAll}>
             <IconCheck size={16} />
             <span>
               {scopeMode === 'default'
                 ? 'Save All-Time Default Hours'
-                : `Save Custom Schedule for Week (${formatDateIso(selectedWeekMonday)})`}
+                : `Save Schedule for ${weekRelativeLabel} (${formatDateIso(selectedWeekMonday)})`}
             </span>
           </button>
         </div>
