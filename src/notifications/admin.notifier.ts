@@ -34,17 +34,6 @@ export class AdminNotificationService {
 
   public async notifyBooking(appointment: Appointment, customer: Customer): Promise<void> {
     const custDigits = (customer.phone || '').replace(/\D/g, '');
-    const adminDigits = (this.adminNumber || '').replace(/\D/g, '');
-    if (custDigits && adminDigits && custDigits === adminDigits) {
-      this.alerts.create({
-        type: 'booking_alert',
-        title: `New Booking: ${customer.name || customer.phone}`,
-        details: `${appointment.service} on ${appointment.start_time}`,
-        customer_id: customer.id,
-      });
-      return;
-    }
-
     const visitDetails = appointment.visit_type === 'home_visit'
       ? `🏠 Home Visit\n📍 Address: ${appointment.address || 'Not specified'}`
       : `🏥 In-Office Visit`;
@@ -67,17 +56,6 @@ export class AdminNotificationService {
 
   public async notifyReschedule(appointment: Appointment, customer: Customer, oldStartTime?: string): Promise<void> {
     const custDigits = (customer.phone || '').replace(/\D/g, '');
-    const adminDigits = (this.adminNumber || '').replace(/\D/g, '');
-    if (custDigits && adminDigits && custDigits === adminDigits) {
-      this.alerts.create({
-        type: 'schedule_conflict',
-        title: `Rescheduled: ${customer.name || customer.phone}`,
-        details: `${appointment.service} moved to ${appointment.start_time}`,
-        customer_id: customer.id,
-      });
-      return;
-    }
-
     const waLink = custDigits ? `https://wa.me/${custDigits}` : '';
 
     const msg = [
@@ -95,17 +73,6 @@ export class AdminNotificationService {
 
   public async notifyCancellation(appointment: Appointment, customer: Customer, reason?: string): Promise<void> {
     const custDigits = (customer.phone || '').replace(/\D/g, '');
-    const adminDigits = (this.adminNumber || '').replace(/\D/g, '');
-    if (custDigits && adminDigits && custDigits === adminDigits) {
-      this.alerts.create({
-        type: 'schedule_conflict',
-        title: `Cancelled: ${customer.name || customer.phone}`,
-        details: `${appointment.service} on ${appointment.start_time} (${reason || 'No reason'})`,
-        customer_id: customer.id,
-      });
-      return;
-    }
-
     const waLink = custDigits ? `https://wa.me/${custDigits}` : '';
 
     const msg = [
