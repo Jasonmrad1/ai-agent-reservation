@@ -1,6 +1,7 @@
 import { FunctionDeclaration, SchemaType } from '@google/generative-ai';
 
 export const CLINIC_SERVICES = [
+  { name: 'Physiotherapy & Rehabilitation', duration: 60, price: 120, description: 'Physiotherapy, musculoskeletal rehab, and manual therapy.' },
   { name: 'General Consultation', duration: 60, price: 120, description: 'Comprehensive medical review and consultation.' },
   { name: 'Follow-up Consultation', duration: 30, price: 70, description: 'Follow-up on previous treatments or test results.' },
   { name: 'Home Visit Care', duration: 60, price: 180, description: 'Doctor travels to patient home for examination and treatment.' },

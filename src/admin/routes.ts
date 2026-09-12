@@ -298,18 +298,34 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
 
   // Settings: Commute Buffer & Global Doctor Preferences
   router.get('/api/settings', requireAdminAuth, (req: Request, res: Response) => {
-    const bufferMinutes = parseInt(db.settings.get('home_visit_buffer_minutes', '30'), 10) || 30;
+    const weekDate = req.query.week as string;
+    let weekBufferMinutes: number | undefined;
+    if (weekDate) {
+      const weekVal = parseInt(db.settings.get(`home_visit_buffer_minutes_week_${weekDate}`, ''), 10);
+      if (!isNaN(weekVal) && weekVal >= 0) {
+        weekBufferMinutes = weekVal;
+      }
+    }
+    const defaultBufferMinutes = parseInt(db.settings.get('home_visit_buffer_minutes', '30'), 10) || 30;
     res.json({
-      home_visit_buffer_minutes: bufferMinutes,
+      home_visit_buffer_minutes: weekBufferMinutes !== undefined ? weekBufferMinutes : defaultBufferMinutes,
+      default_buffer_minutes: defaultBufferMinutes,
       all: db.settings.getAll(),
     });
   });
 
   router.post('/api/settings', requireAdminAuth, (req: Request, res: Response) => {
-    const { home_visit_buffer_minutes } = req.body;
+    const { home_visit_buffer_minutes, week_date, set_as_default } = req.body;
     if (home_visit_buffer_minutes !== undefined) {
       const minutes = Math.max(0, parseInt(String(home_visit_buffer_minutes), 10) || 0);
-      db.settings.set('home_visit_buffer_minutes', String(minutes));
+      if (week_date && !set_as_default) {
+        db.settings.set(`home_visit_buffer_minutes_week_${week_date}`, String(minutes));
+      } else {
+        db.settings.set('home_visit_buffer_minutes', String(minutes));
+        if (week_date) {
+          db.settings.set(`home_visit_buffer_minutes_week_${week_date}`, String(minutes));
+        }
+      }
     }
     const bufferMinutes = parseInt(db.settings.get('home_visit_buffer_minutes', '30'), 10) || 30;
     res.json({

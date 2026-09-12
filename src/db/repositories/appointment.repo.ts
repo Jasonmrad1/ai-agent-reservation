@@ -120,7 +120,7 @@ export class AppointmentRepository {
   public getAppointmentsInRange(startTime: string, endTime: string): Appointment[] {
     const rows = this.db.prepare(`
       SELECT * FROM appointments
-      WHERE status IN ('booked', 'confirmed')
+      WHERE status IN ('booked', 'confirmed', 'rescheduled')
         AND start_time < ?
         AND end_time > ?
       ORDER BY start_time ASC

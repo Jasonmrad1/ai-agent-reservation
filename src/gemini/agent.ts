@@ -341,12 +341,19 @@ Guidelines:
 - Never output raw ISO timestamp strings or timezone tokens like 'Z' or 'T'.
 - If availability / slots were checked:
   * Backend Result provides 'available_slots' and 'upcoming_open_days' with exact shift hours.
-  * Format the schedule clearly using clean **from ... to ...** shift spans (DO NOT dump long comma-separated lists of individual minute slots):
-    - **[Day Name, Date]:** From [Start Time] to [End Time] (if multiple shifts: e.g. From 07:30 AM to 10:30 AM, 11:15 AM to 02:15 PM, 04:45 PM to 08:00 PM)
-    - (If closed or fully booked on a day, state 'Closed' or 'Fully Booked')
-  * Conclude with: "Please choose one of the available time slots above that works best for you, and let us know if you prefer an in-office consultation at the clinic or a home visit." (or the translated equivalent in the patient's language).
+  * If the patient asked for a SPECIFIC time or day (e.g. "Tuesday at 8", "Tomorrow at 10 AM", "Wednesday afternoon"):
+    - Check if that requested time is in 'available_slots'.
+    - If AVAILABLE: Confirm that specific time directly (e.g. "Tuesday at 8:00 AM is available with Dr. Ziad!"). Do NOT dump the full day's shifts or ask them to choose between other minute slots. Only ask for whatever information is still missing (in-office vs home visit, or address if home visit was requested).
+    - If NOT AVAILABLE: Explain politely that this specific slot is unavailable, and provide the nearest available shift window(s) for that day or upcoming open days.
+  * If the patient made a BROAD / GENERAL inquiry (e.g. "when are you free?", "what openings do you have this week?"):
+    - Format the schedule clearly using clean **from ... to ...** shift spans (DO NOT dump long comma-separated lists of individual minute slots):
+      - **[Day Name, Date]:** From [Start Time] to [End Time] (if multiple shifts: e.g. From 07:30 AM to 10:30 AM, 11:15 AM to 02:15 PM, 04:45 PM to 08:00 PM)
+      - (If closed or fully booked on a day, state 'Closed' or 'Fully Booked')
+    - Conclude with: "Please choose one of the available openings above that works best for you, and let us know if you prefer an in-office consultation at the clinic or a home visit." (or translated equivalent).
   * NEVER invent or assume opening hours that are not returned in the Backend Result.
 - If an appointment was booked: provide an enthusiastic, crystal-clear confirmation card with service, date, time, and location (In-Office vs Home Visit + address).
+- If booking had an error / missing address:
+  * Acknowledge the requested appointment enthusiastically, and ask warmly for their home address or WhatsApp location pin to confirm the home visit right away.
 - If an appointment was cancelled:
   * Confirm cancellation clearly and warmly.
   * If the patient mentioned wanting to reschedule or rebook:
@@ -1030,16 +1037,16 @@ UPCOMING DAYS REFERENCE (use these exact dates for Lebanese day names):
 ${upcomingScheduleDays.join('\n')}`;
 
     // 3. Build sanitized, alternating conversation history
-    const recentMessages = db.messages.getRecentMessages(conversation.id, 16);
-    const rawHistory: Array<{ role: 'user' | 'model'; text: string }> = [];
+    const allRecent = db.messages.getRecentMessages(conversation.id, 16);
+    // Exclude only the current message at the end of the array
+    const historyMessages = (allRecent.length > 0 && allRecent[allRecent.length - 1].body === incomingText)
+      ? allRecent.slice(0, -1)
+      : allRecent;
 
-    for (const msg of recentMessages) {
-      if (msg.body === incomingText) continue; // skip current
-      rawHistory.push({
-        role: msg.direction === 'inbound' ? 'user' : 'model',
-        text: msg.body,
-      });
-    }
+    const rawHistory: Array<{ role: 'user' | 'model'; text: string }> = historyMessages.map((msg) => ({
+      role: msg.direction === 'inbound' ? 'user' : 'model',
+      text: msg.body,
+    }));
 
     const conversationHistory: Array<{ role: 'user' | 'model'; parts: Array<{ text?: string }> }> = [];
     let lastRole: 'user' | 'model' | null = null;
@@ -1143,7 +1150,16 @@ ${upcomingScheduleDays.join('\n')}`;
             return { error: 'Home address is required for booking a home visit. Please provide your address.' };
           }
 
-          const serviceItem = CLINIC_SERVICES.find((s) => s.name.toLowerCase() === (args.service || '').toLowerCase()) || CLINIC_SERVICES[0];
+          const rawService = (args.service || '').toLowerCase();
+          const serviceItem = CLINIC_SERVICES.find((s) => {
+            const sLower = s.name.toLowerCase();
+            return sLower === rawService ||
+              (rawService.includes('physio') && sLower.includes('physio')) ||
+              (rawService.includes('home') && sLower.includes('home')) ||
+              (rawService.includes('follow') && sLower.includes('follow')) ||
+              (rawService.includes('acupunc') && sLower.includes('acupunc')) ||
+              (rawService.includes('consult') && sLower.includes('consult'));
+          }) || (visitType === 'home_visit' ? CLINIC_SERVICES.find((s) => s.name.includes('Home')) || CLINIC_SERVICES[0] : CLINIC_SERVICES[0]);
           const startTimeIso = new Date(`${args.date}T${args.time}:00.000Z`).toISOString();
 
           const patientName = args.patient_name || args.customer_name || customer.name;

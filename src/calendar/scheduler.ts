@@ -378,7 +378,7 @@ export class SchedulingEngine {
     if (shifts.length > 0) {
       const fitsInShift = shifts.some((s) => {
         if (visitType === 'home_visit') {
-          return (newStart.getTime() - bufferMs >= s.startMs && newEnd.getTime() + bufferMs <= s.endMs);
+          return (newStart.getTime() >= s.startMs && newEnd.getTime() + bufferMs <= s.endMs);
         }
         return (newStart.getTime() >= s.startMs && newEnd.getTime() <= s.endMs);
       });

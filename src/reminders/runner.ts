@@ -118,14 +118,22 @@ export class ReminderRunner {
     const clean = text.trim();
     const upper = clean.toUpperCase();
 
+    // Only intercept if customer has an active upcoming appointment
+    const active = this.db.appointments.findLatestActiveByCustomerId(customerId);
+    if (!active) {
+      return null;
+    }
+
+    // Only intercept short exact commands (not complex multi-word conversational sentences)
+    const wordCount = clean.split(/\s+/).length;
+    if (wordCount > 3) {
+      return null;
+    }
+
     // 1. Direct Confirmation
     if (upper === 'YES' || upper === 'CONFIRM' || upper === 'TAMAM' || upper === 'EHH' || upper === 'AKID' || upper === 'OUI') {
-      const active = this.db.appointments.findLatestActiveByCustomerId(customerId);
-      if (active) {
-        this.db.appointments.updateStatus(active.id, 'confirmed');
-        return 'Thank you! Your appointment has been confirmed with Dr. Ziad El Khoury. We look forward to seeing you!';
-      }
-      return 'Thank you for your response!';
+      this.db.appointments.updateStatus(active.id, 'confirmed');
+      return 'Thank you! Your appointment has been confirmed with Dr. Ziad El Khoury. We look forward to seeing you!';
     }
 
     // 2. Direct Cancellation from WhatsApp reminder
