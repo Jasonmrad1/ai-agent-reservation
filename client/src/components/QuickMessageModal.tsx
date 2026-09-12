@@ -131,19 +131,19 @@ export const QuickMessageModal: React.FC<QuickMessageModalProps> = ({
             </label>
             <div className="chip-group" style={{ gap: '8px' }}>
               <span className="chip" onClick={() => applyTemplate('late')}>
-                <IconClock size={13} style={{ marginRight: '5px' }} /> ⏱ Running 15 Mins Late
+                <IconClock size={13} style={{ marginRight: '5px' }} /> Running 15 Mins Late
               </span>
               <span className="chip" onClick={() => applyTemplate('pin')}>
-                <IconMapPin size={13} style={{ marginRight: '5px' }} /> 📍 Request Google Maps Pin
+                <IconMapPin size={13} style={{ marginRight: '5px' }} /> Request Google Maps Pin
               </span>
               <span className="chip" onClick={() => applyTemplate('arrived')}>
-                <IconCar size={13} style={{ marginRight: '5px' }} /> 🚗 Doctor Has Arrived
+                <IconCar size={13} style={{ marginRight: '5px' }} /> Doctor Has Arrived
               </span>
               <span className="chip" onClick={() => applyTemplate('rx')}>
-                <IconSparkles size={13} style={{ marginRight: '5px' }} /> 💊 Prescription Ready
+                <IconSparkles size={13} style={{ marginRight: '5px' }} /> Prescription Ready
               </span>
               <span className="chip" onClick={() => applyTemplate('lebanese_late')}>
-                🇱🇧 دقيقة وواصل (عربي)
+                <IconMessage size={13} style={{ marginRight: '5px' }} /> دقيقة وواصل (عربي)
               </span>
             </div>
           </div>

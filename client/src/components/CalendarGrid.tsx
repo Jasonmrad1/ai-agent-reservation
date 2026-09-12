@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Appointment, AvailabilityRule, TimeInterval } from '../types';
-import { IconClock, IconCar, IconMapPin, IconPause, IconTrash, IconPlus } from './Icons';
+import { Appointment, AvailabilityRule, DateOverride, TimeInterval } from '../types';
+import { IconClock, IconCar, IconMapPin, IconPause, IconTrash, IconPlus, IconBuilding, IconHome } from './Icons';
 
 interface CalendarGridProps {
   currentWeekMonday: Date;
   appointments: Appointment[];
   rules: AvailabilityRule[];
+  overrides?: DateOverride[];
   showHoursOverlay?: boolean;
   commuteBufferMinutes?: number;
   onSelectAppointment: (appt: Appointment) => void;
@@ -96,14 +97,14 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
   currentWeekMonday,
   appointments,
   rules,
+  overrides = [],
   showHoursOverlay = true,
   commuteBufferMinutes = 30,
   onSelectAppointment,
 }) => {
   const weekDates: Date[] = [];
   for (let i = 0; i < 7; i++) {
-    const d = new Date(currentWeekMonday);
-    d.setDate(currentWeekMonday.getDate() + i);
+    const d = new Date(currentWeekMonday.getFullYear(), currentWeekMonday.getMonth(), currentWeekMonday.getDate() + i);
     weekDates.push(d);
   }
 
@@ -155,7 +156,8 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
               ).padStart(2, '0')}`;
               const isToday = colDateKey === todayKey;
 
-              const rule =
+              const ov = overrides.find((o) => o.date === colDateKey);
+              const baseRule =
                 rules.find((r) => Number(r.day_of_week) === dayOfWeek) || {
                   day_of_week: dayOfWeek,
                   start_time: '09:00',
@@ -164,10 +166,24 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
                   shifts: [{ start_time: '09:00', end_time: '17:00' }],
                 };
 
-              const isActive = Boolean(rule.is_active);
-              const shifts: TimeInterval[] = (rule.shifts && rule.shifts.length > 0)
-                ? rule.shifts
-                : (isActive ? [{ start_time: rule.start_time, end_time: rule.end_time }] : []);
+              let isActive = Boolean(baseRule.is_active);
+              let shifts: TimeInterval[] = (baseRule.shifts && baseRule.shifts.length > 0)
+                ? baseRule.shifts
+                : (isActive ? [{ start_time: baseRule.start_time, end_time: baseRule.end_time }] : []);
+
+              if (ov) {
+                if (ov.is_unavailable) {
+                  isActive = false;
+                  shifts = [];
+                } else {
+                  isActive = true;
+                  if (ov.shifts && ov.shifts.length > 0) {
+                    shifts = ov.shifts;
+                  } else if (ov.start_time && ov.end_time) {
+                    shifts = [{ start_time: ov.start_time, end_time: ov.end_time }];
+                  }
+                }
+              }
 
               // Format header status
               let statusLabel = 'Closed';

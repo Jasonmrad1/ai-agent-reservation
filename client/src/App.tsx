@@ -300,7 +300,6 @@ export const App: React.FC = () => {
           showToast('All weekly work hours saved successfully!');
         }
         loadAvailability();
-        setActiveTab('appointments');
         setIsWorkHoursOpen(false);
       }
     } catch (err: any) {
@@ -475,6 +474,7 @@ export const App: React.FC = () => {
           currentWeekMonday={currentWeekMonday}
           appointments={appointments}
           rules={rules}
+          overrides={overrides}
           showHoursOverlay={showHoursOverlay}
           commuteBufferMinutes={commuteBufferMinutes}
           onSelectAppointment={(appt) => setSelectedAppt(appt)}

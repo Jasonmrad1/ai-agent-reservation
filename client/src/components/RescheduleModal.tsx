@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Appointment } from '../types';
-import { IconX, IconSparkles, IconCalendar, IconClock, IconMessage } from './Icons';
+import { IconX, IconSparkles, IconCalendar, IconClock, IconMessage, IconAlertCircle, IconSun } from './Icons';
 
 interface RescheduleModalProps {
   appointment: Appointment | null;
@@ -196,16 +196,16 @@ export const RescheduleModal: React.FC<RescheduleModalProps> = ({
             </label>
             <div className="chip-group" style={{ marginBottom: '10px' }}>
               <span className="chip" onClick={() => setPrompt('Hospital emergency, doctor called into urgent case')}>
-                🚨 Hospital Emergency
+                <IconAlertCircle size={13} style={{ marginRight: '5px' }} /> Hospital Emergency
               </span>
               <span className="chip" onClick={() => setPrompt('Doctor unavailable this morning, suggest afternoon slots')}>
-                🌅 Morning Conflict
+                <IconSun size={13} style={{ marginRight: '5px' }} /> Morning Conflict
               </span>
               <span className="chip" onClick={() => setPrompt('Offer Wednesday 2pm or Thursday 11am')}>
-                🗓️ Suggest Wed / Thu
+                <IconCalendar size={13} style={{ marginRight: '5px' }} /> Suggest Wed / Thu
               </span>
               <span className="chip" onClick={() => setPrompt('ظرف طارئ بالمستشفى، يرجى اختيار موعد آخر')}>
-                🇱🇧 طارئ (عربي)
+                <IconMessage size={13} style={{ marginRight: '5px' }} /> طارئ (عربي)
               </span>
             </div>
 

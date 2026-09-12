@@ -9,6 +9,9 @@ import {
   IconCheck,
   IconSliders,
   IconPause,
+  IconChevronLeft,
+  IconChevronRight,
+  IconRotateCcw,
 } from './Icons';
 
 interface WorkHoursViewProps {
@@ -35,13 +38,16 @@ const TOTAL_MINUTES = (END_HOUR - START_HOUR) * 60; // 840
 const TRACK_HEIGHT = 560;
 const PX_PER_MIN = TRACK_HEIGHT / TOTAL_MINUTES;
 
-function getMonday(d: Date): Date {
+function getMonday(d: Date | string | number): Date {
   const date = new Date(d);
   const day = date.getDay();
   const diff = date.getDate() - day + (day === 0 ? -6 : 1);
-  const monday = new Date(date.setDate(diff));
-  monday.setHours(0, 0, 0, 0);
+  const monday = new Date(date.getFullYear(), date.getMonth(), diff, 0, 0, 0, 0);
   return monday;
+}
+
+function addDays(d: Date, days: number): Date {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate() + days, 0, 0, 0, 0);
 }
 
 function formatDateIso(d: Date): string {
@@ -167,7 +173,7 @@ export const WorkHoursView: React.FC<WorkHoursViewProps> = ({
       const weekRules: AvailabilityRule[] = [];
       for (let dayNum = 0; dayNum < 7; dayNum++) {
         const offset = dayNum === 0 ? 6 : dayNum - 1;
-        const dayDate = new Date(selectedWeekMonday.getTime() + offset * 86400000);
+        const dayDate = addDays(selectedWeekMonday, offset);
         const dateStr = formatDateIso(dayDate);
         const ov = overrides.find((o) => o.date === dateStr);
         const baseRule = rules.find((r) => r.day_of_week === dayNum) || {
@@ -205,6 +211,50 @@ export const WorkHoursView: React.FC<WorkHoursViewProps> = ({
       setLocalRules(weekRules);
     }
   }, [rules, overrides, commuteBufferMinutes, scopeMode, selectedWeekMonday]);
+
+  // Handle local preset selection without prematurely wiping DB
+  const handleApplyPresetLocal = (preset: 'standard' | 'split' | 'extended' | 'all') => {
+    const days = [0, 1, 2, 3, 4, 5, 6];
+    const updated: AvailabilityRule[] = days.map((day) => {
+      let isActive = false;
+      let start = '09:00';
+      let end = '17:00';
+      let shifts: TimeInterval[] = [{ start_time: '09:00', end_time: '17:00' }];
+
+      if (preset === 'standard') {
+        isActive = day >= 1 && day <= 5;
+        start = '09:00';
+        end = '17:00';
+        shifts = [{ start_time: '09:00', end_time: '17:00' }];
+      } else if (preset === 'split') {
+        isActive = day >= 1 && day <= 5;
+        start = '09:00';
+        end = '20:00';
+        shifts = [
+          { start_time: '09:00', end_time: '13:00' },
+          { start_time: '16:00', end_time: '20:00' },
+        ];
+      } else if (preset === 'extended') {
+        isActive = day >= 1 && day <= 6;
+        start = '08:00';
+        end = '18:00';
+        shifts = [{ start_time: '08:00', end_time: '18:00' }];
+      } else if (preset === 'all') {
+        isActive = true;
+        start = '09:00';
+        end = '18:00';
+        shifts = [{ start_time: '09:00', end_time: '18:00' }];
+      }
+      return {
+        day_of_week: day,
+        is_active: isActive,
+        start_time: start,
+        end_time: end,
+        shifts,
+      };
+    });
+    setLocalRules(updated);
+  };
 
   // Handle Dragging in Visual Mode
   useEffect(() => {
@@ -467,11 +517,13 @@ export const WorkHoursView: React.FC<WorkHoursViewProps> = ({
     } else if (onSaveWeekOverrides) {
       const weekOverrides = DISPLAY_ORDER.map((dayNum) => {
         const offset = dayNum === 0 ? 6 : dayNum - 1;
-        const dayDate = new Date(selectedWeekMonday.getTime() + offset * 86400000);
+        const dayDate = addDays(selectedWeekMonday, offset);
         const dateStr = formatDateIso(dayDate);
         const dayRule = localRules.find((r) => r.day_of_week === dayNum);
         const isActive = Boolean(dayRule?.is_active);
-        const shifts = dayRule?.shifts || [];
+        const shifts = dayRule?.shifts && dayRule.shifts.length > 0
+          ? dayRule.shifts
+          : isActive ? [{ start_time: dayRule?.start_time || '09:00', end_time: dayRule?.end_time || '17:00' }] : [];
         return {
           date: dateStr,
           is_unavailable: !isActive,
@@ -514,7 +566,7 @@ export const WorkHoursView: React.FC<WorkHoursViewProps> = ({
     timeLabels.push(`${String(h).padStart(2, '0')}:00`);
   }
 
-  const weekEndSunday = new Date(selectedWeekMonday.getTime() + 6 * 86400000);
+  const weekEndSunday = addDays(selectedWeekMonday, 6);
 
   return (
     <main className="work-hours-page-container">
@@ -593,19 +645,24 @@ export const WorkHoursView: React.FC<WorkHoursViewProps> = ({
               <button
                 type="button"
                 className="btn btn-secondary week-nav-arrow"
-                onClick={() => setSelectedWeekMonday(new Date(selectedWeekMonday.getTime() - 7 * 86400000))}
+                onClick={() => setSelectedWeekMonday(addDays(selectedWeekMonday, -7))}
+                title="Previous Week"
               >
-                ◀ Prev Week
+                <IconChevronLeft size={14} />
+                <span>Prev Week</span>
               </button>
               <span className="week-scope-badge">
-                📅 Week of {selectedWeekMonday.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} – {weekEndSunday.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                <IconCalendar size={13} style={{ marginRight: '6px' }} />
+                <span>Week of {selectedWeekMonday.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} – {weekEndSunday.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
               </span>
               <button
                 type="button"
                 className="btn btn-secondary week-nav-arrow"
-                onClick={() => setSelectedWeekMonday(new Date(selectedWeekMonday.getTime() + 7 * 86400000))}
+                onClick={() => setSelectedWeekMonday(addDays(selectedWeekMonday, 7))}
+                title="Next Week"
               >
-                Next Week ▶
+                <span>Next Week</span>
+                <IconChevronRight size={14} />
               </button>
               <button
                 type="button"
@@ -625,7 +682,8 @@ export const WorkHoursView: React.FC<WorkHoursViewProps> = ({
                   }}
                   title="Clear overrides for this week and restore default template"
                 >
-                  Reset Week to Default
+                  <IconRotateCcw size={13} style={{ marginRight: '5px' }} />
+                  <span>Reset Week to Default</span>
                 </button>
               )}
             </div>
@@ -636,16 +694,16 @@ export const WorkHoursView: React.FC<WorkHoursViewProps> = ({
         <div className="presets-bar">
           <span className="presets-label">Schedule Presets:</span>
           <div className="presets-buttons">
-            <button type="button" className="preset-btn" onClick={() => onApplyPreset('standard')}>
+            <button type="button" className="preset-btn" onClick={() => handleApplyPresetLocal('standard')}>
               Standard (Mon–Fri 9–5)
             </button>
-            <button type="button" className="preset-btn" onClick={() => onApplyPreset('split')}>
+            <button type="button" className="preset-btn" onClick={() => handleApplyPresetLocal('split')}>
               Split Shifts (9–1 & 4–8)
             </button>
-            <button type="button" className="preset-btn" onClick={() => onApplyPreset('extended')}>
+            <button type="button" className="preset-btn" onClick={() => handleApplyPresetLocal('extended')}>
               Extended (Mon–Sat 8–6)
             </button>
-            <button type="button" className="preset-btn" onClick={() => onApplyPreset('all')}>
+            <button type="button" className="preset-btn" onClick={() => handleApplyPresetLocal('all')}>
               All 7 Days Open
             </button>
           </div>
@@ -686,7 +744,7 @@ export const WorkHoursView: React.FC<WorkHoursViewProps> = ({
                   const dayLabel = DAY_LABELS[dayNum];
                   const dayShort = DAY_SHORT[dayNum];
                   const offset = dayNum === 0 ? 6 : dayNum - 1;
-                  const dayDate = new Date(selectedWeekMonday.getTime() + offset * 86400000);
+                  const dayDate = addDays(selectedWeekMonday, offset);
                   const dateStr = formatDateIso(dayDate);
                   const hasCustomOverride = scopeMode === 'week' && overrides.some((o) => o.date === dateStr);
 

@@ -12,6 +12,8 @@ import {
   IconClock,
   IconUser,
   IconChevronRight,
+  IconBuilding,
+  IconHome,
 } from './Icons';
 
 interface ReservationModalProps {
@@ -74,8 +76,8 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <div
               style={{
-                width: '40px',
-                height: '40px',
+                width: '42px',
+                height: '42px',
                 borderRadius: '10px',
                 background: isHome ? 'rgba(244, 63, 94, 0.12)' : 'rgba(0, 255, 136, 0.12)',
                 border: `1px solid ${isHome ? 'rgba(244, 63, 94, 0.25)' : 'rgba(0, 255, 136, 0.25)'}`,
@@ -85,15 +87,16 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
                 color: isHome ? '#f43f5e' : '#00ff88',
               }}
             >
-              {isHome ? <IconMapPin size={20} /> : <IconCalendar size={20} />}
+              {isHome ? <IconHome size={20} /> : <IconBuilding size={20} />}
             </div>
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                 <h3 style={{ fontSize: '17px', color: '#fff', fontWeight: 700, margin: 0 }}>
                   {appointment.customer_name || 'Patient Appointment'}
                 </h3>
-                <span className={`badge ${isHome ? 'badge-home' : 'badge-office'}`}>
-                  {isHome ? '🏠 HOME VISIT' : '🏢 IN-OFFICE'}
+                <span className={`badge ${isHome ? 'badge-home' : 'badge-office'}`} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                  {isHome ? <IconHome size={12} /> : <IconBuilding size={12} />}
+                  <span>{isHome ? 'HOME VISIT' : 'IN-OFFICE'}</span>
                 </span>
                 <span
                   className={`badge ${
@@ -247,9 +250,13 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
                       fontFamily: "'JetBrains Mono', monospace",
                       color: '#94a3b8',
                       fontWeight: 600,
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '6px',
                     }}
                   >
-                    ⏱ {durationVal} min slot
+                    <IconClock size={13} />
+                    <span>{durationVal} min slot</span>
                   </span>
                 </div>
               </div>
