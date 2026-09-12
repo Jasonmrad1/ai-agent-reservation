@@ -53,8 +53,24 @@ export class SchedulingEngine {
   /**
    * Dynamically retrieves the configured home visit travel/commute buffer in minutes.
    */
-  public getHomeVisitBufferMinutes(): number {
+  public getHomeVisitBufferMinutes(dateStr?: string): number {
     if (this.db?.settings) {
+      if (dateStr) {
+        try {
+          const [year, month, day] = dateStr.split('-').map(Number);
+          const d = new Date(Date.UTC(year, month - 1, day));
+          const dayOfWeek = d.getUTCDay();
+          const diff = d.getUTCDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1);
+          const mondayUtc = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), diff));
+          const mondayIso = `${mondayUtc.getUTCFullYear()}-${String(mondayUtc.getUTCMonth() + 1).padStart(2, '0')}-${String(mondayUtc.getUTCDate()).padStart(2, '0')}`;
+          
+          const weekVal = parseInt(this.db.settings.get(`home_visit_buffer_minutes_week_${mondayIso}`, ''), 10);
+          if (!isNaN(weekVal) && weekVal >= 0) {
+            return weekVal;
+          }
+        } catch {}
+      }
+
       const val = parseInt(this.db.settings.get('home_visit_buffer_minutes', ''), 10);
       if (!isNaN(val) && val >= 0) {
         return val;
@@ -133,7 +149,7 @@ export class SchedulingEngine {
       return [];
     }
 
-    const bufferMinutes = this.getHomeVisitBufferMinutes();
+    const bufferMinutes = this.getHomeVisitBufferMinutes(dateStr);
     const bufferMs = (visitType === 'home_visit' ? bufferMinutes : 0) * 60 * 1000;
     const slotDurationMs = durationMinutes * 60 * 1000;
     const stepMinutes = 30; // Check slots every 30 mins
@@ -160,9 +176,11 @@ export class SchedulingEngine {
         const candidateStart = new Date(currentStartMs);
         const candidateEnd = new Date(currentStartMs + slotDurationMs);
 
-        // For home visits: doctor must have travel buffer within working shift hours
+        // For home visits: ensure the appointment + post-travel buffer ends within the shift.
+        // We do NOT subtract buffer from the start — the doctor is already at the office/location
+        // at shift start, so no pre-buffer is needed for the first appointment.
         if (visitType === 'home_visit') {
-          if (currentStartMs - bufferMs < shift.startMs || currentStartMs + slotDurationMs + bufferMs > shift.endMs) {
+          if (currentStartMs + slotDurationMs + bufferMs > shift.endMs) {
             currentStartMs += stepMinutes * 60 * 1000;
             continue;
           }
@@ -246,7 +264,9 @@ export class SchedulingEngine {
     if (shifts.length > 0) {
       const fitsInShift = shifts.some((s) => {
         if (params.visitType === 'home_visit') {
-          return (startTime.getTime() - bufferMs >= s.startMs && endTime.getTime() + bufferMs <= s.endMs);
+          // No pre-buffer needed — doctor is already present at shift start.
+          // Only enforce that the appointment + post-travel buffer ends within the shift.
+          return (startTime.getTime() >= s.startMs && endTime.getTime() + bufferMs <= s.endMs);
         }
         return (startTime.getTime() >= s.startMs && endTime.getTime() <= s.endMs);
       });
