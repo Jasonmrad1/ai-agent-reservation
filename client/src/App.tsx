@@ -182,15 +182,19 @@ export const App: React.FC = () => {
   };
 
   // Update commute travel buffer
-  const handleUpdateCommuteBuffer = async (minutes: number) => {
+  const handleUpdateCommuteBuffer = async (minutes: number, weekDate?: string, setAsDefault: boolean = false) => {
     setCommuteBufferMinutes(minutes);
     try {
       await fetch(`/admin/api/settings?key=${adminKey}`, {
         method: 'POST',
         headers: getHeaders(),
-        body: JSON.stringify({ home_visit_buffer_minutes: minutes }),
+        body: JSON.stringify({
+          home_visit_buffer_minutes: minutes,
+          week_date: weekDate,
+          set_as_default: setAsDefault,
+        }),
       });
-      showToast(`Commute buffer updated to ${minutes} mins.`);
+      showToast(`Commute buffer saved (${minutes} mins).`);
     } catch (err: any) {
       alert(`Error updating commute buffer: ${err.message}`);
     }
@@ -484,6 +488,7 @@ export const App: React.FC = () => {
           rules={rules}
           overrides={overrides}
           commuteBufferMinutes={commuteBufferMinutes}
+          adminKey={adminKey}
           onApplyPreset={handleApplyPreset}
           onSaveRule={handleSaveRule}
           onSaveAllRules={handleSaveAllRules}

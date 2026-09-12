@@ -18,12 +18,13 @@ interface WorkHoursViewProps {
   rules: AvailabilityRule[];
   overrides: DateOverride[];
   commuteBufferMinutes: number;
+  adminKey: string;
   onApplyPreset: (preset: 'standard' | 'split' | 'extended' | 'all') => void;
   onSaveRule: (rule: AvailabilityRule) => void;
   onSaveAllRules: (rules: AvailabilityRule[]) => void;
   onSaveWeekOverrides?: (overrides: Array<{ date: string; is_unavailable: boolean; start_time?: string; end_time?: string; reason?: string; shifts?: TimeInterval[] }>) => void;
   onResetWeekOverrides?: (startDate: string, endDate: string) => void;
-  onUpdateCommuteBuffer: (minutes: number) => void;
+  onUpdateCommuteBuffer: (minutes: number, weekDate?: string, setAsDefault?: boolean) => void;
   onAddOverride: (date: string, reason: string) => void;
   onDeleteOverride: (id: string) => void;
 }
@@ -119,6 +120,7 @@ export const WorkHoursView: React.FC<WorkHoursViewProps> = ({
   rules,
   overrides,
   commuteBufferMinutes,
+  adminKey,
   onApplyPreset,
   onSaveRule,
   onSaveAllRules,
@@ -133,6 +135,7 @@ export const WorkHoursView: React.FC<WorkHoursViewProps> = ({
   const [viewMode, setViewMode] = useState<'visual' | 'form'>('visual');
   const [localRules, setLocalRules] = useState<AvailabilityRule[]>([]);
   const [selectedBuffer, setSelectedBuffer] = useState<number>(commuteBufferMinutes || 30);
+  const [defaultBuffer, setDefaultBuffer] = useState<number>(commuteBufferMinutes || 30);
   const [newDate, setNewDate] = useState('');
   const [newReason, setNewReason] = useState('');
 
@@ -141,10 +144,13 @@ export const WorkHoursView: React.FC<WorkHoursViewProps> = ({
   const dragStateRef = useRef<DragState | null>(null);
   dragStateRef.current = dragState;
 
-  // Sync rules, overrides, and buffer when props or scopeMode / selectedWeekMonday update
+  // Keep defaultBuffer in sync whenever the prop changes (global default loaded from DB)
   useEffect(() => {
-    setSelectedBuffer(commuteBufferMinutes || 30);
+    setDefaultBuffer(commuteBufferMinutes || 30);
+  }, [commuteBufferMinutes]);
 
+  // Sync rules and overrides when props, scopeMode or selectedWeekMonday change
+  useEffect(() => {
     if (scopeMode === 'default') {
       if (rules.length > 0) {
         const cloned: AvailabilityRule[] = JSON.parse(JSON.stringify(rules)).map((r: AvailabilityRule) => ({
@@ -210,9 +216,35 @@ export const WorkHoursView: React.FC<WorkHoursViewProps> = ({
       }
       setLocalRules(weekRules);
     }
-  }, [rules, overrides, commuteBufferMinutes, scopeMode, selectedWeekMonday]);
+  }, [rules, overrides, scopeMode, selectedWeekMonday]);
+
+  // Fetch week-specific buffer from API whenever week or scope changes
+  useEffect(() => {
+    if (scopeMode !== 'week') {
+      // In default mode, show the global default
+      setSelectedBuffer(defaultBuffer);
+      return;
+    }
+    const weekDate = formatDateIso(selectedWeekMonday);
+    let cancelled = false;
+    fetch(`/admin/api/settings?key=${adminKey}&week=${weekDate}`, {
+      headers: { Authorization: `Bearer ${adminKey}` },
+    })
+      .then((r) => r.json())
+      .then((data) => {
+        if (!cancelled) {
+          const val = Number(data.home_visit_buffer_minutes);
+          setSelectedBuffer(val > 0 ? val : defaultBuffer);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setSelectedBuffer(defaultBuffer);
+      });
+    return () => { cancelled = true; };
+  }, [scopeMode, selectedWeekMonday, adminKey, defaultBuffer]);
 
   // Handle local preset selection without prematurely wiping DB
+
   const handleApplyPresetLocal = (preset: 'standard' | 'split' | 'extended' | 'all') => {
     const days = [0, 1, 2, 3, 4, 5, 6];
     const updated: AvailabilityRule[] = days.map((day) => {
@@ -536,16 +568,18 @@ export const WorkHoursView: React.FC<WorkHoursViewProps> = ({
       onSaveWeekOverrides(weekOverrides);
     }
 
-    if (selectedBuffer !== commuteBufferMinutes) {
-      onUpdateCommuteBuffer(selectedBuffer);
+    // Always save the buffer alongside the schedule (week-specific when in week mode)
+    if (scopeMode === 'week') {
+      onUpdateCommuteBuffer(selectedBuffer, formatDateIso(selectedWeekMonday), false);
+    } else {
+      onUpdateCommuteBuffer(selectedBuffer, undefined, true);
     }
   };
 
   const handleSaveAsDefault = () => {
     onSaveAllRules(localRules);
-    if (selectedBuffer !== commuteBufferMinutes) {
-      onUpdateCommuteBuffer(selectedBuffer);
-    }
+    // Promote buffer to global default
+    onUpdateCommuteBuffer(selectedBuffer, undefined, true);
   };
 
   const handleAddOverrideSubmit = () => {
@@ -1178,7 +1212,19 @@ export const WorkHoursView: React.FC<WorkHoursViewProps> = ({
               <IconCar size={18} color="#38bdf8" />
               <div>
                 <h4 className="extra-card-title">Home Visit Commute Buffer</h4>
-                <p className="extra-card-desc">Travel time reserved on road before & after visits</p>
+                <p className="extra-card-desc">
+                  Travel time reserved on road before &amp; after visits
+                  {scopeMode === 'week' && selectedBuffer !== defaultBuffer && (
+                    <span style={{ marginLeft: '8px', color: '#38bdf8', fontWeight: 600 }}>
+                      — Week override active: {selectedBuffer} min (default: {defaultBuffer} min)
+                    </span>
+                  )}
+                  {scopeMode === 'week' && selectedBuffer === defaultBuffer && (
+                    <span style={{ marginLeft: '8px', color: 'var(--text-subtle)', fontStyle: 'italic' }}>
+                      — Using default ({defaultBuffer} min)
+                    </span>
+                  )}
+                </p>
               </div>
             </div>
 
@@ -1188,15 +1234,15 @@ export const WorkHoursView: React.FC<WorkHoursViewProps> = ({
                   key={mins}
                   type="button"
                   className={`buffer-btn ${selectedBuffer === mins ? 'selected' : ''}`}
-                  onClick={() => {
-                    setSelectedBuffer(mins);
-                    onUpdateCommuteBuffer(mins);
-                  }}
+                  onClick={() => setSelectedBuffer(mins)}
                 >
                   {mins} mins
                 </button>
               ))}
             </div>
+            <p style={{ fontSize: '11.5px', color: 'var(--text-subtle)', marginTop: '6px' }}>
+              Buffer is saved when you click Save below.
+            </p>
           </div>
 
           {/* Date Overrides / Blockouts Card */}
