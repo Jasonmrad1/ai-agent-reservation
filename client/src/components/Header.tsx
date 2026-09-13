@@ -8,8 +8,8 @@ import {
 } from './Icons';
 
 interface HeaderProps {
-  activeTab: 'appointments' | 'work_hours';
-  onTabChange: (tab: 'appointments' | 'work_hours') => void;
+  activeTab: 'appointments' | 'work_hours' | 'simulator';
+  onTabChange: (tab: 'appointments' | 'work_hours' | 'simulator') => void;
   currentWeekMonday: Date;
   commuteBufferMinutes?: number;
   onUpdateCommuteBuffer?: (minutes: number) => void;
@@ -60,7 +60,7 @@ export const Header: React.FC<HeaderProps> = ({
 
   return (
     <header className="teams-top-bar">
-      {/* Left: Primary Tabs */}
+      {/* Left: Clean Navigation Tabs */}
       <div className="teams-left">
         <div className="nav-tabs-group">
           <button
@@ -68,7 +68,7 @@ export const Header: React.FC<HeaderProps> = ({
             onClick={() => onTabChange('appointments')}
           >
             <IconCalendar size={14} />
-            <span>Appointments</span>
+            <span>Calendar</span>
           </button>
           <button
             className={`nav-tab-btn ${activeTab === 'work_hours' ? 'active' : ''}`}
@@ -76,6 +76,14 @@ export const Header: React.FC<HeaderProps> = ({
           >
             <IconClock size={14} />
             <span>Work Hours</span>
+          </button>
+          <button
+            className={`nav-tab-btn ${activeTab === 'simulator' ? 'active' : ''}`}
+            onClick={() => onTabChange('simulator')}
+            title="Interactive WhatsApp conversation simulator"
+          >
+            <span className="simulator-tab-dot" />
+            <span>Simulator</span>
           </button>
         </div>
       </div>
@@ -115,21 +123,8 @@ export const Header: React.FC<HeaderProps> = ({
               className="google-cal-btn connected"
               onClick={onDisconnectGoogle}
               title="Google Calendar is connected & synced with your phone! Click to disconnect."
-              style={{
-                background: 'rgba(0, 245, 155, 0.1)',
-                color: 'var(--emerald-primary)',
-                border: '1px solid var(--emerald-border)',
-                borderRadius: '8px',
-                padding: '6px 12px',
-                fontSize: '12px',
-                fontWeight: 600,
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '6px',
-                cursor: 'pointer',
-              }}
             >
-              <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#00f59b', boxShadow: '0 0 8px #00f59b' }} />
+              <span className="google-sync-dot" />
               <span>Google Synced</span>
             </button>
           ) : (
@@ -138,19 +133,6 @@ export const Header: React.FC<HeaderProps> = ({
               className="google-cal-btn"
               onClick={onConnectGoogle}
               title="Connect Dr. Ziad's Google Calendar to sync with iPhone"
-              style={{
-                background: 'var(--bg-elevated)',
-                color: '#94a3b8',
-                border: '1px solid var(--border-default)',
-                borderRadius: '8px',
-                padding: '6px 12px',
-                fontSize: '12px',
-                fontWeight: 600,
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '6px',
-                cursor: 'pointer',
-              }}
             >
               <IconCalendar size={13} />
               <span>Connect Google Cal</span>
@@ -163,23 +145,8 @@ export const Header: React.FC<HeaderProps> = ({
             className="btn-new-appointment"
             onClick={onNewAppointment}
             title="Book a new walk-in, phone, or in-person appointment"
-            style={{
-              background: 'linear-gradient(135deg, #00f59b 0%, #00dc8b 100%)',
-              color: '#000000',
-              border: 'none',
-              borderRadius: '8px',
-              padding: '6px 14px',
-              fontSize: '12.5px',
-              fontWeight: 700,
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '6px',
-              cursor: 'pointer',
-              boxShadow: '0 2px 8px rgba(0, 245, 155, 0.25)',
-              transition: 'all 0.15s ease',
-            }}
           >
-            <IconPlus size={14} color="#000000" />
+            <IconPlus size={14} />
             <span>New Appointment</span>
           </button>
         )}

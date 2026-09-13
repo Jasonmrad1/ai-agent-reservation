@@ -36,8 +36,10 @@ export const App: React.FC = () => {
     return 'admin-secret-2026';
   });
 
-  const [activeTab, setActiveTab] = useState<'appointments' | 'work_hours'>('appointments');
   const isSimulatorRoute = typeof window !== 'undefined' && window.location.pathname.includes('simulator');
+  const [activeTab, setActiveTab] = useState<'appointments' | 'work_hours' | 'simulator'>(() => {
+    return isSimulatorRoute ? 'simulator' : 'appointments';
+  });
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [rules, setRules] = useState<AvailabilityRule[]>([]);
   const [overrides, setOverrides] = useState<DateOverride[]>([]);
@@ -546,27 +548,6 @@ export const App: React.FC = () => {
     loadAppointments();
   };
 
-  if (isSimulatorRoute) {
-    return (
-      <div className="react-calendar-app" style={{ minHeight: '100vh', background: '#0a0d12', padding: '16px' }}>
-        <WhatsAppSimulator
-          onRefreshData={loadAppointments}
-          showToast={showToast}
-        />
-        {toast && (
-          <div className="toast-container">
-            <div className="toast">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--emerald-text)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="20 6 9 17 4 12" />
-              </svg>
-              <span>{toast}</span>
-            </div>
-          </div>
-        )}
-      </div>
-    );
-  }
-
   return (
     <div className="react-calendar-app">
       <Header
@@ -586,7 +567,7 @@ export const App: React.FC = () => {
         onDisconnectGoogle={handleDisconnectGoogle}
       />
 
-      {activeTab === 'appointments' ? (
+      {activeTab === 'appointments' && (
         <CalendarGrid
           currentWeekMonday={currentWeekMonday}
           appointments={appointments}
@@ -596,7 +577,9 @@ export const App: React.FC = () => {
           commuteBufferMinutes={commuteBufferMinutes}
           onSelectAppointment={(appt) => setSelectedAppt(appt)}
         />
-      ) : (
+      )}
+
+      {activeTab === 'work_hours' && (
         <WorkHoursView
           rules={rules}
           overrides={overrides}
@@ -611,6 +594,17 @@ export const App: React.FC = () => {
           onAddOverride={handleAddOverride}
           onDeleteOverride={handleDeleteOverride}
         />
+      )}
+
+      {activeTab === 'simulator' && (
+        <main className="calendar-app-container">
+          <div className="simulator-tab-card">
+            <WhatsAppSimulator
+              onRefreshData={loadAppointments}
+              showToast={showToast}
+            />
+          </div>
+        </main>
       )}
 
       {/* Manual Appointment Entry Modal */}
