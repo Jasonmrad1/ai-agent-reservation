@@ -71,6 +71,13 @@ export class AppointmentRepository {
     return this.mapRow(row);
   }
 
+  public findByGoogleEventId(eventId: string): Appointment | null {
+    const row = this.db.prepare('SELECT * FROM appointments WHERE google_event_id = ?').get(eventId) as any;
+    if (!row) return null;
+    return this.mapRow(row);
+  }
+
+
   public findLatestActiveByCustomerId(customerId: string): Appointment | null {
     const row = this.db.prepare(`
       SELECT * FROM appointments
@@ -143,6 +150,57 @@ export class AppointmentRepository {
       customer_name: r.customer_name,
       customer_phone: r.customer_phone,
     }));
+  }
+
+  public updateAddress(id: string, address: string): void {
+    const now = new Date().toISOString();
+    this.db.prepare(`
+      UPDATE appointments SET address = ?, updated_at = ? WHERE id = ?
+    `).run(address, now, id);
+
+    const appt = this.findById(id);
+    if (appt) SupabaseSync.syncAppointment(appt).catch(() => {});
+  }
+
+  public update(id: string, updates: Partial<Appointment>): void {
+    const appt = this.findById(id);
+    if (!appt) return;
+    const updated: Appointment = {
+      ...appt,
+      ...updates,
+      updated_at: new Date().toISOString(),
+    };
+    this.db.prepare(`
+      UPDATE appointments SET
+        visit_type = ?,
+        address = ?,
+        service = ?,
+        price = ?,
+        start_time = ?,
+        end_time = ?,
+        status = ?,
+        google_event_id = ?,
+        reminder_24h_sent = ?,
+        reminder_1h_sent = ?,
+        notes = ?,
+        updated_at = ?
+      WHERE id = ?
+    `).run(
+      updated.visit_type,
+      updated.address ?? null,
+      updated.service,
+      updated.price,
+      updated.start_time,
+      updated.end_time,
+      updated.status,
+      updated.google_event_id ?? null,
+      updated.reminder_24h_sent ? 1 : 0,
+      updated.reminder_1h_sent ? 1 : 0,
+      updated.notes ?? null,
+      updated.updated_at,
+      id
+    );
+    SupabaseSync.syncAppointment(updated).catch(() => {});
   }
 
   public updateStatus(id: string, status: AppointmentStatus): void {

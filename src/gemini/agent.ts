@@ -1,11 +1,12 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import { Customer, Conversation, Appointment, VisitType } from '../types/index.js';
+import { Customer, Conversation, Appointment, VisitType, PendingBookingWorkflow } from '../types/index.js';
 import { DatabaseContext } from '../db/index.js';
 import { SchedulingEngine } from '../calendar/scheduler.js';
 import { AdminNotificationService } from '../notifications/admin.notifier.js';
 import { AGENT_TOOLS, CLINIC_SERVICES, CLINIC_POLICIES } from './tools.js';
 import { SYSTEM_PROMPT, DOCTOR_ASSISTANT_SYSTEM_PROMPT } from './prompts.js';
 import { withRetry } from '../utils/retry.js';
+import { computeFreeWindows } from '../utils/slots.js';
 
 export interface ToolCall {
   name: string;
@@ -35,6 +36,7 @@ export interface GeminiClient {
     toolName: string;
     toolArgs: any;
     toolResult: any;
+    conversationTranscript?: string;
   }): Promise<string>;
 
   getFallbackToolReply(params: {
@@ -61,10 +63,13 @@ export interface GeminiClient {
 }
 
 const FALLBACK_MODEL_POOL = [
-  process.env.GEMINI_MODEL || 'gemini-flash-latest',
-  'gemini-3.7-flash',
+  process.env.GEMINI_MODEL || 'gemini-3.5-flash',
   'gemini-3.5-flash',
+  'gemini-3.5-flash-lite',
   'gemini-3.8-flash',
+  'gemini-flash-lite-latest',
+  'gemini-3.6-flash',
+  'gemini-3.7-flash',
   'gemini-flash-latest',
 ];
 
@@ -128,6 +133,367 @@ export function formatLebDate(isoStr: string): string {
   } catch {
     return isoStr;
   }
+}
+
+export function formatArabicDate(isoStr: string): string {
+  try {
+    const d = new Date(isoStr);
+    if (isNaN(d.getTime())) return isoStr;
+    const weekdaysAr = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
+    const monthsAr = ['كانون الثاني', 'شباط', 'آذار', 'نيسان', 'أيار', 'حزيران', 'تموز', 'آب', 'أيلول', 'تشرين الأول', 'تشرين الثاني', 'كانون الأول'];
+    const weekday = weekdaysAr[d.getUTCDay()];
+    const month = monthsAr[d.getUTCMonth()];
+    const day = d.getUTCDate();
+    const hours = d.getUTCHours();
+    const mins = d.getUTCMinutes().toString().padStart(2, '0');
+    const ampm = hours >= 12 ? 'ظهراً' : 'صباحاً';
+    const h12 = hours % 12 === 0 ? 12 : hours % 12;
+    return `يوم ${weekday} ${day} ${month} الساعة ${h12}:${mins} ${ampm}`;
+  } catch {
+    return isoStr;
+  }
+}
+
+export function extractAllSlotsFromText(text: string): Array<{ date: string; time: string }> {
+  if (!text) return [];
+  const results: Array<{ date: string; time: string }> = [];
+
+  // 1. Long date formats: e.g. "Wednesday, September 23 at 12:00 PM"
+  const longRegex = /(?:(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday|Mon|Tue|Wed|Thu|Fri|Sat|Sun)[a-z]*,?\s+)?\b(January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)\s+(\d{1,2})(?:st|nd|rd|th)?(?:,?\s+(\d{4}))?\s+(?:at|@|se3a)\s+(\d{1,2}):(\d{2})\s*(AM|PM)?\b/gi;
+  let match: RegExpExecArray | null;
+  while ((match = longRegex.exec(text)) !== null) {
+    const month = match[1];
+    const day = match[2];
+    const year = match[3] || String(new Date().getUTCFullYear());
+    let hour = Number(match[4]);
+    const min = match[5] || '00';
+    const ampm = match[6]?.toUpperCase();
+    if (ampm === 'PM' && hour < 12) hour += 12;
+    if (ampm === 'AM' && hour === 12) hour = 0;
+
+    const d = new Date(`${month} ${day}, ${year} UTC`);
+    if (!Number.isNaN(d.getTime())) {
+      results.push({
+        date: d.toISOString().split('T')[0],
+        time: `${String(hour).padStart(2, '0')}:${min}`,
+      });
+    }
+  }
+
+  // 2. ISO format with time: "2026-09-15T09:00:00"
+  const isoRegex = /\b(\d{4}-\d{2}-\d{2})[T\s](\d{1,2}):(\d{2})(?::\d{2})?(?:\.\d{3})?Z?\b/gi;
+  while ((match = isoRegex.exec(text)) !== null) {
+    results.push({
+      date: match[1],
+      time: `${match[2].padStart(2, '0')}:${match[3]}`,
+    });
+  }
+
+  return results;
+}
+
+export function extractSlotFromText(text: string, excludeIso?: string): { date: string; time: string } | null {
+  const all = extractAllSlotsFromText(text);
+  if (all.length === 0) return null;
+  if (!excludeIso) return all[0];
+
+  const excludePrefix = excludeIso.slice(0, 16);
+  const filtered = all.filter((s) => `${s.date}T${s.time}` !== excludePrefix);
+  return filtered.length > 0 ? filtered[filtered.length - 1] : all[0];
+}
+
+export function parseDateTimeFromMessage(
+  text: string,
+  referenceDate: Date = new Date()
+): { date?: string; time?: string } | null {
+  if (!text) return null;
+  const lower = text.toLowerCase().trim();
+
+  // 1. Try existing extractSlotFromText
+  const existing = extractSlotFromText(text);
+  if (existing) {
+    return existing;
+  }
+
+  // 2. Weekday detection (English, Arabizi, Arabic, French)
+  const weekdayMap: Record<string, number> = {
+    sunday: 0, sun: 0, ahad: 0, elahad: 0, dimanche: 0, 'الأحد': 0, 'الاحد': 0,
+    monday: 1, mon: 1, tnen: 1, tanen: 1, eltnen: 1, lundi: 1, 'الإثنين': 1, 'الاثنين': 1,
+    tuesday: 2, tue: 2, taleta: 2, tleta: 2, eltleta: 2, mardi: 2, 'الثلاثاء': 2,
+    wednesday: 3, wed: 3, arba3a: 3, elarba3a: 3, mercredi: 3, 'الأربعاء': 3, 'الاربعاء': 3,
+    thursday: 4, thu: 4, khamis: 4, elkhamis: 4, jeudi: 4, 'الخميس': 4,
+    friday: 5, fri: 5, jem3a: 5, eljem3a: 5, vendredi: 5, 'الجمعة': 5,
+    saturday: 6, sat: 6, sabit: 6, elsabit: 6, samedi: 6, 'السبت': 6,
+  };
+
+  let targetDate: string | undefined;
+
+  if (/\b(tomorrow|bkra|bokra|demain|غداً|بكرة|بكره)\b/i.test(lower)) {
+    const d = new Date(referenceDate.getTime() + 86400000);
+    targetDate = d.toISOString().split('T')[0];
+  } else if (/\b(today|lyom|elyom|aujourd'hui|اليوم)\b/i.test(lower)) {
+    targetDate = referenceDate.toISOString().split('T')[0];
+  } else {
+    for (const [dayName, dayNum] of Object.entries(weekdayMap)) {
+      const regex = new RegExp(`\\b${dayName}\\b`, 'i');
+      if (regex.test(lower)) {
+        const currentDay = referenceDate.getUTCDay();
+        let daysUntil = (dayNum - currentDay + 7) % 7;
+        if (daysUntil === 0) daysUntil = 7; // next occurrence
+        const d = new Date(referenceDate.getTime() + daysUntil * 86400000);
+        targetDate = d.toISOString().split('T')[0];
+        break;
+      }
+    }
+  }
+
+  // Also check explicit month + day: e.g. "sep 16", "september 21"
+  if (!targetDate) {
+    const monthDayMatch = lower.match(/\b(jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\s+(\d{1,2})\b/i);
+    if (monthDayMatch) {
+      const monthNames = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+      const monthIndex = monthNames.findIndex((m) => monthDayMatch[1].startsWith(m));
+      if (monthIndex >= 0) {
+        const day = parseInt(monthDayMatch[2], 10);
+        const year = referenceDate.getUTCFullYear();
+        const d = new Date(Date.UTC(year, monthIndex, day));
+        targetDate = d.toISOString().split('T')[0];
+      }
+    }
+  }
+
+  // 3. Time detection
+  // Look specifically for patterns like "at 9", "9 am", "2pm", "14:00", "9:30"
+  let targetTime: string | undefined;
+  const strongTimeRegex = /(?:(?:at|@|se3a|à|on|from|between|around)\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)?)|(?:\b(\d{1,2}):(\d{2})\s*(am|pm)?\b)|(?:\b(\d{1,2})\s*(am|pm)\b)|(?:\b(\d{1,2})(?::(\d{2}))?\s*(?:till|to|-)\s*\d)/i;
+  const strongMatch = lower.match(strongTimeRegex);
+
+  if (strongMatch) {
+    const rawHour = strongMatch[1] || strongMatch[4] || strongMatch[7] || strongMatch[9];
+    const rawMin = strongMatch[2] || strongMatch[5] || strongMatch[10] || '00';
+    const rawAmpm = (strongMatch[3] || strongMatch[6] || strongMatch[8] || '').toUpperCase();
+
+    let hour = parseInt(rawHour, 10);
+    if (rawAmpm === 'PM' && hour < 12) hour += 12;
+    if (rawAmpm === 'AM' && hour === 12) hour = 0;
+
+    // If no AM/PM specified, infer typical clinic hours: 1..6 -> 13..18 (PM)
+    if (!rawAmpm) {
+      if (hour >= 1 && hour <= 6) {
+        hour += 12;
+      }
+    }
+
+    targetTime = `${String(hour).padStart(2, '0')}:${rawMin}`;
+  }
+
+  if (targetDate || targetTime) {
+    return {
+      date: targetDate,
+      time: targetTime,
+    };
+  }
+
+  return null;
+}
+
+function extractLocationBookingArgs(
+  incomingText: string,
+  historyMessages: Array<{ direction: string; body: string }>,
+  customer: Customer,
+  activeWorkflow?: PendingBookingWorkflow | null
+): Record<string, any> | null {
+  if (!incomingText.includes('📍 Shared Location')) return null;
+
+  const address = incomingText.match(/📍 Shared Location: ([\s\S]*?)(?:\s*\| Maps:|$)/)?.[1]?.trim() || incomingText;
+
+  // 1. If active database workflow already holds the selected date and time
+  if (activeWorkflow && activeWorkflow.date && activeWorkflow.time) {
+    return {
+      date: activeWorkflow.date,
+      time: activeWorkflow.time,
+      visit_type: 'home_visit',
+      service: activeWorkflow.service || 'Home Visit Care',
+      address,
+      patient_name: customer.name,
+      patient_phone: customer.phone,
+    };
+  }
+
+  // 2. Fallback to message history extraction
+  const previousPatientMessage = [...historyMessages]
+    .reverse()
+    .find((message) => message.direction === 'inbound' && /\b(home visit|home|beit|zyara)\b/i.test(message.body));
+  if (!previousPatientMessage) return null;
+
+  const request = previousPatientMessage.body;
+  const weekdayMatch = request.match(/\b(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)\b/i);
+  const timeMatch = request.match(/\b(\d{1,2})(?::(\d{2}))?\s*(AM|PM)?\b/i);
+  if (!weekdayMatch || !timeMatch) return null;
+
+  const weekdayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  const requestedDay = weekdayNames.findIndex((day) => day.toLowerCase() === weekdayMatch[1].toLowerCase());
+  const now = new Date();
+  const daysUntil = (requestedDay - now.getUTCDay() + 7) % 7 || 7;
+  const appointmentDate = new Date(now.getTime() + daysUntil * 24 * 60 * 60 * 1000)
+    .toISOString()
+    .split('T')[0];
+
+  let hour = Number(timeMatch[1]);
+  const meridiem = timeMatch[3]?.toUpperCase();
+  if (meridiem === 'PM' && hour < 12) hour += 12;
+  if (meridiem === 'AM' && hour === 12) hour = 0;
+
+  return {
+    date: appointmentDate,
+    time: `${String(hour).padStart(2, '0')}:${timeMatch[2] || '00'}`,
+    visit_type: 'home_visit',
+    service: 'Home Visit Care',
+    address,
+    patient_name: customer.name,
+    patient_phone: customer.phone,
+  };
+}
+
+export function sanitizeWhatsAppText(text: string): string {
+  if (!text) return text;
+  return text
+    .replace(/^\s*\*\s+/gm, '• ') // replace asterisk bullet markers with clean dots
+    .replace(/\*+/g, '')          // remove all asterisks
+    .trim();
+}
+
+function formatExistingBookingSummary(appointment: Appointment, customerName: string): string {
+  const location = appointment.visit_type === 'home_visit'
+    ? `Home Visit (${appointment.address || 'Shared Location Pin'})`
+    : 'In-Office at the Clinic';
+  return `All set, ${customerName}! Your appointment has already been confirmed with Dr. Ziad El Khoury:\n\n` +
+    `📅 Date: ${formatEnglishDate(appointment.start_time)}\n` +
+    `📍 Location: ${location}\n\n` +
+    `The location pin is safely attached to this booking. We look forward to seeing you!`;
+}
+
+function extractPendingHomeVisitSelection(
+  incomingText: string,
+  historyMessages: Array<{ direction: string; body: string }>,
+  activeWorkflow?: PendingBookingWorkflow | null,
+  excludeIso?: string
+): Record<string, string> | null {
+  if (incomingText.includes('📍 Shared Location')) return null;
+  if (!/\b(home visit|home|beit|zyara|manzil|منزل|منزلية|زيارة منزلية)\b/i.test(incomingText)) return null;
+
+  // Reject negations: "i don't want a home visit", "not home", "no home visit", "mesh beit", "ma bde zyara"
+  if (/\b(don'?t|not|no|don't|mesh|msh|ma bde|ma rade|ma 7ebe|لا أريد|ما أريد|مش|لا زيارة)\s+(want|need|bde|rade|7ebe)?\s*(a\s+)?(home visit|home|beit|zyara|manzil|منزل|منزلية|زيارة منزلية)\b/i.test(incomingText)) return null;
+  if (/\b(i\s+)?(don'?t|don't|not|no)\s+(want|need)\s+(a\s+)?home/i.test(incomingText)) return null;
+
+  // 1. Did active workflow already have established date and time while awaiting visit type?
+  if (activeWorkflow && activeWorkflow.date && activeWorkflow.time && activeWorkflow.state === 'awaiting_visit_type') {
+    return {
+      date: activeWorkflow.date,
+      time: activeWorkflow.time,
+    };
+  }
+
+  // If there is no active workflow and no prior conversation history, let Gemini handle the first message directly
+  if (!activeWorkflow && historyMessages.length === 0) {
+    return null;
+  }
+
+  // 2. Did the incoming message itself specify date and time?
+  const currentParsed = parseDateTimeFromMessage(incomingText) || extractSlotFromText(incomingText, excludeIso);
+  if (currentParsed && currentParsed.date && currentParsed.time) {
+    return {
+      date: currentParsed.date,
+      time: currentParsed.time,
+    };
+  }
+
+  // 3. Did the patient explicitly specify date and time in their immediately preceding inbound message?
+  const previousInbound = [...historyMessages].reverse().find((message) => message.direction === 'inbound');
+  if (previousInbound) {
+    const prevParsed = parseDateTimeFromMessage(previousInbound.body) || extractSlotFromText(previousInbound.body, excludeIso);
+    if (prevParsed && prevParsed.date && prevParsed.time) {
+      return {
+        date: prevParsed.date,
+        time: prevParsed.time,
+      };
+    }
+  }
+
+  return null;
+}
+
+function extractPendingInOfficeSelection(
+  incomingText: string,
+  historyMessages: Array<{ direction: string; body: string }>,
+  activeWorkflow?: PendingBookingWorkflow | null,
+  excludeIso?: string
+): Record<string, string> | null {
+  if (incomingText.includes('📍 Shared Location')) return null;
+
+  // If the message contains cancellation or reschedule verbs, it is NOT confirming an in-office booking!
+  if (/\b(cancel|reschedule|change|postpone|elghe|ghayyer|bade 8ayer|stop|don't|dont|no|nah|mesh|msh|la2|laa|لا|الغاء|إلغاء)\b/i.test(incomingText)) {
+    return null;
+  }
+
+  const cleanText = incomingText.trim();
+  const isAffirmative = /^(YES|CONFIRM|TAMAM|OK|SURE|PLEASE|OUI|AKID|YEP|YUP|AH|EHH|تمام|نعم|أكيد|اي|أي|موافق|تأكيد)(\s+(please|plz|yes|tamam|doctor|hakim|doc))?[\s.!]*$/i.test(cleanText);
+  const specifiesOffice = /\b(in[- ]?office|clinic|cabinet|bil 3iyade|3iyade|3al 3iyade|في العيادة|بالعيادة|عيادة)\b/i.test(incomingText);
+
+  if (!specifiesOffice && !isAffirmative) return null;
+
+  // 1. Did active workflow already have established date and time while awaiting visit type?
+  if (activeWorkflow && activeWorkflow.date && activeWorkflow.time && activeWorkflow.state === 'awaiting_visit_type') {
+    if (!specifiesOffice) return null;
+    return {
+      date: activeWorkflow.date,
+      time: activeWorkflow.time,
+    };
+  }
+
+  // 2. Did incoming message itself specify date and time?
+  const currentOfficeSlot = parseDateTimeFromMessage(incomingText) || extractSlotFromText(incomingText, excludeIso);
+  if (currentOfficeSlot && currentOfficeSlot.date && currentOfficeSlot.time) {
+    if (!specifiesOffice) return null;
+    return {
+      date: currentOfficeSlot.date,
+      time: currentOfficeSlot.time,
+    };
+  }
+
+  // 3. Did the patient explicitly specify date and time in their immediately preceding inbound message?
+  const previousInbound = [...historyMessages].reverse().find((message) => message.direction === 'inbound');
+  if (previousInbound) {
+    const prevParsed = parseDateTimeFromMessage(previousInbound.body) || extractSlotFromText(previousInbound.body, excludeIso);
+    if (prevParsed && prevParsed.date && prevParsed.time) {
+      if (!specifiesOffice) return null;
+      return {
+        date: prevParsed.date,
+        time: prevParsed.time,
+      };
+    }
+  }
+
+  // 4. If patient gave affirmative reply ("yes", "confirm") to a specific offered slot from bot
+  if (isAffirmative && !specifiesOffice) {
+    const lastOutbound = [...historyMessages].reverse().find((m) => m.direction === 'outbound');
+    if (lastOutbound && /\b(clinic or home visit|in-office or home visit|عيادة أم زيارة منزلية|بالعيادة أو بالبيت)\b/i.test(lastOutbound.body)) {
+      return null;
+    }
+    const lastOutboundMentionsOffice = lastOutbound && /\b(in[- ]?office|clinic|cabinet|bil 3iyade|3iyade|في العيادة|بالعيادة|عيادة)\b/i.test(lastOutbound.body);
+    const lastOutboundAsksConfirmation = lastOutbound && /\b(confirm|like us to confirm|would you like us to confirm|تأكيد|نؤكد|هل ترغب بتأكيد)\b/i.test(lastOutbound.body);
+    if (lastOutboundMentionsOffice && lastOutboundAsksConfirmation) {
+      const offeredSlot = parseDateTimeFromMessage(lastOutbound.body) || extractSlotFromText(lastOutbound.body, excludeIso);
+      if (offeredSlot && offeredSlot.date && offeredSlot.time) {
+        return {
+          date: offeredSlot.date,
+          time: offeredSlot.time,
+        };
+      }
+    }
+  }
+
+  return null;
 }
 
 export class LiveGeminiClient implements GeminiClient {
@@ -204,6 +570,9 @@ export class LiveGeminiClient implements GeminiClient {
     console.warn('[Agent] ⚠️ All Gemini models throttled, falling back to local heuristic classifier.');
     const lower = params.incomingMessage.toLowerCase();
     const lang = detectLanguage(params.incomingMessage);
+    const historyText = (params.conversationHistory || []).map((h) => (h.parts || []).map((p) => p.text || '').join(' ')).join(' ').toLowerCase();
+    const isHomeContext = lower.includes('beit') || lower.includes('home') || lower.includes('zyara') || lower.includes('manzil') || historyText.includes('home visit') || historyText.includes('zyara') || historyText.includes('beit');
+    const visitType = isHomeContext ? 'home_visit' : 'in_office';
     
     if (lower.includes('ghil') || lower.includes('cancel') || lower.includes('ilgha') || lower.includes('elghe') || lower.includes('laghe') || lower.includes('ma baddi')) {
       return {
@@ -214,16 +583,30 @@ export class LiveGeminiClient implements GeminiClient {
       };
     }
 
+    const parsedDateTime = parseDateTimeFromMessage(params.incomingMessage);
+    if (parsedDateTime && (parsedDateTime.date || parsedDateTime.time)) {
+      const tomorrow = new Date(Date.now() + 86400000).toISOString().split('T')[0];
+      return {
+        toolCalls: [{
+          name: 'check_availability',
+          args: {
+            date: parsedDateTime.date || tomorrow,
+            time: parsedDateTime.time,
+            visit_type: visitType,
+          },
+        }],
+      };
+    }
+
     if (lower.includes('fade') || lower.includes('fadi') || lower.includes('mawa3eed') || lower.includes('slots') || lower.includes('available') || lower.includes('aymta') || lower.includes('free')) {
       const tomorrow = new Date();
       tomorrow.setDate(tomorrow.getDate() + 1);
-      const isHome = lower.includes('beit') || lower.includes('home') || lower.includes('zyara');
       return {
         toolCalls: [{
           name: 'check_availability',
           args: {
             date: tomorrow.toISOString().split('T')[0],
-            visit_type: isHome ? 'home_visit' : 'in_office',
+            visit_type: visitType,
           },
         }],
       };
@@ -301,6 +684,23 @@ export class LiveGeminiClient implements GeminiClient {
       };
     }
 
+    // If this is an ongoing conversation, continue naturally without repeating welcome greetings
+    if (params.conversationHistory && params.conversationHistory.length > 0) {
+      if (lang === 'arabizi') {
+        return {
+          text: "Tekram! Ayya nhar w se3a byenasbak kermel nshouflak l mawa3eed l fadiye, aw baddak t7ajez bil 3iyade aw zyara 3al beit?",
+        };
+      }
+      if (lang === 'arabic') {
+        return {
+          text: "تكرم عينك! يرجى إعلامنا باليوم والوقت الأنسب لك، وهل تفضل الموعد في العيادة أم زيارة منزلية؟",
+        };
+      }
+      return {
+        text: "I would be happy to help! Which date and time works best for you, and would you prefer an in-office consultation or a home visit?",
+      };
+    }
+
     if (lang === 'english') {
       return {
         text: "Hello! Welcome to Dr. Ziad El Khoury's clinic. How may I assist you today? Would you like to book an in-office consultation or a home visit?",
@@ -318,40 +718,74 @@ export class LiveGeminiClient implements GeminiClient {
     toolName: string;
     toolArgs: any;
     toolResult: any;
+    conversationTranscript?: string;
   }): Promise<string> {
+    const draftingInstruction = `You are the expert, polite, warm, and highly efficient medical coordinator for Dr. Ziad El Khoury's private medical practice in Lebanon, communicating with patients over WhatsApp.
+Your role here is to draft the final, polished WhatsApp reply directly to the patient based on the backend action result and conversation history.
+No asterisks (* or **). No money or pricing mentions. No service selection. Respond in the exact language of the patient (English, Lebanese Arabizi, Arabic, or French).`;
+
     for (const modelName of this.modelPool) {
       try {
         const model = this.genAI.getGenerativeModel({
           model: modelName,
-          systemInstruction: params.systemPrompt,
+          systemInstruction: draftingInstruction,
         });
 
+        const transcriptBlock = params.conversationTranscript ? `${params.conversationTranscript}\n\n` : '';
         const prompt = `
-User asked / message: "${params.userQuery}"
+${transcriptBlock}User asked / message: "${params.userQuery}"
 Action/Tool Executed: ${params.toolName} with arguments: ${JSON.stringify(params.toolArgs)}
 Backend Result: ${JSON.stringify(params.toolResult)}
 
-Draft the final WhatsApp reply to the user based STRICTLY on the tool result above.
+Draft the final WhatsApp reply to the user based STRICTLY on the tool result and conversation history above.
 
 Guidelines:
+- STRICT NO-ASTERISK FORMATTING RULE:
+  * NEVER use asterisks (* or **) anywhere in your text.
+  * Do NOT format words with **bold** or *bold*. Write clean plain text without any asterisks.
+  * Asterisks appear as literal symbols on WhatsApp and look messy to patients.
+  * For lists, use simple hyphens (-) or bullet dots (•), never asterisks.
+- OPENING GREETING & BILINGUAL FORMAT RULE (ENGLISH FIRST, ARABIC AT BOTTOM):
+  * When welcoming a patient (initial greeting or first reply):
+    Write the complete message in ENGLISH first, and then at the bottom provide the EXACT SAME message in ARABIC.
+    Do NOT merge English and Arabic on the same line with a dash (never write "Welcome... — أهلاً وسهلاً...").
+    Structure:
+    Hello [Name]! Welcome to Dr. Ziad El Khoury's clinic.
+    [English response content: availability / question about in-office vs home visit]
+
+    أهلاً وسهلاً بكم في عيادة الدكتور زياد الخوري.
+    [Arabic translation of the same response content: availability / question about in-office vs home visit]
 - Match the exact language and dialect of the patient:
   * If the patient wrote in ENGLISH: reply in warm, polished, professional, and empathetic English. Format key appointment details with clean bullet points.
   * If the patient wrote in LEBANESE ARABIZI: reply in natural, warm Franco-Arabe Arabizi ("Ahla", "Alf salemeh", "ayya", "byenasbak", "nzabbitlak").
   * If the patient wrote in ARABIC SCRIPT or FRENCH: reply in fluent, respectful Arabic or French.
 - Never output raw ISO timestamp strings or timezone tokens like 'Z' or 'T'.
 - If availability / slots were checked:
-  * Backend Result provides 'available_slots' and 'upcoming_open_days' with exact shift hours.
-  * If the patient asked for a SPECIFIC time or day (e.g. "Tuesday at 8", "Tomorrow at 10 AM", "Wednesday afternoon"):
-    - Check if that requested time is in 'available_slots'.
-    - If AVAILABLE: Confirm that specific time directly (e.g. "Tuesday at 8:00 AM is available with Dr. Ziad!"). Do NOT dump the full day's shifts or ask them to choose between other minute slots. Only ask for whatever information is still missing (in-office vs home visit, or address if home visit was requested).
-    - If NOT AVAILABLE: Explain politely that this specific slot is unavailable, and provide the nearest available shift window(s) for that day or upcoming open days.
-  * If the patient made a BROAD / GENERAL inquiry (e.g. "when are you free?", "what openings do you have this week?"):
-    - Format the schedule clearly using clean **from ... to ...** shift spans (DO NOT dump long comma-separated lists of individual minute slots):
-      - **[Day Name, Date]:** From [Start Time] to [End Time] (if multiple shifts: e.g. From 07:30 AM to 10:30 AM, 11:15 AM to 02:15 PM, 04:45 PM to 08:00 PM)
-      - (If closed or fully booked on a day, state 'Closed' or 'Fully Booked')
-    - Conclude with: "Please choose one of the available openings above that works best for you, and let us know if you prefer an in-office consultation at the clinic or a home visit." (or translated equivalent).
-  * NEVER invent or assume opening hours that are not returned in the Backend Result.
-- If an appointment was booked: provide an enthusiastic, crystal-clear confirmation card with service, date, time, and location (In-Office vs Home Visit + address).
+  * Backend Result provides 'available_slots' (exact 24h start times), 'free_windows' (pre-computed contiguous free spans), and 'upcoming_open_days'.
+  * CRITICAL TIME-MATCHING RULE: 'available_slots' contains 24-hour times. 24h→12h: "09:00"=9:00 AM, "12:00"=12:00 PM, "13:00"=1:00 PM, "14:00"=2:00 PM, "16:00"=4:00 PM.
+  * If the patient asked for a SPECIFIC time (e.g. "Wednesday at 2 PM", "Saturday at 10 and a clinic visit"):
+    - Convert the requested time to 24h and check if it is PRESENT in 'available_slots'.
+    - If AVAILABLE (exact 24h slot IS in available_slots):
+      * Check if the patient explicitly specified the visit type ("in clinic", "in-office", "bil 3iyade", "عيادة") OR ("home visit", "zyara 3al beit", "منزل").
+      * IF VISIT TYPE IS NOT SPECIFIED:
+        STRICT BAN: NEVER assume in-office! NEVER say "is available for an in-office consultation at the clinic" or ask "Would you like us to confirm this in-office visit?" when the patient has not explicitly requested clinic or home visit!
+        YOU MUST state that the requested time is available, and MANDATORILY ASK: "Would you prefer an in-office consultation at the clinic or a home visit?"
+        In Arabic: "هل تفضلون أن يكون الموعد في العيادة أم زيارة منزلية؟"
+      * IF VISIT TYPE IS SPECIFIED:
+        - If visit type is Home Visit and the patient has NOT provided their home address yet:
+          You MUST confirm the time is available, and MANDATORILY ASK for their home address or location pin:
+          "Great! [Time] on [Date] is available for a home visit. Please share your home address or send a WhatsApp location pin so Dr. Ziad knows where to visit you."
+          In Arabic: "يرجى تزويدنا بعنوان المنزل أو إرسال موقعكم عبر الواتساب حتى يتمكن الدكتور زياد من زيارتكم."
+          STRICT BAN: Do NOT ask to confirm the booking until the address is received!
+        - If visit type is In-Office (or Home Visit with address already provided): Confirm the appointment enthusiastically!
+    - If NOT AVAILABLE (exact 24h slot is NOT in available_slots): Politely say the exact time is unavailable. Then use 'free_windows' to offer the free time ranges for that day as clean "From X to Y" spans. Ask them to choose a time within those windows.
+  * If the patient made a BROAD / GENERAL inquiry (e.g. "when are you free?", "what openings this week?"):
+    - Use 'free_windows' from each day in 'upcoming_open_days' to present clean "From X to Y" spans. DO NOT list individual slot times.
+    - Example: "Wednesday, Sep 16: From 12:30 PM to 5:00 PM" (no asterisks, not a bullet list of individual slots)
+    - Conclude: "Please choose one of the available openings above and let us know if you prefer an in-office consultation or a home visit."
+  * NEVER invent times not in available_slots. NEVER list individual slot start times unless there is only one slot.
+- NO MONEY & NO SERVICE SELECTION: NEVER mention prices ($), fees, or costs. Never ask patients to pick between medical services. Every visit is simply an appointment with Dr. Ziad (In-Office Consultation or Home Visit).
+- If an appointment was booked: provide an enthusiastic, crystal-clear confirmation card with Date, Time, and Location (In-Office vs Home Visit + address). Do NOT include prices or service names. Do NOT use asterisks.
 - If booking had an error / missing address:
   * Acknowledge the requested appointment enthusiastically, and ask warmly for their home address or WhatsApp location pin to confirm the home visit right away.
 - If an appointment was cancelled:
@@ -359,18 +793,21 @@ Guidelines:
   * If the patient mentioned wanting to reschedule or rebook:
     - Present a mini schedule of upcoming openings from 'upcoming_open_days' (using clean From [Start] to [End] shift intervals).
     - Conclude by asking them to pick from the available openings above and whether they prefer an in-office consultation or a home visit.
-- If an appointment was rescheduled: confirm the new date, time, and visit type.
+- If an appointment was rescheduled: confirm the new date, time, and visit type without asterisks.
 - If clinic overview / services & policies were retrieved ('get_services_and_policies'):
-  * List the services and their exact prices clearly.
-  * Present the clinic working hours using the EXACT 'clinic_working_hours' array returned in the Backend Result (e.g. Wednesday shifts, Friday closed, weekend closed). NEVER invent or assume opening hours that differ from the Backend Result.
+  * Present the clinic working hours using the EXACT 'clinic_working_hours' array returned in the Backend Result. Do NOT list prices or money.
   * Mention the cancellation policy (up to 2 hours before appointment).
   * Conclude warmly: "Please choose one of the available time slots above that works best for you, and let us know if you prefer an in-office consultation at the clinic or a home visit."
 - NEVER ask repetitive questions if the patient already specified the information.
-- Keep it concise, high-touch, and empathetic.
+- Keep it concise, high-touch, and empathetic. Do NOT use asterisks.
 `;
 
         const result = await model.generateContent(prompt);
-        return result.response.text().trim();
+        const text = result.response.text()?.trim() || '';
+        if (text.length > 0) {
+          return text;
+        }
+        console.warn(`[Agent] ⚠️ Model ${modelName} returned empty text draft, trying next model or fallback...`);
       } catch (err: any) {
         console.warn(`[Agent] ⚠️ Drafting on ${modelName} failed (${err?.status || err?.message}), trying next model...`);
       }
@@ -393,8 +830,20 @@ Guidelines:
         if (slots.length === 0) {
           return `We do not have any open slots on ${params.toolArgs.date}. Would you like to check another day?`;
         }
-        const typeLabel = params.toolArgs.visit_type === 'home_visit' ? 'Home Visit' : 'In-Office';
-        return `Available slots on ${params.toolArgs.date} (${typeLabel}):\n• ${slots.join(', ')}\n\nWhich time works best for you?`;
+        const requestedSlot = extractSlotFromText(params.userQuery || '');
+        const targetTime = params.toolArgs.time || requestedSlot?.time;
+        const hasOfficeKeyword = /\b(in[- ]?office|clinic|cabinet|bil 3iyade|3iyade|3al 3iyade|بالعيادة|في العيادة|عيادة)\b/i.test(params.userQuery || '');
+        const hasHomeKeyword = /\b(home visit|home|beit|zyara|منزل|زيارة منزلية)\b/i.test(params.userQuery || '');
+        const specifiedType = hasHomeKeyword ? 'Home Visit' : (hasOfficeKeyword ? 'In-Office Consultation' : null);
+
+        if (targetTime && slots.includes(targetTime)) {
+          if (specifiedType) {
+            return `Great news! ${targetTime} on ${params.toolArgs.date} is available for your ${specifiedType} with Dr. Ziad El Khoury. Would you like me to confirm this appointment for you?`;
+          }
+          return `${targetTime} on ${params.toolArgs.date} is available with Dr. Ziad El Khoury!\n\nWould you prefer this appointment in-office at the clinic or as a home visit?\n\nالساعة ${targetTime} يوم ${params.toolArgs.date} متاحة لدى الدكتور زياد. هل تفضلون الموعد في العيادة أم زيارة منزلية؟`;
+        }
+        const typeLabel = params.toolArgs.visit_type === 'home_visit' ? 'Home Visit' : 'In-Office Consultation';
+        return `Available slots on ${params.toolArgs.date} (${typeLabel}):\n• ${slots.join(', ')}\n\nWhich time works best for you, and would you prefer an in-office consultation at the clinic or a home visit?`;
       }
 
       if (params.toolName === 'book_appointment') {
@@ -405,7 +854,7 @@ Guidelines:
         const locDisplay = params.toolResult.visit_type === 'home_visit'
           ? `Home Visit (${params.toolResult.address || 'Address provided'})`
           : 'In-Office at Clinic';
-        return `All set! Your appointment for **${params.toolResult.service}** on **${timeDisplay}** (${locDisplay}) is confirmed. We look forward to seeing you!`;
+        return `All set! Your appointment on ${timeDisplay} (${locDisplay}) is confirmed with Dr. Ziad. We look forward to seeing you!`;
       }
 
       if (params.toolName === 'reschedule_appointment') {
@@ -413,7 +862,7 @@ Guidelines:
           return `We couldn't reschedule your appointment: ${params.toolResult.error}.`;
         }
         const timeDisplay = formatEnglishDate(params.toolResult.start_time);
-        return `Your appointment has been successfully rescheduled to **${timeDisplay}**. See you then!`;
+        return `Your appointment has been successfully rescheduled to ${timeDisplay}. See you then!`;
       }
 
       if (params.toolName === 'cancel_appointment') {
@@ -433,7 +882,7 @@ Guidelines:
 
       if (params.toolName === 'get_services_and_policies') {
         const hoursList = (params.toolResult.clinic_working_hours || []).join('\n• ');
-        return `We offer General Consultations ($120), Follow-ups ($70), and Home Visits ($180).\n\n🕒 **Clinic Working Hours:**\n• ${hoursList}\n\nWhich day and time works best for you, and would you prefer an **in-office consultation** or a **home visit**?`;
+        return `🕒 Clinic Working Hours:\n• ${hoursList}\n\nWhich day and time works best for you, and would you prefer an in-office consultation or a home visit?`;
       }
 
       return JSON.stringify(params.toolResult);
@@ -457,7 +906,7 @@ Guidelines:
         const locDisplay = params.toolResult.visit_type === 'home_visit'
           ? `Visite à domicile (${params.toolResult.address || 'Adresse indiquée'})`
           : 'Au cabinet du Dr. Ziad';
-        return `Parfait! Votre rendez-vous pour **${params.toolResult.service}** le **${timeDisplay}** (${locDisplay}) est bien confirmé. Au plaisir de vous accueillir!`;
+        return `Parfait! Votre rendez-vous le ${timeDisplay} (${locDisplay}) est bien confirmé avec le Dr. Ziad. Au plaisir de vous accueillir!`;
       }
 
       if (params.toolName === 'reschedule_appointment') {
@@ -465,7 +914,7 @@ Guidelines:
           return `Impossible de reporter: ${params.toolResult.error}.`;
         }
         const timeDisplay = formatEnglishDate(params.toolResult.start_time);
-        return `Votre rendez-vous a bien été déplacé au **${timeDisplay}**. À très bientôt!`;
+        return `Votre rendez-vous a bien été déplacé au ${timeDisplay}. À très bientôt!`;
       }
 
       if (params.toolName === 'cancel_appointment') {
@@ -485,7 +934,7 @@ Guidelines:
 
       if (params.toolName === 'get_services_and_policies') {
         const hoursList = (params.toolResult.clinic_working_hours || []).join('\n• ');
-        return `Nous proposons des Consultations Générales (120$), des Suivis (70$) et des Visites à Domicile (180$).\n\n🕒 **Horaires du cabinet:**\n• ${hoursList}\n\nQuel jour et quelle heure vous conviendraient le mieux, et préférez-vous une consultation au cabinet ou à domicile?`;
+        return `🕒 Horaires du cabinet:\n• ${hoursList}\n\nQuel jour et quelle heure vous conviendraient le mieux, et préférez-vous une consultation au cabinet ou à domicile?`;
       }
 
       return JSON.stringify(params.toolResult);
@@ -504,7 +953,8 @@ Guidelines:
         if (params.toolResult.error) {
           return `تعذر تثبيت الموعد: ${params.toolResult.error}`;
         }
-        return `تم تأكيد موعدك بنجاح (${params.toolResult.service}). ألف سلامة ونتطلع لرؤيتك!`;
+        const locDisplay = params.toolResult.visit_type === 'home_visit' ? 'زيارة منزلية' : 'في العيادة';
+        return `تم تأكيد موعدك بنجاح مع الدكتور زياد (${locDisplay}). ألف سلامة ونتطلع لرؤيتك!`;
       }
 
       if (params.toolName === 'reschedule_appointment') {
@@ -531,7 +981,7 @@ Guidelines:
 
       if (params.toolName === 'get_services_and_policies') {
         const hoursList = (params.toolResult.clinic_working_hours || []).join('\n• ');
-        return `نقدم استشارات عامة (120$)، متابعة (70$)، وزيارات منزلية (180$).\n\n🕒 **أوقات دوام العيادة:**\n• ${hoursList}\n\nأي يوم ووقت يناسبكم؟ وهل تفضلون الموعد في العيادة أم زيارة منزلية؟`;
+        return `🕒 أوقات دوام العيادة:\n• ${hoursList}\n\nأي يوم ووقت يناسبكم؟ وهل تفضلون الموعد في العيادة أم زيارة منزلية؟`;
       }
 
       return JSON.stringify(params.toolResult);
@@ -554,7 +1004,7 @@ Guidelines:
       const locDisplay = params.toolResult.visit_type === 'home_visit' 
         ? `zyara 3al beit (${params.toolResult.address || ''})` 
         : `bil 3iyade`;
-      return `Tamam! Zabbattelak l maw3ad (${params.toolResult.service}) ${timeDisplay} ${locDisplay}. Alf salemeh w mnshoufak bi kher!`;
+      return `Tamam! Zabbattelak l maw3ad ma3 Dr. Ziad ${timeDisplay} ${locDisplay}. Alf salemeh w mnshoufak bi kher!`;
     }
 
     if (params.toolName === 'reschedule_appointment') {
@@ -582,7 +1032,7 @@ Guidelines:
 
     if (params.toolName === 'get_services_and_policies') {
       const hoursList = (params.toolResult.clinic_working_hours || []).join('\n• ');
-      return `3enna General Consultations ($120), Follow-ups ($70), w Home Visits ($180).\n\n🕒 **Dawam l 3iyade:**\n• ${hoursList}\n\nAyya nhar w se3a byenasbak? W btefaddal bil 3iyade aw zyara 3al beit?`;
+      return `🕒 Dawam l 3iyade:\n• ${hoursList}\n\nAyya nhar w se3a byenasbak? W btefaddal bil 3iyade aw zyara 3al beit?`;
     }
 
     return JSON.stringify(params.toolResult);
@@ -784,6 +1234,7 @@ export class MockGeminiClient implements GeminiClient {
     toolName: string;
     toolArgs: any;
     toolResult: any;
+    conversationTranscript?: string;
   }): Promise<string> {
     if (this.mockReplyText) {
       return this.mockReplyText;
@@ -795,11 +1246,14 @@ export class MockGeminiClient implements GeminiClient {
       }
     }
     if (params.toolName === 'check_availability') {
+      if (params.toolResult && params.toolResult.visit_type_specified === false) {
+        return `Welcome to Dr. Ziad El Khoury's clinic! To share our exact available schedule, please let us know if you prefer an in-office consultation at our clinic or a home visit (available hours differ due to travel commute).`;
+      }
       const slots = params.toolResult.available_slots || [];
       if (slots.length === 0) {
-        return `We do not have any open slots on ${params.toolArgs.date}. Would you like to check another day?`;
+        return `We do not have any open slots on ${params.toolArgs.date} for ${params.toolResult.visit_type || 'in-office'}. Would you like to check another day?`;
       }
-      return `Available slots on ${params.toolArgs.date} (${params.toolArgs.visit_type || 'in_office'}): ${slots.join(', ')}. Which time works best for you?`;
+      return `Available slots on ${params.toolArgs.date} (${params.toolResult.visit_type || 'in_office'}): ${slots.join(', ')}. Which time works best for you?`;
     }
 
     if (params.toolName === 'book_appointment') {
@@ -892,6 +1346,16 @@ export class AgentCore {
   }
 
   public async processMessage(context: {
+    customer: Customer;
+    conversation: Conversation;
+    incomingText: string;
+    db: DatabaseContext;
+  }): Promise<string> {
+    const rawReply = await this.internalProcessMessage(context);
+    return sanitizeWhatsAppText(rawReply);
+  }
+
+  private async internalProcessMessage(context: {
     customer: Customer;
     conversation: Conversation;
     incomingText: string;
@@ -1001,7 +1465,342 @@ export class AgentCore {
       return this.executeEscalation(customer, conversation, db, 'Patient requested human / direct contact with doctor', 'medium', incomingText);
     }
 
-    const contextSystemPrompt = isDoctor
+    // 3. Workflow management & history
+    if (db.workflows) {
+      try {
+        db.workflows.expireOldWorkflows();
+      } catch {}
+    }
+    const activeWorkflow = db.workflows ? db.workflows.findActiveByCustomerId(customer.id) : null;
+
+    const allRecent = db.messages.getRecentMessages(conversation.id, 16);
+    // Exclude only the current message at the end of the array
+    const historyMessages = (allRecent.length > 0 && allRecent[allRecent.length - 1].body === incomingText)
+      ? allRecent.slice(0, -1)
+      : allRecent;
+
+    const isOngoingConversation = historyMessages.length > 0;
+
+    const rawHistory: Array<{ role: 'user' | 'model'; text: string }> = historyMessages.map((msg) => ({
+      role: msg.direction === 'inbound' ? 'user' : 'model',
+      text: msg.body,
+    }));
+
+    const existingAppointment = db.appointments.findLatestActiveByCustomerId(customer.id);
+
+    // If the patient is requesting a BRAND NEW (additional) appointment, clear the active workflow
+    // so they are asked for visit type fresh instead of inheriting the previous appointment's type.
+    const isNewAppointmentRequest = /\b(new|another|additional|second|extra|tani|jdid|منفصل|جديد|اضافي)\s+(appointment|maw3ad|reservation|booking|visit|consultation)\b/i.test(incomingText) ||
+      /\b(reserve|book|add|have|get)\s+(a\s+)?(new|another|additional|second|extra)\s+(appointment|maw3ad|reservation|booking|visit)\b/i.test(incomingText) ||
+      /\bcan\s+i\s+(reserve|book|make|add|get|have)\s+(a\s+)?(new|another)?\s*(appointment|maw3ad)\b/i.test(incomingText);
+
+    if (isNewAppointmentRequest && db.workflows) {
+      // Cancel the existing booked workflow so there is no lingering visit_type assumption
+      db.workflows.cancelActiveByCustomerId(customer.id);
+    }
+
+    // If customer shares a location pin and has an active booking workflow awaiting address:
+    if (incomingText.includes('📍 Shared Location') && activeWorkflow && activeWorkflow.date && activeWorkflow.time && activeWorkflow.state !== 'booked') {
+      const pinAddress = incomingText.match(/📍 Shared Location: ([\s\S]*?)(?:\s*\| Maps:|$)/)?.[1]?.trim() || incomingText;
+      await this.executeTool(
+        {
+          name: 'book_appointment',
+          args: {
+            date: activeWorkflow.date,
+            time: activeWorkflow.time,
+            visit_type: 'home_visit',
+            service: 'Home Visit',
+            address: pinAddress,
+            patient_name: customer.name || undefined,
+            patient_phone: customer.phone,
+          },
+        },
+        customer,
+        conversation,
+        db
+      );
+
+      if (db.workflows) {
+        db.workflows.transition(activeWorkflow.id, 'booked');
+      }
+
+      const isoStr = `${activeWorkflow.date}T${activeWorkflow.time}:00.000Z`;
+      const engDate = formatEnglishDate(isoStr);
+      const arDate = formatArabicDate(isoStr);
+      const nameGreeting = customer.name ? `All set, ${customer.name}!` : 'All set!';
+      const arabicName = customer.name ? `تم تأكيد موعدك يا ${customer.name}!` : 'تم تأكيد موعدك بنجاح!';
+
+      return `${nameGreeting} Your home visit appointment has been confirmed with Dr. Ziad El Khoury:\n\n` +
+        `📅 Date: ${engDate}\n` +
+        `📍 Location: Home Visit (${pinAddress})\n\n` +
+        `Dr. Ziad looks forward to visiting you!\n\n` +
+        `${arabicName}\n\n` +
+        `📅 الموعد: ${arDate}\n` +
+        `📍 المكان: زيارة منزلية (${pinAddress})\n\n` +
+        `الدكتور زياد بانتظار زيارتكم، وألف سلامة!`;
+    }
+
+    // If customer shares a location pin without an active booking in progress, and already has an active confirmed home visit appointment:
+    if (incomingText.includes('📍 Shared Location') && existingAppointment && existingAppointment.visit_type === 'home_visit') {
+      const pinAddress = incomingText.match(/📍 Shared Location: ([\s\S]*?)(?:\s*\| Maps:|$)/)?.[1]?.trim() || incomingText;
+      if (pinAddress && existingAppointment.address !== pinAddress) {
+        try {
+          db.appointments.update(existingAppointment.id, { address: pinAddress });
+        } catch {}
+      }
+      return formatExistingBookingSummary(existingAppointment, customer.name || 'Patient');
+    }
+
+    const pendingHomeVisit = extractPendingHomeVisitSelection(incomingText, historyMessages, activeWorkflow, existingAppointment?.start_time);
+    if (pendingHomeVisit) {
+      if (db.workflows) {
+        if (activeWorkflow) {
+          db.workflows.transition(activeWorkflow.id, 'awaiting_address', {
+            date: pendingHomeVisit.date,
+            time: pendingHomeVisit.time,
+            visit_type: 'home_visit',
+          });
+        } else {
+          db.workflows.create({
+            customer_id: customer.id,
+            conversation_id: conversation.id,
+            date: pendingHomeVisit.date,
+            time: pendingHomeVisit.time,
+            visit_type: 'home_visit',
+            state: 'awaiting_address',
+          });
+        }
+      }
+
+      const isoStr = `${pendingHomeVisit.date}T${pendingHomeVisit.time}:00.000Z`;
+      const engDate = formatEnglishDate(isoStr);
+      const arDate = formatArabicDate(isoStr);
+      const nameStrEng = customer.name ? ` ${customer.name}` : '';
+      const nameStrAr = customer.name ? ` يا ${customer.name}` : '';
+
+      return `Great${nameStrEng}! I have your home visit request for ${engDate}.\n\n` +
+        `Please share your home address or send a WhatsApp location pin so Dr. Ziad knows where to visit you. Once received, I will finalize the booking and send you the complete appointment summary.\n\n` +
+        `ممتاز${nameStrAr}! تم تسجيل طلب الزيارة المنزلية لـ ${arDate}.\n\n` +
+        `يرجى تزويدنا بعنوان المنزل أو إرسال موقعكم عبر الواتساب حتى يتمكن الدكتور زياد من زيارتكم وتأكيد الموعد فوراً.`;
+    }
+
+    const pendingInOffice = extractPendingInOfficeSelection(incomingText, historyMessages, activeWorkflow, existingAppointment?.start_time);
+    if (pendingInOffice) {
+      const familyMatch = incomingText.match(/\b(sister|brother|mother|father|son|daughter|wife|husband|mom|dad|طفل|ابن|بنت|زوج|زوجة|اخت|أخت|اخ|أخ|ام|أم|اب|أب)\b/i);
+      const patientName = familyMatch ? `${familyMatch[0]} of ${customer.name || 'Patient'}` : (customer.name || undefined);
+      const isNewAppointment = Boolean(existingAppointment) && /\b(another|additional|second|separate|sister|brother|mother|father|son|daughter|wife|husband|mom|dad|تاني|ثاني|أخرى|إضافي)\b/i.test(incomingText);
+
+      const bookRes = await this.executeTool(
+        {
+          name: 'book_appointment',
+          args: {
+            date: pendingInOffice.date,
+            time: pendingInOffice.time,
+            visit_type: 'in_office',
+            service: activeWorkflow?.service || 'General Consultation',
+            patient_name: patientName,
+            patient_phone: customer.phone,
+            is_new_appointment: isNewAppointment,
+          },
+        },
+        customer,
+        conversation,
+        db
+      );
+
+      if (bookRes && bookRes.error) {
+        return `I am sorry, but that time slot (${pendingInOffice.date} at ${pendingInOffice.time}) is no longer available: ${bookRes.error}. Would you like to pick another time?\n\nعذراً، هذا الوقت لم يعد متاحاً. هل ترغب باختيار وقت آخر؟`;
+      }
+
+      if (activeWorkflow && db.workflows) {
+        db.workflows.transition(activeWorkflow.id, 'booked');
+      }
+
+      const isoStr = `${pendingInOffice.date}T${pendingInOffice.time}:00.000Z`;
+      const engDate = formatEnglishDate(isoStr);
+      const arDate = formatArabicDate(isoStr);
+      const nameGreeting = customer.name ? `All set, ${customer.name}!` : 'All set!';
+      const arabicName = customer.name ? `تم تأكيد موعدك يا ${customer.name}!` : 'تم تأكيد موعدك بنجاح!';
+
+      return `${nameGreeting} Your appointment has been confirmed with Dr. Ziad El Khoury:\n\n` +
+        `📅 Date: ${engDate}\n` +
+        `📍 Location: In-Office at the Clinic\n\n` +
+        `We look forward to seeing you!\n\n` +
+        `${arabicName}\n\n` +
+        `📅 الموعد: ${arDate}\n` +
+        `📍 المكان: في عيادة الدكتور زياد الخوري\n\n` +
+        `أهلاً وسهلاً بكم، ونحن بانتظاركم!`;
+    }
+
+    const isNegatingHome = /\b(don'?t|not|no|mesh|msh|ma bde|ma rade|ma 7ebe|لا أريد|ما أريد|مش|لا زيارة)\b/i.test(incomingText) &&
+      /\b(home visit|home|beit|zyara|manzil|منزل|منزلية|زيارة منزلية)\b/i.test(incomingText);
+    const isNegatingOffice = /\b(don'?t|not|no|mesh|msh|ma bde|ma rade|ma 7ebe|لا أريد|ما أريد|مش)\b/i.test(incomingText) &&
+      /\b(in[- ]?office|clinic|cabinet|bil 3iyade|3iyade|في العيادة|بالعيادة|عيادة)\b/i.test(incomingText);
+
+    const specifiesHome = !isNegatingHome && /\b(home visit|home|beit|zyara|manzil|منزل|منزلية|زيارة منزلية)\b/i.test(incomingText) &&
+      !incomingText.includes('📍 Shared Location');
+    const specifiesOffice = !isNegatingOffice && /\b(in[- ]?office|clinic|cabinet|bil 3iyade|3iyade|3al 3iyade|في العيادة|بالعيادة|عيادة)\b/i.test(incomingText);
+
+    const parsedDateTimeInAwaiting = parseDateTimeFromMessage(incomingText);
+    const hasDateTimeKeywords = parsedDateTimeInAwaiting !== null ||
+      /\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday|mon|tue|wed|thu|fri|sat|sun|today|tomorrow|bkra|bokra|lyom|elyom|tnen|tanen|taleta|tleta|arba3a|khamis|jem3a|sabit|ahad|\d{1,2}:\d{2}|\d{1,2}\s*(am|pm))\b/i.test(incomingText);
+
+    const hasInquiryOrActionKeywords = /\b(when|what|how|do you have|can i|could you|is there|open|available|schedule|hours|bade es2al|maftou7|ayya|ayye|fi|shou|kam|price|cost|se3er|book|reserve|maw3ad|appointment|rendez-vous|move|reschedule|change|cancel|elghe)\b/i.test(incomingText);
+
+    const isBareHomeSelection = specifiesHome && !hasDateTimeKeywords && !hasInquiryOrActionKeywords && !pendingHomeVisit;
+    const isBareOfficeSelection = specifiesOffice && !hasDateTimeKeywords && !hasInquiryOrActionKeywords && !pendingInOffice;
+
+    if (isBareHomeSelection) {
+      if (db.workflows) {
+        if (activeWorkflow) {
+          db.workflows.update(activeWorkflow.id, {
+            visit_type: 'home_visit',
+            date: null,
+            time: null,
+            state: 'awaiting_slot',
+          });
+        } else {
+          db.workflows.create({
+            customer_id: customer.id,
+            conversation_id: conversation.id,
+            visit_type: 'home_visit',
+            state: 'awaiting_slot',
+          });
+        }
+      }
+
+      const targetDate = new Date().toISOString().split('T')[0];
+      const openDays = await this.scheduler.getAvailableSlotsAcrossRange(targetDate, 7, 'home_visit', 4);
+      const activeWindows = openDays.filter((d) => !d.is_closed && d.free_windows.length > 0).slice(0, 4);
+      const scheduleLines = activeWindows.map((d) => {
+        const spans = d.free_windows.map((w) => `From ${w.from12} to ${w.to12}`).join(', ');
+        const [y, m, dayNum] = d.date.split('-').map(Number);
+        const dateObj = new Date(Date.UTC(y, m - 1, dayNum));
+        const monthDay = dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
+        return `• ${d.day_name}, ${monthDay}: ${spans}`;
+      });
+
+      const lang = detectLanguage(incomingText);
+      if (lang === 'arabizi') {
+        return `Tekram! Sajjalt 3anna ennk baddak zyara 3al beit 🏠.\n\nAyya nhar w se3a byenasbak? Haydi l mawa3eed l fadiye lal zyarat l menzeliye hal jem3a:\n${scheduleLines.join('\n')}\n\nRja2 5abberna ayya wa2et byenasbak ma3 l 3enwan aw location pin!`;
+      }
+      if (lang === 'arabic') {
+        return `تكرم عينك! تم تسجيل رغبتكم في حجز زيارة منزلية 🏠.\n\nأي يوم ووقت يناسبكم؟ إليكم الأوقات المتاحة للزيارات منزلية هذا الأسبوع:\n${scheduleLines.join('\n')}\n\nيرجى إعلامنا باليوم والوقت المفضلين لديكم مع تزويدنا بعنوان المنزل أو إرسال موقعكم عبر الواتساب.`;
+      }
+      const nameStr = customer.name ? ` ${customer.name}` : '';
+      return `Great${nameStr}! We have noted that you would like a **Home Visit** 🏠.\n\nWhich day and time works best for you? Here are our available times for home visits this week:\n${scheduleLines.join('\n')}\n\nPlease let us know your preferred day and time, along with your home address or WhatsApp location pin!`;
+    }
+
+    if (isBareOfficeSelection) {
+      if (db.workflows) {
+        if (activeWorkflow) {
+          db.workflows.update(activeWorkflow.id, {
+            visit_type: 'in_office',
+            date: null,
+            time: null,
+            state: 'awaiting_slot',
+          });
+        } else {
+          db.workflows.create({
+            customer_id: customer.id,
+            conversation_id: conversation.id,
+            visit_type: 'in_office',
+            state: 'awaiting_slot',
+          });
+        }
+      }
+
+      const targetDate = new Date().toISOString().split('T')[0];
+      const openDays = await this.scheduler.getAvailableSlotsAcrossRange(targetDate, 7, 'in_office', 4);
+      const activeWindows = openDays.filter((d) => !d.is_closed && d.free_windows.length > 0).slice(0, 4);
+      const scheduleLines = activeWindows.map((d) => {
+        const spans = d.free_windows.map((w) => `From ${w.from12} to ${w.to12}`).join(', ');
+        const [y, m, dayNum] = d.date.split('-').map(Number);
+        const dateObj = new Date(Date.UTC(y, m - 1, dayNum));
+        const monthDay = dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
+        return `• ${d.day_name}, ${monthDay}: ${spans}`;
+      });
+
+      const lang = detectLanguage(incomingText);
+      if (lang === 'arabizi') {
+        return `Tekram! Sajjalt 3anna ennk baddak maw3ad bil 3iyade 🏢.\n\nAyya nhar w se3a byenasbak? Haydi l mawa3eed l fadiye bil 3iyade hal jem3a:\n${scheduleLines.join('\n')}\n\nRja2 na22e l wa2et li byenasbak!`;
+      }
+      if (lang === 'arabic') {
+        return `تكرم عينك! تم تسجيل رغبتكم في حجز استشارة في العيادة 🏢.\n\nأي يوم ووقت يناسبكم؟ إليكم الأوقات المتاحة في العيادة هذا الأسبوع:\n${scheduleLines.join('\n')}\n\nيرجى اختيار اليوم والوقت الأنسب لكم!`;
+      }
+      const nameStr = customer.name ? ` ${customer.name}` : '';
+      return `Great${nameStr}! We have noted that you would like an **In-Office consultation at our clinic** 🏢.\n\nWhich day and time works best for you? Here are our available clinic hours this week:\n${scheduleLines.join('\n')}\n\nPlease choose a day and time that works best for you!`;
+    }
+
+    // When awaiting visit type (clinic vs home visit), if patient gives an affirmative response (yes/sure/confirm/ok) without specifying:
+    if (activeWorkflow && activeWorkflow.state === 'awaiting_visit_type' && activeWorkflow.date && activeWorkflow.time) {
+      const cleanUpper = incomingText.trim().toUpperCase();
+      const isAffirmative = /^(YES|CONFIRM|TAMAM|OK|SURE|PLEASE|OUI|AKID|YEP|YUP|AH|EHH|تمام|نعم|أكيد|اي|أي|موافق|تأكيد)$/i.test(cleanUpper) ||
+        /^(YES PLEASE|CONFIRM PLEASE|OK PLEASE|TAMAM PLEASE)$/i.test(cleanUpper);
+      const specifiesOffice = /\b(in[- ]?office|clinic|cabinet|bil 3iyade|3iyade|3al 3iyade|في العيادة|بالعيادة|عيادة)\b/i.test(incomingText);
+      const specifiesHome = /\b(home visit|home|beit|zyara|manzil|منزل|منزلية|زيارة منزلية)\b/i.test(incomingText);
+
+      if (isAffirmative && !specifiesOffice && !specifiesHome) {
+        const isoStr = `${activeWorkflow.date}T${activeWorkflow.time}:00.000Z`;
+        const engDate = formatEnglishDate(isoStr);
+        const arDate = formatArabicDate(isoStr);
+        return `We have reserved ${engDate} for you! To finalize your booking, please let us know: would you prefer an in-office consultation at the clinic or a home visit?\n\nلقد حجزنا موعد ${arDate} من أجلكم! لتأكيد الحجز، يرجى إعلامنا هل تفضلون أن يكون الموعد في العيادة أم زيارة منزلية؟`;
+      }
+    }
+
+    // Text address for home visit awaiting address
+    if (activeWorkflow && activeWorkflow.state === 'awaiting_address' && activeWorkflow.date && activeWorkflow.time) {
+      if (hasDateTimeKeywords && parsedDateTimeInAwaiting && db.workflows) {
+        // Patient selected a different slot while in awaiting_address
+        db.workflows.update(activeWorkflow.id, {
+          date: parsedDateTimeInAwaiting.date || activeWorkflow.date,
+          time: parsedDateTimeInAwaiting.time || activeWorkflow.time,
+          state: 'awaiting_address',
+        });
+      } else if (!incomingText.includes('📍 Shared Location') && !hasDateTimeKeywords && !/\b(cancel|reschedule|change|no|stop|ghayyer|elghe)\b/i.test(incomingText)) {
+        const address = incomingText.trim();
+        await this.executeTool(
+          {
+            name: 'book_appointment',
+            args: {
+              date: activeWorkflow.date,
+              time: activeWorkflow.time,
+              visit_type: 'home_visit',
+              service: activeWorkflow.service || 'Home Visit Care',
+              address,
+              patient_name: customer.name || undefined,
+              patient_phone: customer.phone,
+            },
+          },
+          customer,
+          conversation,
+          db
+        );
+
+        if (db.workflows) {
+          db.workflows.transition(activeWorkflow.id, 'booked');
+        }
+
+        const isoStr = `${activeWorkflow.date}T${activeWorkflow.time}:00.000Z`;
+        const engDate = formatEnglishDate(isoStr);
+        const arDate = formatArabicDate(isoStr);
+        const nameGreeting = customer.name ? `All set, ${customer.name}!` : 'All set!';
+        const arabicName = customer.name ? `تم تأكيد موعدك يا ${customer.name}!` : 'تم تأكيد موعدك بنجاح!';
+
+        return `${nameGreeting} Your home visit appointment has been confirmed with Dr. Ziad El Khoury:\n\n` +
+          `📅 Date: ${engDate}\n` +
+          `📍 Location: Home Visit (${address})\n\n` +
+          `Dr. Ziad looks forward to visiting you!\n\n` +
+          `${arabicName}\n\n` +
+          `📅 الموعد: ${arDate}\n` +
+          `📍 المكان: زيارة منزلية (${address})\n\n` +
+          `الدكتور زياد بانتظار زيارتكم، وألف سلامة!`;
+      }
+    }
+
+    const locationBookingArgs = extractLocationBookingArgs(incomingText, historyMessages, customer, activeWorkflow);
+
+    let contextSystemPrompt = isDoctor
       ? `${DOCTOR_ASSISTANT_SYSTEM_PROMPT}
 
 CURRENT SYSTEM CONTEXT:
@@ -1019,8 +1818,10 @@ CURRENT SYSTEM CONTEXT:
 - Patient Name: ${customer.name || 'Patient'}
 - Patient Phone: ${customer.phone}
 
-OFFICIAL CLINIC SERVICES & RULES:
-- Available Services: General Consultation ($120), Follow-up ($70), Home Visit Care ($180), Therapy ($130)
+OFFICIAL CLINIC PRACTICE RULES:
+- Dr. Ziad offers in-office consultations at the clinic and home visits.
+- DO NOT mention fees, prices, or money ($) to patients.
+- DO NOT ask the patient to pick medical services. Simply schedule an appointment with Dr. Ziad (in-office or home visit).
 - Always call 'check_availability' to retrieve exact open calendar slots and active weekly shifts.
 - Never assume the clinic is open when check_availability returns closed or empty slots.
 - Always ask or confirm whether the patient prefers an in-office consultation at the clinic or a home visit.
@@ -1036,17 +1837,44 @@ CRITICAL GROUNDING & VISIT TYPE RULES:
 UPCOMING DAYS REFERENCE (use these exact dates for Lebanese day names):
 ${upcomingScheduleDays.join('\n')}`;
 
-    // 3. Build sanitized, alternating conversation history
-    const allRecent = db.messages.getRecentMessages(conversation.id, 16);
-    // Exclude only the current message at the end of the array
-    const historyMessages = (allRecent.length > 0 && allRecent[allRecent.length - 1].body === incomingText)
-      ? allRecent.slice(0, -1)
-      : allRecent;
+    const conversationTranscript = historyMessages.length > 0
+      ? 'CONVERSATION TRANSCRIPT SO FAR:\n' + historyMessages.map((m) => `${m.direction === 'inbound' ? 'Patient' : 'Assistant (Clinic)'}: ${m.body}`).join('\n\n')
+      : '';
 
-    const rawHistory: Array<{ role: 'user' | 'model'; text: string }> = historyMessages.map((msg) => ({
-      role: msg.direction === 'inbound' ? 'user' : 'model',
-      text: msg.body,
-    }));
+    if (conversationTranscript) {
+      contextSystemPrompt += `\n\n${conversationTranscript}\n- Always take the above conversation history into account when understanding patient intent and picking tool arguments.`;
+    }
+
+    if (existingAppointment) {
+      const existingDateEng = formatEnglishDate(existingAppointment.start_time);
+      const existingType = existingAppointment.visit_type === 'home_visit' ? 'Home Visit' : 'In-Office Consultation';
+      contextSystemPrompt += `\n\nEXISTING UPCOMING APPOINTMENT ON FILE:
+- Patient ${customer.name || ''} ALREADY HAS a confirmed upcoming ${existingType} with Dr. Ziad on ${existingDateEng}${existingAppointment.address ? ` (Address: ${existingAppointment.address})` : ''} (ID: ${existingAppointment.id}).
+- RECOGNITION & POSTPONEMENT / RESCHEDULING RULE:
+  * When this patient explicitly reaches out to MOVE, RESCHEDULE, CHANGE, or POSTPONE:
+    - Recognize that they want to reschedule their existing ${existingDateEng} visit.
+    - Call 'reschedule_appointment' so the old slot is freed up and the new slot is confirmed!
+  * When this patient asks for another day/time (e.g. "Can I book for Wednesday...", "at 1 pm", etc.) WITHOUT explicitly asking to move:
+    - Check availability for the requested time.
+    - Naturally acknowledge their existing appointment:
+      English: "I see you currently have an appointment confirmed on ${existingDateEng}. Would you like to move that appointment to [New Date/Time], or would you like to schedule an additional separate appointment?"
+      Arabic: "نرى أن لديكم موعداً مسجلاً يوم [التاريخ القديم]. هل ترغبون بنقل هذا الموعد إلى [الموعد الجديد] أم حجز موعد إضافي منفصل؟"
+  * When the patient specifies they want an ADDITIONAL / NEW appointment:
+    - Call 'book_appointment' with 'is_new_appointment': true. Do NOT cancel or move the existing appointment.
+  * If the appointment is a home visit, their address (${existingAppointment.address || 'Address on file'}) is already on file, so you can offer to keep the same address unless they provide a new one or a new location pin.`;
+    }
+
+    if (isOngoingConversation) {
+      contextSystemPrompt += `\n\nCONVERSATION CONTINUATION RULES:
+- You have ALREADY greeted this patient in an earlier message.
+- DO NOT repeat the clinic opening greeting or bilingual welcome. DO NOT say "Hello [Name]! Welcome to Dr. Ziad..." or "أهلاً وسهلاً بكم في عيادة الدكتور زياد الخوري".
+- Continue the ongoing conversation directly, naturally, and concisely.
+- Do NOT re-ask for the appointment time if already discussed.`;
+    }
+
+    if (activeWorkflow && activeWorkflow.date && activeWorkflow.time) {
+      contextSystemPrompt += `\n- CURRENT ACTIVE APPOINTMENT IN DISCUSSION: The patient is currently scheduling for ${activeWorkflow.date} at ${activeWorkflow.time} (State: ${activeWorkflow.state}, Visit type: ${activeWorkflow.visit_type || 'unconfirmed'}). Keep this time in mind!`;
+    }
 
     const conversationHistory: Array<{ role: 'user' | 'model'; parts: Array<{ text?: string }> }> = [];
     let lastRole: 'user' | 'model' | null = null;
@@ -1073,47 +1901,266 @@ ${upcomingScheduleDays.join('\n')}`;
 
     // 4. Request Gemini classification / tool call
     console.log(`[Agent] 🤖 Calling Gemini LLM for intent & tool calling...`);
-    const geminiRes = await this.client.generateResponse({
-      systemPrompt: contextSystemPrompt,
-      conversationHistory,
-      incomingMessage: incomingText,
-      tools: AGENT_TOOLS,
-    });
+    const geminiRes = locationBookingArgs
+      ? { toolCalls: [{ name: 'book_appointment', args: locationBookingArgs }] }
+      : await this.client.generateResponse({
+        systemPrompt: contextSystemPrompt,
+        conversationHistory,
+        incomingMessage: incomingText,
+        tools: AGENT_TOOLS,
+      });
 
     if (geminiRes.text && (!geminiRes.toolCalls || geminiRes.toolCalls.length === 0)) {
       console.log(`[Agent] 💬 Gemini responded with direct text: "${geminiRes.text}"`);
+
+      // 🛡️ ANTI-HALLUCINATION GUARD:
+      // If Gemini drafted a text message claiming an appointment has been booked or confirmed,
+      // but NO tool call was executed, execute book_appointment now so it is saved to DB and Google Calendar!
+      const claimsBooking = /successfully confirmed|has been confirmed|تم تأكيد موعدك|تم تثبيت موعدك|confirmed your appointment|booked your appointment/i.test(geminiRes.text);
+      if (claimsBooking) {
+        console.warn(`[Agent] 🚨 Intercepted direct text confirmation without tool call! Verifying booking in database...`);
+        const slot = parseDateTimeFromMessage(geminiRes.text, existingAppointment?.start_time ? new Date(existingAppointment.start_time) : new Date()) ||
+          extractSlotFromText(geminiRes.text, existingAppointment?.start_time) ||
+          (activeWorkflow && activeWorkflow.date && activeWorkflow.time ? { date: activeWorkflow.date, time: activeWorkflow.time } : null) ||
+          parseDateTimeFromMessage(historyMessages.slice(-2).map((m) => m.body).join(' '));
+
+        const isHome = /home visit|زيارة منزلية/i.test(geminiRes.text);
+        const visitType: VisitType = isHome ? 'home_visit' : 'in_office';
+
+        if (slot && slot.date && slot.time) {
+          try {
+            const bookedAppt = await this.scheduler.bookAppointment({
+              customerId: customer.id,
+              customerPhone: customer.phone,
+              customerName: customer.name,
+              visitType,
+              address: isHome ? (customer.address || 'Patient Address') : null,
+              service: visitType === 'home_visit' ? 'Home Visit Care' : 'General Consultation',
+              price: visitType === 'home_visit' ? 180 : 120,
+              startTime: new Date(`${slot.date}T${slot.time}:00.000Z`).toISOString(),
+              notes: 'Auto-booked from direct confirmation response',
+            });
+            console.log(`[Agent] ✅ Successfully saved appointment to DB and Google Calendar: ${bookedAppt.id}`);
+            if (activeWorkflow && db.workflows) {
+              db.workflows.transition(activeWorkflow.id, 'booked');
+            }
+          } catch (err: any) {
+            console.error(`[Agent] ❌ Booking failed for direct confirmation slot:`, err);
+            return `I apologize, but that time slot (${slot.date} at ${slot.time}) could not be booked: ${err.message}. Would you like to select another available opening?\n\nعذراً، لم نتمكن من حجز هذا الموعد: ${err.message}. هل ترغب باختيار وقت آخر متاح؟`;
+          }
+        }
+      }
+
+      const slot = extractSlotFromText(geminiRes.text);
+      if (slot && db.workflows) {
+        if (activeWorkflow) {
+          db.workflows.update(activeWorkflow.id, {
+            date: slot.date,
+            time: slot.time,
+            state: 'awaiting_visit_type',
+          });
+        } else {
+          db.workflows.create({
+            customer_id: customer.id,
+            conversation_id: conversation.id,
+            date: slot.date,
+            time: slot.time,
+            state: 'awaiting_visit_type',
+          });
+        }
+      }
       return geminiRes.text;
     }
 
     if (!geminiRes.toolCalls || geminiRes.toolCalls.length === 0) {
-      return "Hi! How can our medical practice help you today? Would you like to book an in-office or home visit?";
+      if (isOngoingConversation) {
+        const lang = detectLanguage(incomingText);
+        if (lang === 'arabizi') {
+          return "Tekram! Ayya nhar w se3a byenasbak kermel nshouflak l mawa3eed l fadiye, aw baddak t7ajez bil 3iyade aw zyara 3al beit?";
+        }
+        if (lang === 'arabic') {
+          return "تكرم عينك! يرجى إعلامنا باليوم والوقت الذي يناسبك، وهل تفضل الموعد في العيادة أم زيارة منزلية؟";
+        }
+        return "I would be happy to help! Which day and time works best for you, and would you prefer an in-office consultation or a home visit?";
+      }
+
+      const nameGreeting = customer.name ? `Hello ${customer.name}!` : 'Hello!';
+      const arabicGreeting = customer.name ? `أهلاً وسهلاً بك ${customer.name} في عيادة الدكتور زياد الخوري.` : 'أهلاً وسهلاً بكم في عيادة الدكتور زياد الخوري.';
+      return `${nameGreeting} Welcome to Dr. Ziad El Khoury's clinic.\n\nHow can we help you today? Would you like to check available appointments for an in-office consultation or a home visit?\n\n${arabicGreeting}\nكيف يمكننا مساعدتكم اليوم؟ هل ترغبون في معرفة المواعيد المتاحة لزيارة العيادة أو لزيارة منزلية؟`;
     }
 
     // 5. Deterministic tool execution
-    const toolCall = geminiRes.toolCalls[0];
+    let toolCall = geminiRes.toolCalls[0];
     console.log(`[Agent] 🛠️ Tool invoked: ${toolCall.name} | Args:`, JSON.stringify(toolCall.args));
-    const toolResult = await this.executeTool(toolCall, customer, conversation, db);
+    let toolResult = await this.executeTool(toolCall, customer, conversation, db);
     console.log(`[Agent] 📋 Tool result:`, JSON.stringify(toolResult));
+
+    // Smart auto-booking / auto-rescheduling chain: If check_availability was called, but the patient explicitly asked to book or move a specific slot
+    if (toolCall.name === 'check_availability' && toolResult && Array.isArray(toolResult.available_slots)) {
+      const parsedSlot = parseDateTimeFromMessage(incomingText);
+      const isRescheduleIntent = /\b(move|reschedule|change|postpone|ghayyer|bade 8ayer|badal|te2jeel)\b/i.test(incomingText);
+      const isBookingIntent = /\b(book|maw3ad|appointment|rendez-vous|visit|clinic|in-office|home visit|consultation|se3a|at \d)\b/i.test(incomingText);
+      const reqTime = parsedSlot?.time;
+      const isAvailable = reqTime && toolResult.available_slots.includes(reqTime);
+      const isHome = /\b(home visit|home|beit|zyara|منزل|زيارة منزلية)\b/i.test(incomingText);
+      const isOffice = /\b(in[- ]?office|clinic|cabinet|bil 3iyade|3iyade|3al 3iyade|بالعيادة|في العيادة|عيادة)\b/i.test(incomingText);
+      const specifiedVisitType: VisitType | null = isHome ? 'home_visit' : (isOffice ? 'in_office' : null);
+      const hasRequiredInfo = specifiedVisitType === 'in_office' || (specifiedVisitType === 'home_visit' && (customer.address || incomingText.includes('📍')));
+
+      if (existingAppointment && isRescheduleIntent && isAvailable) {
+        console.log(`[Agent] ⚡ Reschedule slot ${reqTime} on ${toolCall.args.date} is confirmed available. Auto-rescheduling appointment...`);
+        toolCall = {
+          name: 'reschedule_appointment',
+          args: {
+            new_date: toolCall.args.date || parsedSlot?.date,
+            new_time: reqTime,
+            visit_type: specifiedVisitType || existingAppointment.visit_type,
+          },
+        };
+        toolResult = await this.executeTool(toolCall, customer, conversation, db);
+        console.log(`[Agent] 📋 Auto-reschedule result:`, JSON.stringify(toolResult));
+      } else if (isBookingIntent && isAvailable && specifiedVisitType && hasRequiredInfo) {
+        console.log(`[Agent] ⚡ Slot ${reqTime} on ${toolCall.args.date} is confirmed available and patient specified visit type (${specifiedVisitType}). Auto-booking appointment...`);
+        toolCall = {
+          name: 'book_appointment',
+          args: {
+            date: toolCall.args.date || parsedSlot?.date,
+            time: reqTime,
+            visit_type: specifiedVisitType,
+            service: specifiedVisitType === 'home_visit' ? 'Home Visit Care' : 'General Consultation',
+            patient_name: customer.name,
+            patient_phone: customer.phone,
+            address: specifiedVisitType === 'home_visit' ? (customer.address || 'Address on file') : undefined,
+          },
+        };
+        toolResult = await this.executeTool(toolCall, customer, conversation, db);
+        console.log(`[Agent] 📋 Auto-booking result:`, JSON.stringify(toolResult));
+      } else if (specifiedVisitType === 'home_visit' && !hasRequiredInfo && parsedSlot && db.workflows) {
+        const targetDate = toolCall.args.date || parsedSlot.date;
+        const targetTime = reqTime || parsedSlot.time;
+        if (targetDate && targetTime) {
+          if (activeWorkflow) {
+            db.workflows.update(activeWorkflow.id, {
+              date: targetDate,
+              time: targetTime,
+              visit_type: 'home_visit',
+              state: 'awaiting_address',
+            });
+          } else {
+            db.workflows.create({
+              customer_id: customer.id,
+              conversation_id: conversation.id,
+              date: targetDate,
+              time: targetTime,
+              visit_type: 'home_visit',
+              state: 'awaiting_address',
+            });
+          }
+        }
+      } else if (!specifiedVisitType && parsedSlot && db.workflows) {
+        const targetDate = toolCall.args.date || parsedSlot.date;
+        const targetTime = reqTime || parsedSlot.time;
+        if (targetDate && targetTime) {
+          if (activeWorkflow) {
+            db.workflows.update(activeWorkflow.id, {
+              date: targetDate,
+              time: targetTime,
+              state: 'awaiting_visit_type',
+            });
+          } else {
+            db.workflows.create({
+              customer_id: customer.id,
+              conversation_id: conversation.id,
+              date: targetDate,
+              time: targetTime,
+              state: 'awaiting_visit_type',
+            });
+          }
+        }
+      }
+    }
 
     // 6. Draft grounded reply from backend tool result
     console.log(`[Agent] ✍️ Drafting grounded reply from tool result...`);
     try {
-      const reply = await this.client.generateReplyFromToolResult({
+      let reply = await this.client.generateReplyFromToolResult({
         systemPrompt: contextSystemPrompt,
         userQuery: incomingText,
         toolName: toolCall.name,
         toolArgs: toolCall.args,
         toolResult,
+        conversationTranscript,
       });
+
+      if (!reply || !reply.trim()) {
+        console.warn('[Agent] ⚠️ generateReplyFromToolResult returned empty string, invoking fallback...');
+        reply = this.client.getFallbackToolReply({
+          toolName: toolCall.name,
+          toolArgs: toolCall.args,
+          toolResult,
+          userQuery: incomingText,
+        });
+      }
+
+      if (toolCall.name === 'check_availability') {
+        const slot = parseDateTimeFromMessage(incomingText, existingAppointment?.start_time ? new Date(existingAppointment.start_time) : new Date()) ||
+          extractSlotFromText(incomingText, existingAppointment?.start_time);
+
+        if (slot && slot.date && slot.time && db.workflows) {
+          const currentWf = db.workflows.findActiveByCustomerId(customer.id);
+          if (currentWf) {
+            db.workflows.update(currentWf.id, {
+              date: slot.date,
+              time: slot.time,
+              state: currentWf.visit_type ? currentWf.state : 'awaiting_visit_type',
+            });
+          } else {
+            db.workflows.create({
+              customer_id: customer.id,
+              conversation_id: conversation.id,
+              date: slot.date,
+              time: slot.time,
+              state: 'awaiting_visit_type',
+            });
+          }
+        }
+      }
+
       return reply;
     } catch (draftErr) {
       console.warn('[Agent] ⚠️ Failed to draft AI reply, using deterministic fallback:', draftErr);
-      return this.client.getFallbackToolReply({
+      const fallbackReply = this.client.getFallbackToolReply({
         toolName: toolCall.name,
         toolArgs: toolCall.args,
         toolResult,
         userQuery: incomingText,
       });
+
+      if (toolCall.name === 'check_availability') {
+        const slot = parseDateTimeFromMessage(incomingText, existingAppointment?.start_time ? new Date(existingAppointment.start_time) : new Date()) ||
+          extractSlotFromText(incomingText, existingAppointment?.start_time);
+
+        if (slot && slot.date && slot.time && db.workflows) {
+          const currentWf = db.workflows.findActiveByCustomerId(customer.id);
+          if (currentWf) {
+            db.workflows.update(currentWf.id, {
+              date: slot.date,
+              time: slot.time,
+              state: currentWf.visit_type ? currentWf.state : 'awaiting_visit_type',
+            });
+          } else {
+            db.workflows.create({
+              customer_id: customer.id,
+              conversation_id: conversation.id,
+              date: slot.date,
+              time: slot.time,
+              state: 'awaiting_visit_type',
+            });
+          }
+        }
+      }
+
+      return fallbackReply;
     }
   }
 
@@ -1127,20 +2174,101 @@ ${upcomingScheduleDays.join('\n')}`;
 
     switch (name) {
       case 'check_availability': {
-        const visitType: VisitType = args.visit_type === 'home_visit' ? 'home_visit' : 'in_office';
+        const activeWf = db.workflows ? db.workflows.findActiveByCustomerId(customer.id) : null;
+        let explicitVisitType: VisitType | null = null;
+
+        // Only inherit visit type from args (Gemini explicitly chose it), never from prior workflow
+        // when the patient is requesting a NEW appointment — they need to be asked fresh.
+        const isNewAppointmentRequest = args.is_new_appointment === true ||
+          /\b(new|another|additional|second|extra|tani|jdid|منفصل|جديد|اضافي)\b/i.test(args.patient_message || '');
+
+        if (args.visit_type === 'home_visit' || args.visit_type === 'in_office') {
+          explicitVisitType = args.visit_type;
+        } else if (!isNewAppointmentRequest && (activeWf?.visit_type === 'home_visit' || activeWf?.visit_type === 'in_office')) {
+          explicitVisitType = activeWf.visit_type;
+        }
+
         const targetDate = args.date || new Date().toISOString().split('T')[0];
-        const slots = await this.scheduler.getAvailableSlots(targetDate, visitType);
+        const daysAhead = args.days_ahead || 7;
+        const duration = Number(args.duration_minutes) || 60;
 
-        // Also search upcoming days across this week and next week for flexible suggestions
-        const daysAhead = args.days_ahead || (slots.length === 0 ? 14 : 7);
-        const upcomingOpenDays = await this.scheduler.getAvailableSlotsAcrossRange(targetDate, daysAhead, visitType, 4);
+        if (explicitVisitType) {
+          const slots = await this.scheduler.getAvailableSlots(targetDate, explicitVisitType, duration);
+          const upcomingOpenDays = await this.scheduler.getAvailableSlotsAcrossRange(targetDate, daysAhead, explicitVisitType, 4);
 
-        return {
-          date: targetDate,
-          visit_type: visitType,
-          available_slots: slots,
-          upcoming_open_days: upcomingOpenDays,
-        };
+          if (db.workflows && args.date) {
+            const currentWf = db.workflows.findActiveByCustomerId(customer.id);
+            if (currentWf) {
+              db.workflows.update(currentWf.id, {
+                date: args.date,
+                visit_type: explicitVisitType,
+                state: explicitVisitType === 'home_visit' ? 'awaiting_address' : currentWf.state,
+              });
+            } else {
+              db.workflows.create({
+                customer_id: customer.id,
+                conversation_id: conversation.id,
+                date: args.date,
+                visit_type: explicitVisitType,
+                state: explicitVisitType === 'home_visit' ? 'awaiting_address' : 'slot_selected',
+              });
+            }
+          }
+
+          return {
+            date: targetDate,
+            visit_type: explicitVisitType,
+            visit_type_specified: true,
+            available_slots: slots,
+            free_windows: computeFreeWindows(slots, this.scheduler['defaultSlotDurationMinutes'] ?? 60),
+            upcoming_open_days: upcomingOpenDays,
+          };
+        } else {
+          // Visit type is unknown: home visit and in-office have different schedules due to road travel buffers!
+          const inOfficeSlots = await this.scheduler.getAvailableSlots(targetDate, 'in_office');
+          const homeVisitSlots = await this.scheduler.getAvailableSlots(targetDate, 'home_visit');
+          const upcomingInOffice = await this.scheduler.getAvailableSlotsAcrossRange(targetDate, daysAhead, 'in_office', 4);
+          const upcomingHomeVisit = await this.scheduler.getAvailableSlotsAcrossRange(targetDate, daysAhead, 'home_visit', 4);
+
+          if (db.workflows && args.date) {
+            const currentWf = db.workflows.findActiveByCustomerId(customer.id);
+            if (currentWf) {
+              db.workflows.update(currentWf.id, {
+                date: args.date,
+                visit_type: null,
+                state: 'awaiting_visit_type',
+              });
+            } else {
+              db.workflows.create({
+                customer_id: customer.id,
+                conversation_id: conversation.id,
+                date: args.date,
+                visit_type: undefined,
+                state: 'awaiting_visit_type',
+              });
+            }
+          }
+
+          return {
+            date: targetDate,
+            visit_type: null,
+            visit_type_specified: false,
+            instruction: 'Patient has not selected in-office vs home visit. Because home visits require commute buffers, available hours differ. Ask the patient if they prefer an in-office consultation at the clinic or a home visit so you can provide the exact schedule.',
+            in_office: {
+              available_slots: inOfficeSlots,
+              free_windows: computeFreeWindows(inOfficeSlots, this.scheduler['defaultSlotDurationMinutes'] ?? 60),
+              upcoming_open_days: upcomingInOffice,
+            },
+            home_visit: {
+              available_slots: homeVisitSlots,
+              free_windows: computeFreeWindows(homeVisitSlots, this.scheduler['defaultSlotDurationMinutes'] ?? 60),
+              upcoming_open_days: upcomingHomeVisit,
+            },
+            available_slots: inOfficeSlots,
+            free_windows: computeFreeWindows(inOfficeSlots, this.scheduler['defaultSlotDurationMinutes'] ?? 60),
+            upcoming_open_days: upcomingInOffice,
+          };
+        }
       }
 
       case 'book_appointment': {
@@ -1165,7 +2293,7 @@ ${upcomingScheduleDays.join('\n')}`;
           const patientName = args.patient_name || args.customer_name || customer.name;
           const patientPhone = args.patient_phone || args.customer_phone || customer.phone;
 
-          if (patientName && patientName !== customer.name) {
+          if (patientName && !args.is_new_appointment && !patientName.includes(' of ') && (!customer.name || customer.name === 'Patient' || customer.name === 'Unknown' || customer.name.startsWith('+'))) {
             db.customers.updateName(customer.id, patientName);
             customer.name = patientName;
           }
@@ -1184,6 +2312,53 @@ ${upcomingScheduleDays.join('\n')}`;
             combinedNotes = combinedNotes ? `${combinedNotes} | Contact Phone: ${args.patient_phone}` : `Contact Phone: ${args.patient_phone}`;
           }
 
+          // If customer ALREADY has an active confirmed appointment on a different date/time,
+          // treat booking as moving / rescheduling their existing appointment UNLESS they requested a new / additional appointment!
+          const activeAppt = db.appointments.findLatestActiveByCustomerOrPhone(customer.id, customer.phone);
+          const lastInbound = db.messages.getRecentMessages(conversation.id, 2).reverse().find((m) => m.direction === 'inbound')?.body || '';
+          const isExplicitNew = args.is_new_appointment === true || /\b(new|another|second|extra|additional|tani|jdid|منفصل|جديد|اضافي)\b/i.test(lastInbound);
+          if (activeAppt && activeAppt.id && activeAppt.start_time !== startTimeIso && !isExplicitNew) {
+            const oldTime = activeAppt.start_time;
+            const resched = await this.scheduler.rescheduleAppointment({
+              appointmentId: activeAppt.id,
+              newStartTime: startTimeIso,
+              visitType,
+              address: args.address || activeAppt.address || null,
+            });
+
+            await this.notifier.notifyReschedule(resched, customer, oldTime);
+
+            if (db.workflows) {
+              const activeWf = db.workflows.findActiveByCustomerId(customer.id);
+              if (activeWf) {
+                db.workflows.transition(activeWf.id, 'booked', {
+                  appointment_id: resched.id,
+                  date: args.date,
+                  time: args.time,
+                  visit_type: resched.visit_type,
+                  address: resched.address,
+                  service: resched.service,
+                  price: resched.price,
+                });
+              }
+            }
+
+            return {
+              status: 'success',
+              rescheduled: true,
+              appointment_id: resched.id,
+              service: resched.service,
+              visit_type: resched.visit_type,
+              address: resched.address,
+              start_time: resched.start_time,
+              old_start_time: oldTime,
+              price: resched.price,
+            };
+          }
+
+          const durationMins = Number(args.duration_minutes) || serviceItem.duration || 60;
+          const endTimeIso = new Date(new Date(startTimeIso).getTime() + durationMins * 60 * 1000).toISOString();
+
           const appt = await this.scheduler.bookAppointment({
             customerId: customer.id,
             customerPhone: patientPhone,
@@ -1193,8 +2368,38 @@ ${upcomingScheduleDays.join('\n')}`;
             service: args.service || serviceItem.name,
             price: serviceItem.price,
             startTime: startTimeIso,
+            endTime: endTimeIso,
             notes: combinedNotes,
           });
+
+          // Update workflow state to booked
+          if (db.workflows) {
+            const activeWf = db.workflows.findActiveByCustomerId(customer.id);
+            if (activeWf) {
+              db.workflows.transition(activeWf.id, 'booked', {
+                appointment_id: appt.id,
+                date: args.date,
+                time: args.time,
+                visit_type: appt.visit_type,
+                address: appt.address,
+                service: appt.service,
+                price: appt.price,
+              });
+            } else {
+              db.workflows.create({
+                customer_id: customer.id,
+                conversation_id: conversation.id,
+                state: 'booked',
+                appointment_id: appt.id,
+                date: args.date,
+                time: args.time,
+                visit_type: appt.visit_type,
+                address: appt.address,
+                service: appt.service,
+                price: appt.price,
+              });
+            }
+          }
 
           // Notify admin
           await this.notifier.notifyBooking(appt, customer);
@@ -1252,6 +2457,10 @@ ${upcomingScheduleDays.join('\n')}`;
 
           const cancelled = await this.scheduler.cancelAppointment(activeAppt.id, args.reason);
           await this.notifier.notifyCancellation(cancelled, customer, args.reason);
+
+          if (db.workflows) {
+            db.workflows.cancelActiveByCustomerId(customer.id);
+          }
 
           const todayStr = new Date().toISOString().split('T')[0];
           const upcomingOpenDays = await this.scheduler.getAvailableSlotsAcrossRange(todayStr, 7, 'in_office', 4);

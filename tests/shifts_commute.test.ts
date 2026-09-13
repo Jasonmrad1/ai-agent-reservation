@@ -157,5 +157,92 @@ describe('Split Shifts & Road Commute Travel Buffer', () => {
       const updatedVal = db.settings.get('home_visit_buffer_minutes');
       expect(updatedVal).toBe('60');
     });
+
+    it('allows first appointment at shift start without buffer and enforces commute buffer symmetrically between in-office and home visits', async () => {
+      // Default Monday rule: 09:00 - 17:00, buffer 30 mins
+      // 1. Without any reservations, the first available slot for BOTH in-office and home visits is 09:00
+      const initialInOfficeSlots = await scheduler.getAvailableSlots('2026-09-07', 'in_office');
+      expect(initialInOfficeSlots[0]).toBe('09:00');
+
+      const initialHomeVisitSlots = await scheduler.getAvailableSlots('2026-09-07', 'home_visit');
+      expect(initialHomeVisitSlots[0]).toBe('09:00');
+
+      // 2. Book an in-office appointment from 09:00 to 10:00
+      const custA = db.customers.findOrCreate('whatsapp:+96170111222', 'Patient Clinic');
+      await scheduler.bookAppointment({
+        customerId: custA.id,
+        customerPhone: custA.phone,
+        visitType: 'in_office',
+        service: 'Consultation',
+        startTime: '2026-09-07T09:00:00.000Z',
+        endTime: '2026-09-07T10:00:00.000Z',
+      });
+
+      // 3. Immediately after in-office appointment (10:00):
+      // - In-office visit can start at 10:00 (no travel needed)
+      // - Home visit CANNOT start at 10:00 (doctor needs 30 min commute buffer from clinic to home)
+      const afterClinicSlots = await scheduler.getAvailableSlots('2026-09-07', 'in_office');
+      expect(afterClinicSlots).toContain('10:00');
+
+      const afterClinicHomeSlots = await scheduler.getAvailableSlots('2026-09-07', 'home_visit');
+      expect(afterClinicHomeSlots).not.toContain('10:00');
+      expect(afterClinicHomeSlots).toContain('10:30');
+
+      // Booking home visit at 10:00 fails due to commute buffer
+      const custB = db.customers.findOrCreate('whatsapp:+96170333444', 'Patient Home');
+      await expect(
+        scheduler.bookAppointment({
+          customerId: custB.id,
+          customerPhone: custB.phone,
+          visitType: 'home_visit',
+          address: 'Downtown Beirut',
+          service: 'Home Visit',
+          startTime: '2026-09-07T10:00:00.000Z',
+          endTime: '2026-09-07T11:00:00.000Z',
+        })
+      ).rejects.toThrow(/travel buffer|conflict/i);
+
+      // 4. Book a home visit at 10:30 - 11:30
+      await scheduler.bookAppointment({
+        customerId: custB.id,
+        customerPhone: custB.phone,
+        visitType: 'home_visit',
+        address: 'Downtown Beirut',
+        service: 'Home Visit',
+        startTime: '2026-09-07T10:30:00.000Z',
+        endTime: '2026-09-07T11:30:00.000Z',
+      });
+
+      // 5. Now, because 10:30-11:30 was a HOME VISIT, doctor needs 30 min commute buffer to return:
+      // - 11:30 is BLOCKED
+      // - 12:00 is the earliest available slot
+      const afterHomeSlots = await scheduler.getAvailableSlots('2026-09-07', 'in_office');
+      expect(afterHomeSlots).not.toContain('11:30');
+      expect(afterHomeSlots).toContain('12:00');
+
+      // Booking at 11:30 must fail with travel buffer conflict
+      const custC = db.customers.findOrCreate('whatsapp:+96170555666', 'Patient Next');
+      await expect(
+        scheduler.bookAppointment({
+          customerId: custC.id,
+          customerPhone: custC.phone,
+          visitType: 'in_office',
+          service: 'Checkup',
+          startTime: '2026-09-07T11:30:00.000Z',
+          endTime: '2026-09-07T12:30:00.000Z',
+        })
+      ).rejects.toThrow(/travel buffer/i);
+
+      // Booking at 12:00 succeeds
+      const apptC = await scheduler.bookAppointment({
+        customerId: custC.id,
+        customerPhone: custC.phone,
+        visitType: 'in_office',
+        service: 'Checkup',
+        startTime: '2026-09-07T12:00:00.000Z',
+        endTime: '2026-09-07T13:00:00.000Z',
+      });
+      expect(apptC.status).toBe('booked');
+    });
   });
 });

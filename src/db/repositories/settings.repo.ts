@@ -35,4 +35,10 @@ export class SettingsRepository {
       return {};
     }
   }
+
+  public delete(key: string): void {
+    try {
+      this.db.prepare('DELETE FROM settings WHERE key = ?').run(key);
+    } catch {}
+  }
 }

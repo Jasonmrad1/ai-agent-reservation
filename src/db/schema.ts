@@ -106,6 +106,32 @@ CREATE TABLE IF NOT EXISTS admin_alerts (
   created_at TEXT NOT NULL,
   resolved_at TEXT
 );
+
+CREATE TABLE IF NOT EXISTS pending_booking_workflows (
+  id TEXT PRIMARY KEY,
+  customer_id TEXT NOT NULL,
+  conversation_id TEXT NOT NULL,
+  state TEXT NOT NULL DEFAULT 'collecting_preferences',
+  date TEXT,
+  time TEXT,
+  service TEXT,
+  price REAL,
+  visit_type TEXT,
+  address TEXT,
+  location_lat REAL,
+  location_lng REAL,
+  last_message_sid TEXT,
+  appointment_id TEXT,
+  version INTEGER NOT NULL DEFAULT 1,
+  expires_at TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  FOREIGN KEY (customer_id) REFERENCES customers(id),
+  FOREIGN KEY (conversation_id) REFERENCES conversations(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_workflows_customer_state ON pending_booking_workflows(customer_id, state);
+CREATE INDEX IF NOT EXISTS idx_workflows_expires ON pending_booking_workflows(expires_at);
 `;
 
 export const DEFAULT_WEEKLY_AVAILABILITY = [

@@ -1,6 +1,6 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { config } from '../config/index.js';
-import { Customer, Appointment, AvailabilityRule, AvailabilityOverride, Invoice, Message } from '../types/index.js';
+import { Customer, Appointment, AvailabilityRule, AvailabilityOverride, Invoice, Message, PendingBookingWorkflow } from '../types/index.js';
 
 let supabaseClient: SupabaseClient | null = null;
 
@@ -38,7 +38,9 @@ export class SupabaseSync {
         const localCusts = db.appDb.db.prepare('SELECT id FROM customers').all() as any[];
         for (const lc of localCusts) {
           if (!remoteCustIds.has(lc.id)) {
-            db.appDb.db.prepare('DELETE FROM customers WHERE id = ?').run(lc.id);
+            try {
+              db.appDb.db.prepare('DELETE FROM customers WHERE id = ?').run(lc.id);
+            } catch {}
           }
         }
 
@@ -65,7 +67,9 @@ export class SupabaseSync {
         const localAppts = db.appDb.db.prepare('SELECT id FROM appointments').all() as any[];
         for (const la of localAppts) {
           if (!remoteApptIds.has(la.id)) {
-            db.appDb.db.prepare('DELETE FROM appointments WHERE id = ?').run(la.id);
+            try {
+              db.appDb.db.prepare('DELETE FROM appointments WHERE id = ?').run(la.id);
+            } catch {}
           }
         }
 
@@ -148,6 +152,61 @@ export class SupabaseSync {
             db.settings.set(s.key, s.value);
           } catch {}
         }
+      }
+
+      // 6. Hydrate pending_booking_workflows
+      if (db.workflows) {
+        try {
+          const { data: workflows } = await client.from('pending_booking_workflows').select('*');
+          if (workflows && workflows.length > 0) {
+            const stmt = db.appDb.db.prepare(`
+              INSERT INTO pending_booking_workflows (
+                id, customer_id, conversation_id, state, date, time, service, price,
+                visit_type, address, location_lat, location_lng, last_message_sid,
+                appointment_id, version, expires_at, created_at, updated_at
+              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              ON CONFLICT(id) DO UPDATE SET
+                state = excluded.state,
+                date = excluded.date,
+                time = excluded.time,
+                service = excluded.service,
+                price = excluded.price,
+                visit_type = excluded.visit_type,
+                address = excluded.address,
+                location_lat = excluded.location_lat,
+                location_lng = excluded.location_lng,
+                last_message_sid = excluded.last_message_sid,
+                appointment_id = excluded.appointment_id,
+                version = excluded.version,
+                expires_at = excluded.expires_at,
+                updated_at = excluded.updated_at
+            `);
+            for (const wf of workflows) {
+              try {
+                stmt.run(
+                  wf.id,
+                  wf.customer_id,
+                  wf.conversation_id,
+                  wf.state,
+                  wf.date || null,
+                  wf.time || null,
+                  wf.service || null,
+                  wf.price != null ? Number(wf.price) : null,
+                  wf.visit_type || null,
+                  wf.address || null,
+                  wf.location_lat != null ? Number(wf.location_lat) : null,
+                  wf.location_lng != null ? Number(wf.location_lng) : null,
+                  wf.last_message_sid || null,
+                  wf.appointment_id || null,
+                  Number(wf.version || 1),
+                  wf.expires_at,
+                  wf.created_at,
+                  wf.updated_at
+                );
+              } catch {}
+            }
+          }
+        } catch {}
       }
 
       console.log(`⚡ [Supabase] Hydrated local database with ${customers?.length || 0} customers and ${appointments?.length || 0} appointments from cloud.`);
@@ -323,6 +382,76 @@ export class SupabaseSync {
       await client.from('settings').upsert({ key, value });
     } catch (err) {
       console.error('⚠️ [Supabase] Error syncing setting:', err);
+    }
+  }
+
+  public static async syncConversation(conv: { id: string; customer_id: string; channel?: string; status?: string; created_at: string; updated_at: string }): Promise<void> {
+    const client = this.client;
+    if (!client) return;
+    try {
+      await client.from('conversations').upsert({
+        id: conv.id,
+        customer_id: conv.customer_id,
+        status: conv.status || 'active',
+        created_at: conv.created_at,
+        updated_at: conv.updated_at,
+      });
+    } catch (err) {
+      console.warn('⚠️ [Supabase] Error syncing conversation:', err);
+    }
+  }
+
+  public static async syncWorkflow(wf: PendingBookingWorkflow): Promise<void> {
+    const client = this.client;
+    if (!client) return;
+    try {
+      // Ensure customer exists in Supabase first
+      const { data: cust } = await client.from('customers').select('id').eq('id', wf.customer_id).maybeSingle();
+      if (!cust) {
+        await client.from('customers').upsert({
+          id: wf.customer_id,
+          phone: `whatsapp:+${wf.id.replace(/\D/g, '').slice(0, 10) || '0000000000'}`,
+          name: 'Patient',
+          opted_out: 0,
+          created_at: wf.created_at,
+          updated_at: wf.updated_at,
+        });
+      }
+
+      // Ensure conversation exists in Supabase
+      await client.from('conversations').upsert({
+        id: wf.conversation_id,
+        customer_id: wf.customer_id,
+        status: 'active',
+        created_at: wf.created_at,
+        updated_at: wf.updated_at,
+      });
+
+      const { error } = await client.from('pending_booking_workflows').upsert({
+        id: wf.id,
+        customer_id: wf.customer_id,
+        conversation_id: wf.conversation_id,
+        state: wf.state,
+        date: wf.date || null,
+        time: wf.time || null,
+        service: wf.service || null,
+        price: wf.price != null ? Number(wf.price) : null,
+        visit_type: wf.visit_type || null,
+        address: wf.address || null,
+        location_lat: wf.location_lat != null ? Number(wf.location_lat) : null,
+        location_lng: wf.location_lng != null ? Number(wf.location_lng) : null,
+        last_message_sid: wf.last_message_sid || null,
+        appointment_id: wf.appointment_id || null,
+        version: wf.version,
+        expires_at: wf.expires_at,
+        created_at: wf.created_at,
+        updated_at: wf.updated_at,
+      });
+      if (error) {
+        console.warn('⚠️ [Supabase] Workflow sync warning:', error.message);
+      }
+    } catch (err) {
+      console.warn('⚠️ [Supabase] Note: Pending workflow sync skipped or failed:', err);
     }
   }
 }

@@ -1,3 +1,4 @@
+import fs from 'fs';
 import path from 'path';
 import express from 'express';
 import { DatabaseContext, createDatabaseContext } from './db/index.js';
@@ -11,6 +12,7 @@ import { AgentCore, GeminiClient, MockGeminiClient, LiveGeminiClient } from './g
 import { ReminderRunner } from './reminders/runner.js';
 import { BillingService } from './billing/service.js';
 import { createAdminRouter } from './admin/routes.js';
+import { createSimulatorRouter } from './simulator/router.js';
 import { AppConfig, config as defaultAppConfig } from './config/index.js';
 
 export interface AppInstance {
@@ -61,6 +63,8 @@ export function createApp(options: CreateAppOptions = {}): AppInstance {
           clientId: cfg.googleCalendarClientId,
           clientSecret: cfg.googleCalendarClientSecret,
           calendarId: cfg.googleCalendarId || 'primary',
+          redirectUri: cfg.googleCalendarRedirectUri,
+          getRefreshToken: () => db.settings.get('google_calendar_refresh_token', ''),
         })
       : new InMemoryCalendarProvider()
   );
@@ -107,6 +111,17 @@ export function createApp(options: CreateAppOptions = {}): AppInstance {
     res.json({ status: 'ok', uptime: process.uptime(), timestamp: new Date().toISOString() });
   });
 
+  // Standalone WhatsApp Simulator UI Route
+  app.get('/simulator', (req, res) => {
+    const indexPath = path.resolve(process.cwd(), 'public', 'index.html');
+    if (!fs.existsSync(indexPath)) {
+      res.status(500).send('Frontend bundle not found. Run npm run build:client.');
+      return;
+    }
+    const html = fs.readFileSync(indexPath, 'utf-8');
+    res.type('html').send(html);
+  });
+
   // Twilio Webhooks
   const webhookRouter = createWebhookRouter({
     db,
@@ -138,6 +153,14 @@ export function createApp(options: CreateAppOptions = {}): AppInstance {
     geminiClient,
   });
   app.use('/admin', adminRouter);
+
+  // WhatsApp Simulator API (Zero-Twilio Testing Framework)
+  const simulatorRouter = createSimulatorRouter({
+    db,
+    agent,
+    reminders,
+  });
+  app.use('/api/simulator', simulatorRouter);
 
   return {
     app,

@@ -550,7 +550,7 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
               }}
             >
               <IconSparkles size={14} />
-              <span>Prompt AI to Reschedule</span>
+              <span>Move / Reschedule</span>
             </button>
             <button
               className="btn btn-emerald"

@@ -2,6 +2,40 @@ export type VisitType = 'in_office' | 'home_visit';
 
 export type AppointmentStatus = 'booked' | 'confirmed' | 'rescheduled' | 'cancelled' | 'completed';
 
+export type WorkflowState =
+  | 'idle'
+  | 'collecting_preferences'
+  | 'slot_selected'
+  | 'awaiting_visit_type'
+  | 'awaiting_address'
+  | 'ready_to_book'
+  | 'booking'
+  | 'booked'
+  | 'cancelled'
+  | 'expired'
+  | 'failed';
+
+export interface PendingBookingWorkflow {
+  id: string;
+  customer_id: string;
+  conversation_id: string;
+  state: WorkflowState;
+  date?: string | null;
+  time?: string | null;
+  service?: string | null;
+  price?: number | null;
+  visit_type?: VisitType | null;
+  address?: string | null;
+  location_lat?: number | null;
+  location_lng?: number | null;
+  last_message_sid?: string | null;
+  appointment_id?: string | null;
+  version: number;
+  expires_at: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export type MessageDirection = 'inbound' | 'outbound';
 
 export type InvoiceStatus = 'unpaid' | 'paid';

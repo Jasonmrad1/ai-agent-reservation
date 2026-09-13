@@ -399,13 +399,27 @@ export const WorkHoursView: React.FC<WorkHoursViewProps> = ({
       setDragState(null);
     };
 
+    // Touch equivalents — map touch Y coords to the same delta logic
+    const handleTouchMove = (e: TouchEvent) => {
+      const cur = dragStateRef.current;
+      if (!cur || e.touches.length === 0) return;
+      e.preventDefault(); // prevent page scroll while dragging a shift
+      handleMouseMove({ clientY: e.touches[0].clientY } as MouseEvent);
+    };
+
+    const handleTouchEnd = () => handleMouseUp();
+
     if (dragState) {
       window.addEventListener('mousemove', handleMouseMove);
       window.addEventListener('mouseup', handleMouseUp);
+      window.addEventListener('touchmove', handleTouchMove, { passive: false });
+      window.addEventListener('touchend', handleTouchEnd);
     }
     return () => {
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
+      window.removeEventListener('touchmove', handleTouchMove);
+      window.removeEventListener('touchend', handleTouchEnd);
     };
   }, [dragState]);
 
@@ -428,6 +442,30 @@ export const WorkHoursView: React.FC<WorkHoursViewProps> = ({
       dayOfWeek,
       mode: 'create',
       initialClientY: e.clientY,
+      initialStartM: snapStartM,
+      initialEndM: snapEndM,
+      currentStartM: snapStartM,
+      currentEndM: snapEndM,
+    });
+  };
+
+  // Touch equivalent — finger tap on empty track starts a new shift
+  const handleTrackTouchStart = (dayOfWeek: number, e: React.TouchEvent<HTMLDivElement>) => {
+    if ((e.target as HTMLElement).closest('.avail-block')) return;
+    if (e.touches.length === 0) return;
+    const trackElem = e.currentTarget;
+    const rect = trackElem.getBoundingClientRect();
+    const offsetY = e.touches[0].clientY - rect.top;
+    const rawMin = START_HOUR * 60 + offsetY / PX_PER_MIN;
+    const snapStartM = Math.max(
+      START_HOUR * 60,
+      Math.min(END_HOUR * 60 - 30, Math.round(rawMin / 15) * 15)
+    );
+    const snapEndM = Math.min(END_HOUR * 60, snapStartM + 60);
+    setDragState({
+      dayOfWeek,
+      mode: 'create',
+      initialClientY: e.touches[0].clientY,
       initialStartM: snapStartM,
       initialEndM: snapEndM,
       currentStartM: snapStartM,
@@ -547,24 +585,34 @@ export const WorkHoursView: React.FC<WorkHoursViewProps> = ({
     if (scopeMode === 'default') {
       onSaveAllRules(localRules);
     } else if (onSaveWeekOverrides) {
-      const weekOverrides = DISPLAY_ORDER.map((dayNum) => {
-        const offset = dayNum === 0 ? 6 : dayNum - 1;
-        const dayDate = addDays(selectedWeekMonday, offset);
-        const dateStr = formatDateIso(dayDate);
-        const dayRule = localRules.find((r) => r.day_of_week === dayNum);
-        const isActive = Boolean(dayRule?.is_active);
-        const shifts = dayRule?.shifts && dayRule.shifts.length > 0
-          ? dayRule.shifts
-          : isActive ? [{ start_time: dayRule?.start_time || '09:00', end_time: dayRule?.end_time || '17:00' }] : [];
-        return {
-          date: dateStr,
-          is_unavailable: !isActive,
-          start_time: dayRule?.start_time || '09:00',
-          end_time: dayRule?.end_time || '17:00',
-          shifts: shifts,
-          reason: `Custom hours for week of ${formatDateIso(selectedWeekMonday)}`,
-        };
-      });
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const todayStr = formatDateIso(today);
+
+      const weekOverrides = DISPLAY_ORDER
+        .map((dayNum) => {
+          const offset = dayNum === 0 ? 6 : dayNum - 1;
+          const dayDate = addDays(selectedWeekMonday, offset);
+          const dateStr = formatDateIso(dayDate);
+          // Only save overrides for the current day and forward (never past days)
+          if (dateStr < todayStr) return null;
+
+          const dayRule = localRules.find((r) => r.day_of_week === dayNum);
+          const isActive = Boolean(dayRule?.is_active);
+          const shifts = dayRule?.shifts && dayRule.shifts.length > 0
+            ? dayRule.shifts
+            : isActive ? [{ start_time: dayRule?.start_time || '09:00', end_time: dayRule?.end_time || '17:00' }] : [];
+          return {
+            date: dateStr,
+            is_unavailable: !isActive,
+            start_time: dayRule?.start_time || '09:00',
+            end_time: dayRule?.end_time || '17:00',
+            shifts: shifts,
+            reason: `Custom hours for week of ${formatDateIso(selectedWeekMonday)}`,
+          };
+        })
+        .filter(Boolean) as Array<{ date: string; is_unavailable: boolean; start_time?: string; end_time?: string; reason?: string; shifts?: TimeInterval[] }>;
+
       onSaveWeekOverrides(weekOverrides);
     }
 
@@ -584,6 +632,13 @@ export const WorkHoursView: React.FC<WorkHoursViewProps> = ({
 
   const handleAddOverrideSubmit = () => {
     if (!newDate) return alert('Please choose a date to block out.');
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const todayStr = formatDateIso(today);
+    if (newDate < todayStr) {
+      alert('Cannot set work hours or block dates in the past. Please select today or a future date.');
+      return;
+    }
     onAddOverride(newDate, newReason);
     setNewDate('');
     setNewReason('');
@@ -715,8 +770,10 @@ export const WorkHoursView: React.FC<WorkHoursViewProps> = ({
                   <button
                     type="button"
                     className="btn btn-secondary week-nav-arrow"
+                    disabled={selectedWeekMonday.getTime() <= currentMonday.getTime()}
                     onClick={() => setSelectedWeekMonday(addDays(selectedWeekMonday, -7))}
-                    title="Previous Week"
+                    title={selectedWeekMonday.getTime() <= currentMonday.getTime() ? "Cannot view or edit hours in the past" : "Previous Week"}
+                    style={selectedWeekMonday.getTime() <= currentMonday.getTime() ? { opacity: 0.35, cursor: 'not-allowed' } : {}}
                   >
                     <IconChevronLeft size={14} />
                     <span>Prev Week</span>
@@ -739,51 +796,24 @@ export const WorkHoursView: React.FC<WorkHoursViewProps> = ({
                 </div>
 
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-                  <button
-                    type="button"
-                    className={`btn ${weekDiff === 0 ? 'btn-emerald' : 'btn-secondary'}`}
-                    style={{ fontSize: '11px', padding: '4px 9px' }}
-                    onClick={() => setSelectedWeekMonday(currentMonday)}
-                  >
-                    This Week
-                  </button>
-                  <button
-                    type="button"
-                    className={`btn ${weekDiff === 1 ? 'btn-emerald' : 'btn-secondary'}`}
-                    style={{ fontSize: '11px', padding: '4px 9px' }}
-                    onClick={() => setSelectedWeekMonday(addDays(currentMonday, 7))}
-                  >
-                    Next Week (+1)
-                  </button>
-                  <button
-                    type="button"
-                    className={`btn ${weekDiff === 2 ? 'btn-emerald' : 'btn-secondary'}`}
-                    style={{ fontSize: '11px', padding: '4px 9px' }}
-                    onClick={() => setSelectedWeekMonday(addDays(currentMonday, 14))}
-                  >
-                    In 2 Weeks (+2)
-                  </button>
-                  <button
-                    type="button"
-                    className={`btn ${weekDiff === 3 ? 'btn-emerald' : 'btn-secondary'}`}
-                    style={{ fontSize: '11px', padding: '4px 9px' }}
-                    onClick={() => setSelectedWeekMonday(addDays(currentMonday, 21))}
-                  >
-                    In 3 Weeks (+3)
-                  </button>
-
-                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', marginLeft: '6px' }}>
+                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
                     <span style={{ fontSize: '11px', color: 'var(--text-subtle)' }}>Jump to:</span>
                     <input
                       type="date"
                       className="override-date-input"
                       style={{ padding: '3px 8px', fontSize: '11.5px', height: '28px' }}
+                      min={formatDateIso(currentMonday)}
                       value={formatDateIso(selectedWeekMonday)}
                       onChange={(e) => {
                         if (e.target.value) {
                           const [y, m, d] = e.target.value.split('-').map(Number);
                           const picked = new Date(y, m - 1, d);
-                          setSelectedWeekMonday(getMonday(picked));
+                          const monday = getMonday(picked);
+                          if (monday.getTime() < currentMonday.getTime()) {
+                            setSelectedWeekMonday(currentMonday);
+                          } else {
+                            setSelectedWeekMonday(monday);
+                          }
                         }
                       }}
                     />
@@ -802,7 +832,7 @@ export const WorkHoursView: React.FC<WorkHoursViewProps> = ({
                       title="Clear overrides for this week and restore default template"
                     >
                       <IconRotateCcw size={13} style={{ marginRight: '4px' }} />
-                      <span>Reset to Default</span>
+                      <span>Reset Week</span>
                     </button>
                   )}
                 </div>
@@ -811,23 +841,35 @@ export const WorkHoursView: React.FC<WorkHoursViewProps> = ({
           )}
         </div>
 
-        {/* Schedule Presets */}
-        <div className="presets-bar">
-          <span className="presets-label">Schedule Presets:</span>
-          <div className="presets-buttons">
-            <button type="button" className="preset-btn" onClick={() => handleApplyPresetLocal('standard')}>
-              Standard (Mon–Fri 9–5)
-            </button>
-            <button type="button" className="preset-btn" onClick={() => handleApplyPresetLocal('split')}>
-              Split Shifts (9–1 & 4–8)
-            </button>
-            <button type="button" className="preset-btn" onClick={() => handleApplyPresetLocal('extended')}>
-              Extended (Mon–Sat 8–6)
-            </button>
-            <button type="button" className="preset-btn" onClick={() => handleApplyPresetLocal('all')}>
-              All 7 Days Open
-            </button>
-          </div>
+        {/* Schedule Presets (Clean Single Dropdown) */}
+        <div className="presets-bar" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <span className="presets-label" style={{ fontSize: '11.5px', color: 'var(--text-muted)' }}>⚡ Quick Presets:</span>
+          <select
+            className="nav-buffer-select"
+            style={{
+              background: 'var(--bg-elevated)',
+              padding: '4px 10px',
+              borderRadius: 'var(--radius-sm)',
+              border: '1px solid var(--border-default)',
+              color: 'var(--emerald-primary)',
+              fontSize: '12px',
+              fontWeight: 600,
+              cursor: 'pointer',
+              outline: 'none',
+            }}
+            value=""
+            onChange={(e) => {
+              if (e.target.value) {
+                handleApplyPresetLocal(e.target.value as any);
+              }
+            }}
+          >
+            <option value="" disabled>Choose a schedule preset...</option>
+            <option value="standard">Standard Mon–Fri (09:00 – 17:00)</option>
+            <option value="split">Split Shifts (09:00–13:00, 16:00–20:00)</option>
+            <option value="extended">Extended Mon–Sat (08:00 – 18:00)</option>
+            <option value="all">Full Week 7 Days (09:00 – 18:00)</option>
+          </select>
         </div>
 
         {/* VISUAL DRAGGABLE TIMELINE MODE */}
@@ -868,6 +910,9 @@ export const WorkHoursView: React.FC<WorkHoursViewProps> = ({
                   const dayDate = addDays(selectedWeekMonday, offset);
                   const dateStr = formatDateIso(dayDate);
                   const hasCustomOverride = scopeMode === 'week' && overrides.some((o) => o.date === dateStr);
+                  const today = new Date();
+                  today.setHours(0, 0, 0, 0);
+                  const isPastDay = scopeMode === 'week' && dayDate.getTime() < today.getTime();
 
                   const rule =
                     localRules.find((r) => r.day_of_week === dayNum) || {
@@ -907,24 +952,33 @@ export const WorkHoursView: React.FC<WorkHoursViewProps> = ({
                   const createHeight = Math.max(28, minutesToY(createEndM) - createTop);
 
                   return (
-                    <div key={dayNum} className="day-column" data-day={dayNum}>
+                    <div key={dayNum} className={`day-column ${isPastDay ? 'is-past-day' : ''}`} data-day={dayNum}>
                       {/* Column Header */}
-                      <div className={`day-col-header ${hasCustomOverride ? 'has-override' : ''}`}>
+                      <div className={`day-col-header ${hasCustomOverride ? 'has-override' : ''} ${isPastDay ? 'is-past-header' : ''}`}>
                         <div className="day-header-meta">
                           <span className="day-abbr">
                             {dayShort}
                             {scopeMode === 'week' && (
-                              <span style={{ fontSize: '10px', color: 'var(--text-subtle)', marginLeft: '4px' }}>
+                              <span style={{ fontSize: '10px', color: isPastDay ? 'var(--text-muted)' : 'var(--text-subtle)', marginLeft: '4px' }}>
                                 {dayDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                               </span>
                             )}
                           </span>
+                          {isPastDay && (
+                            <span style={{ fontSize: '9px', background: 'rgba(255, 255, 255, 0.07)', color: 'var(--text-subtle)', padding: '1px 5px', borderRadius: '3px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                              Past
+                            </span>
+                          )}
                         </div>
                         <div className="day-header-actions">
                           <span
                             className={`day-col-status ${isActive ? '' : 'closed'}`}
-                            onClick={() => handleToggleActive(dayNum)}
-                            title="Click to toggle Open / Closed"
+                            style={isPastDay ? { opacity: 0.45, cursor: 'not-allowed' } : {}}
+                            onClick={() => {
+                              if (isPastDay) return;
+                              handleToggleActive(dayNum);
+                            }}
+                            title={isPastDay ? "Past day schedule cannot be modified" : "Click to toggle Open / Closed"}
                           >
                             {statusLabel}
                           </span>
@@ -933,11 +987,41 @@ export const WorkHoursView: React.FC<WorkHoursViewProps> = ({
 
                       {/* Column Track */}
                       <div
-                        className={`day-col-track ${isActive ? '' : 'day-closed'}`}
-                        style={{ height: `${TRACK_HEIGHT}px`, cursor: 'crosshair' }}
-                        onMouseDown={(e) => handleTrackMouseDown(dayNum, e)}
+                        className={`day-col-track ${isActive ? '' : 'day-closed'} ${isPastDay ? 'day-past-track' : ''}`}
+                        style={{ height: `${TRACK_HEIGHT}px`, cursor: isPastDay ? 'not-allowed' : 'crosshair' }}
+                        onMouseDown={(e) => {
+                          if (isPastDay) return;
+                          handleTrackMouseDown(dayNum, e);
+                        }}
+                        onTouchStart={(e) => {
+                          if (isPastDay) return;
+                          handleTrackTouchStart(dayNum, e);
+                        }}
                       >
-                        {!isActive && !isCreatingOnThisCol && (
+                        {isPastDay && (
+                          <div style={{
+                            position: 'absolute',
+                            top: 0,
+                            left: 0,
+                            right: 0,
+                            bottom: 0,
+                            background: 'repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.015), rgba(255, 255, 255, 0.015) 10px, transparent 10px, transparent 20px)',
+                            pointerEvents: 'auto',
+                            cursor: 'not-allowed',
+                            zIndex: 40,
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '4px',
+                          }}>
+                            <span style={{ fontSize: '10px', color: 'var(--text-subtle)', background: 'rgba(10, 12, 18, 0.9)', border: '1px solid var(--border-subtle)', padding: '2px 8px', borderRadius: '4px', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 600 }}>
+                              Past Day
+                            </span>
+                          </div>
+                        )}
+
+                        {!isActive && !isCreatingOnThisCol && !isPastDay && (
                           <div className="day-closed-notice">
                             <span>Closed</span>
                             <small style={{ fontSize: '9px', opacity: 0.7 }}>Click & drag to open shift</small>
@@ -1011,6 +1095,20 @@ export const WorkHoursView: React.FC<WorkHoursViewProps> = ({
                                           currentEndM: sEndM,
                                         });
                                       }}
+                                      onTouchStart={(e) => {
+                                        e.stopPropagation();
+                                        if (e.touches.length === 0) return;
+                                        setDragState({
+                                          dayOfWeek: dayNum,
+                                          shiftIndex: sIdx,
+                                          mode: 'start',
+                                          initialClientY: e.touches[0].clientY,
+                                          initialStartM: sStartM,
+                                          initialEndM: sEndM,
+                                          currentStartM: sStartM,
+                                          currentEndM: sEndM,
+                                        });
+                                      }}
                                     />
 
                                     {/* Move Handle & Label */}
@@ -1030,6 +1128,21 @@ export const WorkHoursView: React.FC<WorkHoursViewProps> = ({
                                           currentEndM: sEndM,
                                         });
                                       }}
+                                      onTouchStart={(e) => {
+                                        if ((e.target as HTMLElement).closest('.shift-delete-btn')) return;
+                                        e.stopPropagation();
+                                        if (e.touches.length === 0) return;
+                                        setDragState({
+                                          dayOfWeek: dayNum,
+                                          shiftIndex: sIdx,
+                                          mode: 'move',
+                                          initialClientY: e.touches[0].clientY,
+                                          initialStartM: sStartM,
+                                          initialEndM: sEndM,
+                                          currentStartM: sStartM,
+                                          currentEndM: sEndM,
+                                        });
+                                      }}
                                     >
                                       <span className="shift-title-text">
                                         {shifts.length > 1 ? `Shift ${sIdx + 1}: ` : ''}
@@ -1043,6 +1156,7 @@ export const WorkHoursView: React.FC<WorkHoursViewProps> = ({
                                         title="Delete this shift"
                                         onClick={(e) => handleDeleteShiftFromVisual(dayNum, sIdx, e)}
                                         onMouseDown={(e) => e.stopPropagation()}
+                                        onTouchStart={(e) => e.stopPropagation()}
                                       >
                                         <IconTrash size={11} />
                                       </button>
@@ -1069,6 +1183,20 @@ export const WorkHoursView: React.FC<WorkHoursViewProps> = ({
                                           shiftIndex: sIdx,
                                           mode: 'end',
                                           initialClientY: e.clientY,
+                                          initialStartM: sStartM,
+                                          initialEndM: sEndM,
+                                          currentStartM: sStartM,
+                                          currentEndM: sEndM,
+                                        });
+                                      }}
+                                      onTouchStart={(e) => {
+                                        e.stopPropagation();
+                                        if (e.touches.length === 0) return;
+                                        setDragState({
+                                          dayOfWeek: dayNum,
+                                          shiftIndex: sIdx,
+                                          mode: 'end',
+                                          initialClientY: e.touches[0].clientY,
                                           initialStartM: sStartM,
                                           initialEndM: sEndM,
                                           currentStartM: sStartM,
@@ -1116,6 +1244,11 @@ export const WorkHoursView: React.FC<WorkHoursViewProps> = ({
             {sortedRules.map((rule) => {
               const dayNum = Number(rule.day_of_week);
               const dayLabel = DAY_LABELS[dayNum];
+              const offset = dayNum === 0 ? 6 : dayNum - 1;
+              const dayDate = addDays(selectedWeekMonday, offset);
+              const today = new Date();
+              today.setHours(0, 0, 0, 0);
+              const isPastDay = scopeMode === 'week' && dayDate.getTime() < today.getTime();
               const isActive = Boolean(rule.is_active);
               const shifts: TimeInterval[] =
                 rule.shifts && rule.shifts.length > 0
@@ -1123,22 +1256,32 @@ export const WorkHoursView: React.FC<WorkHoursViewProps> = ({
                   : [{ start_time: rule.start_time || '09:00', end_time: rule.end_time || '17:00' }];
 
               return (
-                <div key={dayNum} className={`day-schedule-row ${isActive ? 'is-active' : 'is-closed'}`}>
+                <div key={dayNum} className={`day-schedule-row ${isActive ? 'is-active' : 'is-closed'} ${isPastDay ? 'is-past-day' : ''}`} style={isPastDay ? { opacity: 0.6 } : {}}>
                   {/* Day Meta & Switch */}
                   <div className="day-meta-cell">
-                    <label className="switch-wrap">
+                    <label className="switch-wrap" style={isPastDay ? { cursor: 'not-allowed' } : {}}>
                       <div className="switch">
                         <input
                           type="checkbox"
                           checked={isActive}
-                          onChange={() => handleToggleActive(dayNum)}
+                          disabled={isPastDay}
+                          onChange={() => {
+                            if (!isPastDay) handleToggleActive(dayNum);
+                          }}
                         />
-                        <span className="slider"></span>
+                        <span className="slider" style={isPastDay ? { opacity: 0.4 } : {}}></span>
                       </div>
-                      <span className="day-name-text">{dayLabel}</span>
+                      <span className="day-name-text">
+                        {dayLabel}
+                        {scopeMode === 'week' && (
+                          <span style={{ fontSize: '11px', color: 'var(--text-subtle)', marginLeft: '6px' }}>
+                            ({dayDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })})
+                          </span>
+                        )}
+                      </span>
                     </label>
                     <span className={`day-state-tag ${isActive ? 'active' : 'closed'}`}>
-                      {isActive ? (shifts.length > 1 ? `${shifts.length} Shifts` : 'Open') : 'Closed'}
+                      {isPastDay ? 'Past (Locked)' : isActive ? (shifts.length > 1 ? `${shifts.length} Shifts` : 'Open') : 'Closed'}
                     </span>
                   </div>
 
@@ -1154,23 +1297,25 @@ export const WorkHoursView: React.FC<WorkHoursViewProps> = ({
 
                             <input
                               type="time"
+                              disabled={isPastDay}
                               className="time-picker-input"
                               value={shift.start_time}
                               onChange={(e) =>
-                                handleShiftChange(dayNum, sIdx, 'start_time', e.target.value)
+                                !isPastDay && handleShiftChange(dayNum, sIdx, 'start_time', e.target.value)
                               }
                             />
                             <span className="time-separator">to</span>
                             <input
                               type="time"
+                              disabled={isPastDay}
                               className="time-picker-input"
                               value={shift.end_time}
                               onChange={(e) =>
-                                handleShiftChange(dayNum, sIdx, 'end_time', e.target.value)
+                                !isPastDay && handleShiftChange(dayNum, sIdx, 'end_time', e.target.value)
                               }
                             />
 
-                            {shifts.length > 1 && (
+                            {shifts.length > 1 && !isPastDay && (
                               <button
                                 type="button"
                                 className="remove-shift-btn"
@@ -1183,18 +1328,25 @@ export const WorkHoursView: React.FC<WorkHoursViewProps> = ({
                           </div>
                         ))}
 
-                        <button
-                          type="button"
-                          className="add-shift-btn"
-                          onClick={() => handleAddShift(dayNum)}
-                        >
-                          <IconPlus size={12} />
-                          <span>Add Split Shift</span>
-                        </button>
+                        {!isPastDay && (
+                          <button
+                            type="button"
+                            className="add-shift-btn"
+                            onClick={() => handleAddShift(dayNum)}
+                          >
+                            <IconPlus size={12} />
+                            <span>Add Split Shift</span>
+                          </button>
+                        )}
+                        {isPastDay && (
+                          <span style={{ fontSize: '11px', color: 'var(--text-subtle)', fontStyle: 'italic' }}>
+                            Past day schedule cannot be modified.
+                          </span>
+                        )}
                       </div>
                     ) : (
                       <div className="day-closed-msg">
-                        <span>Doctor unavailable / clinic closed</span>
+                        <span>{isPastDay ? 'Clinic was closed (Past Day)' : 'Doctor unavailable / clinic closed'}</span>
                       </div>
                     )}
                   </div>
@@ -1258,6 +1410,7 @@ export const WorkHoursView: React.FC<WorkHoursViewProps> = ({
             <div className="add-override-form">
               <input
                 type="date"
+                min={formatDateIso(new Date())}
                 value={newDate}
                 onChange={(e) => setNewDate(e.target.value)}
                 className="override-date-input"

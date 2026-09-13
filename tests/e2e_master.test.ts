@@ -196,7 +196,7 @@ describe('🏆 MASTER END-TO-END CLINIC LIFECYCLE SUITE (DR. ZIAD EL KHOURY)', (
 
     const drBlockReply = gateway.sentMessages.find((m) => m.to === DOCTOR_PHONE);
     expect(drBlockReply).toBeDefined();
-    expect(drBlockReply?.body).toContain('blocked out *2026-09-18*');
+    expect(drBlockReply?.body).toContain('blocked out 2026-09-18');
 
     // Verify override saved in DB
     const override = db.availability.getOverrideForDate('2026-09-18');

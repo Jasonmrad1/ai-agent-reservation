@@ -2,6 +2,8 @@ import { Request, Response } from 'express';
 import { DatabaseContext } from '../db/index.js';
 import { WhatsAppGateway } from './client.js';
 import { verifyTwilioWebhook } from './verifier.js';
+import { sanitizeWhatsAppText } from '../gemini/agent.js';
+import { validateInboundMessage, resetRateLimit } from '../security/guardrails.js';
 
 export interface WebhookHandlerOptions {
   db: DatabaseContext;
@@ -146,6 +148,39 @@ export function createWebhookRouter(options: WebhookHandlerOptions) {
       return;
     }
 
+    // 6.1 Testing Reset Command (#reset, /reset, #clear)
+    const trimmedInput = incomingText.trim().toLowerCase();
+    if (trimmedInput === '#reset' || trimmedInput === '/reset' || trimmedInput === '#clear' || trimmedInput === '/clear') {
+      console.log(`[Twilio Webhook] 🔄 Received test reset command from ${fromPhone}. Clearing patient chat and test bookings...`);
+      const activeAppts = db.appointments.findUpcomingByCustomerId(customer.id);
+      for (const appt of activeAppts) {
+        db.appointments.updateStatus(appt.id, 'cancelled');
+      }
+      if (db.workflows) {
+        const wf = db.workflows.findActiveByCustomerId(customer.id);
+        if (wf) {
+          db.workflows.transition(wf.id, 'expired');
+        }
+      }
+      db.conversations.updateStatus(conversation.id, 'closed');
+      resetRateLimit(fromPhone);
+
+      const resetReply = '🔄 Session Reset Complete!\nYour conversation history and active test booking have been cleared. You can now test a brand new booking from scratch.\n\nتمت إعادة ضبط المحادثة وحالة الحجز بنجاح. يمكنك الآن تجربة حجز جديد.';
+      await gateway.sendMessage(fromPhone, resetReply, customer.id);
+      db.messages.create(conversation.id, 'outbound', resetReply, null, 'sent');
+      res.type('text/xml').send('<Response/>');
+      return;
+    }
+
+    // 6.2 Security, Prompt-Injection & Anti-Abuse Guardrails (0 Gemini tokens spent)
+    const guardrail = validateInboundMessage(incomingText, fromPhone);
+    if (!guardrail.allowed && guardrail.reply) {
+      await gateway.sendMessage(fromPhone, guardrail.reply, customer.id);
+      db.messages.create(conversation.id, 'outbound', guardrail.reply, null, 'sent');
+      res.type('text/xml').send('<Response/>');
+      return;
+    }
+
     // 7. Doctor Direct Chat Co-presence (Yielding to Dr. Ziad during 1-on-1 human conversation or active escalation)
     const lower = incomingText.toLowerCase();
     const upper = incomingText.toUpperCase();
@@ -175,7 +210,7 @@ export function createWebhookRouter(options: WebhookHandlerOptions) {
     }
 
     // 8. Process Message with Gemini Core (with multi-model failover)
-    let replyText = "Ahla fik! Kif fina nse3dak l yom bi 3iyadetna?";
+    let replyText = "Hello! Welcome to Dr. Ziad El Khoury's clinic. How can we help you today?\n\nأهلاً وسهلاً بكم في عيادة الدكتور زياد الخوري. كيف يمكننا مساعدتكم اليوم؟";
     if (processMessage) {
       try {
         console.log(`[Agent] 🧠 Passing message to Gemini agent...`);
@@ -194,7 +229,7 @@ export function createWebhookRouter(options: WebhookHandlerOptions) {
         }
       } catch (err: any) {
         console.error('[Agent] ❌ Error processing message with Gemini:', err);
-        replyText = 'Ahla fik! 3enna shwayyet ta2kheer bi seystem, bas tkram 3aynak ra7 nse3dak bi a2rab wa2et. Ayya se3a btnesbak kermel l maw3ad?';
+        replyText = "Hello! Welcome to Dr. Ziad El Khoury's clinic. We are currently experiencing a brief delay, but we are here to help you right away. What day and time works best for your appointment?\n\nأهلاً وسهلاً بكم في عيادة الدكتور زياد الخوري. نعتذر عن هذا التأخير البسيط، ونحن في خدمتكم فوراً. ما هو اليوم والوقت الأنسب لموعدكم؟";
         db.alerts.create({
           type: 'system_error',
           title: `Processing Error for ${customer.phone}`,
@@ -204,7 +239,11 @@ export function createWebhookRouter(options: WebhookHandlerOptions) {
       }
     }
 
-    // 8. Outbound Reply via WhatsApp Gateway
+    replyText = sanitizeWhatsAppText(replyText);
+    if (!replyText || !replyText.trim()) {
+      console.warn(`[Twilio Webhook] ⚠️ Final replyText was empty, using safe fallback for ${fromPhone}`);
+      replyText = "Hello! Welcome to Dr. Ziad El Khoury's clinic. We received your message and are here to help. What day and time works best for your appointment?\n\nأهلاً وسهلاً بكم في عيادة الدكتور زياد الخوري. كيف يمكننا مساعدتكم اليوم وما هو الموعد المناسب لكم؟";
+    }
     try {
       console.log(`[Twilio Webhook] 📤 Sending WhatsApp reply to ${fromPhone}...`);
       const sendResult = await gateway.sendMessage(fromPhone, replyText, customer.id);

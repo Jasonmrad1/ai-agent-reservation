@@ -5,8 +5,10 @@ import { CalendarGrid, parseTimeInfo } from './components/CalendarGrid';
 import { ReservationModal } from './components/ReservationModal';
 import { WorkHoursModal } from './components/WorkHoursModal';
 import { WorkHoursView } from './components/WorkHoursView';
-import { RescheduleModal } from './components/RescheduleModal';
+import { RescheduleModal, DirectMoveParams, AiOutreachParams } from './components/RescheduleModal';
 import { QuickMessageModal } from './components/QuickMessageModal';
+import { WhatsAppSimulator } from './components/WhatsAppSimulator';
+import { ManualBookingModal, ManualBookingData } from './components/ManualBookingModal';
 
 declare global {
   interface Window {
@@ -35,6 +37,7 @@ export const App: React.FC = () => {
   });
 
   const [activeTab, setActiveTab] = useState<'appointments' | 'work_hours'>('appointments');
+  const isSimulatorRoute = typeof window !== 'undefined' && window.location.pathname.includes('simulator');
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [rules, setRules] = useState<AvailabilityRule[]>([]);
   const [overrides, setOverrides] = useState<DateOverride[]>([]);
@@ -47,6 +50,7 @@ export const App: React.FC = () => {
   const [rescheduleAppt, setRescheduleAppt] = useState<Appointment | null>(null);
   const [quickMsgAppt, setQuickMsgAppt] = useState<Appointment | null>(null);
   const [isWorkHoursOpen, setIsWorkHoursOpen] = useState<boolean>(false);
+  const [isManualBookingOpen, setIsManualBookingOpen] = useState<boolean>(false);
 
   // Toast
   const [toast, setToast] = useState<string | null>(null);
@@ -108,11 +112,52 @@ export const App: React.FC = () => {
     }
   }, [adminKey, getHeaders]);
 
+  // Load Google Calendar status
+  const [googleStatus, setGoogleStatus] = useState<{ configured: boolean; connected: boolean; calendarId?: string } | null>(null);
+
+  const loadGoogleStatus = useCallback(async () => {
+    try {
+      const res = await fetch(`/admin/api/google-calendar/status?key=${adminKey}`, {
+        headers: getHeaders(),
+      });
+      const data = await res.json();
+      setGoogleStatus(data);
+    } catch {
+      // ignore
+    }
+  }, [adminKey, getHeaders]);
+
+  const handleConnectGoogle = () => {
+    window.location.href = `/admin/auth/google?key=${adminKey}`;
+  };
+
+  const handleDisconnectGoogle = async () => {
+    if (!confirm('Disconnect Google Calendar? Future appointments will no longer sync to Google Calendar.')) return;
+    try {
+      await fetch(`/admin/api/google-calendar/disconnect?key=${adminKey}`, {
+        method: 'POST',
+        headers: getHeaders(),
+      });
+      showToast('Google Calendar disconnected.');
+      loadGoogleStatus();
+    } catch {
+      showToast('Failed to disconnect Google Calendar.');
+    }
+  };
+
   useEffect(() => {
     loadAppointments();
     loadAvailability();
     loadSettings();
-  }, [loadAppointments, loadAvailability, loadSettings]);
+    loadGoogleStatus();
+
+    // Check if redirected back from Google OAuth
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('google_connected') === '1') {
+      showToast('🎉 Google Calendar connected and synced successfully!');
+      window.history.replaceState({}, '', window.location.pathname + `?key=${adminKey}`);
+    }
+  }, [loadAppointments, loadAvailability, loadSettings, loadGoogleStatus, adminKey, showToast]);
 
   // Keyboard Escape listener to dismiss any active modal
   useEffect(() => {
@@ -122,6 +167,7 @@ export const App: React.FC = () => {
         setRescheduleAppt(null);
         setQuickMsgAppt(null);
         setIsWorkHoursOpen(false);
+        setIsManualBookingOpen(false);
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -281,13 +327,14 @@ export const App: React.FC = () => {
           showToast('Schedule updated.');
         }
         loadAvailability();
+        setActiveTab('appointments');
       }
     } catch (err: any) {
       alert(`Error: ${err.message}`);
     }
   };
 
-  const handleSaveAllRules = async (allRules: AvailabilityRule[]) => {
+  const handleSaveAllRules = async (allRules: AvailabilityRule[], targetWeekMonday?: Date) => {
     try {
       const res = await fetch(`/admin/api/availability/rules/batch?key=${adminKey}`, {
         method: 'POST',
@@ -303,8 +350,12 @@ export const App: React.FC = () => {
         } else {
           showToast('All weekly work hours saved successfully!');
         }
+        if (targetWeekMonday) {
+          setCurrentWeekMonday(targetWeekMonday);
+        }
         loadAvailability();
         setIsWorkHoursOpen(false);
+        setActiveTab('appointments');
       }
     } catch (err: any) {
       alert(`Error: ${err.message}`);
@@ -334,7 +385,10 @@ export const App: React.FC = () => {
     }
   };
 
-  const handleSaveWeekOverrides = async (overridesList: Array<{ date: string; is_unavailable: boolean; start_time?: string; end_time?: string; reason?: string; shifts?: TimeInterval[] }>) => {
+  const handleSaveWeekOverrides = async (
+    overridesList: Array<{ date: string; is_unavailable: boolean; start_time?: string; end_time?: string; reason?: string; shifts?: TimeInterval[] }>,
+    targetWeekMonday?: Date
+  ) => {
     try {
       const res = await fetch(`/admin/api/availability/overrides/batch?key=${adminKey}`, {
         method: 'POST',
@@ -350,7 +404,11 @@ export const App: React.FC = () => {
         } else {
           showToast('Custom schedule saved for this specific week!');
         }
+        if (targetWeekMonday) {
+          setCurrentWeekMonday(targetWeekMonday);
+        }
         loadAvailability();
+        setActiveTab('appointments');
       }
     } catch (err: any) {
       alert(`Error saving week schedule: ${err.message}`);
@@ -458,6 +516,57 @@ export const App: React.FC = () => {
     }
   };
 
+  const handleManualBooking = async (formData: ManualBookingData) => {
+    const res = await fetch(`/admin/api/appointments/manual?key=${adminKey}`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify(formData),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(data.error || 'Failed to book appointment');
+    }
+    const waNote = data.whatsappSent ? ' Confirmation sent to patient on WhatsApp.' : '';
+    showToast(`Appointment booked successfully!${waNote}`);
+    loadAppointments();
+  };
+
+  const handleDirectReschedule = async (params: DirectMoveParams) => {
+    const res = await fetch(`/admin/api/appointments/${params.appointmentId}/reschedule-direct?key=${adminKey}`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify(params),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(data.error || 'Failed to move appointment');
+    }
+    const waNote = data.whatsappSent ? ' Patient updated via WhatsApp.' : '';
+    showToast(`Appointment moved to ${params.date} at ${params.time}!${waNote}`);
+    loadAppointments();
+  };
+
+  if (isSimulatorRoute) {
+    return (
+      <div className="react-calendar-app" style={{ minHeight: '100vh', background: '#0a0d12', padding: '16px' }}>
+        <WhatsAppSimulator
+          onRefreshData={loadAppointments}
+          showToast={showToast}
+        />
+        {toast && (
+          <div className="toast-container">
+            <div className="toast">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--emerald-text)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+              <span>{toast}</span>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="react-calendar-app">
       <Header
@@ -471,6 +580,10 @@ export const App: React.FC = () => {
         onTodayWeek={handleTodayWeek}
         showHoursOverlay={showHoursOverlay}
         onToggleHoursOverlay={() => setShowHoursOverlay(!showHoursOverlay)}
+        onNewAppointment={() => setIsManualBookingOpen(true)}
+        googleStatus={googleStatus}
+        onConnectGoogle={handleConnectGoogle}
+        onDisconnectGoogle={handleDisconnectGoogle}
       />
 
       {activeTab === 'appointments' ? (
@@ -499,6 +612,13 @@ export const App: React.FC = () => {
           onDeleteOverride={handleDeleteOverride}
         />
       )}
+
+      {/* Manual Appointment Entry Modal */}
+      <ManualBookingModal
+        isOpen={isManualBookingOpen}
+        onClose={() => setIsManualBookingOpen(false)}
+        onSubmit={handleManualBooking}
+      />
 
       {/* Reservation Details Modal */}
       <ReservationModal
@@ -531,11 +651,12 @@ export const App: React.FC = () => {
         onDeleteOverride={handleDeleteOverride}
       />
 
-      {/* AI Reschedule Modal */}
+      {/* Move & Reschedule Modal (Direct Move or AI Outreach) */}
       <RescheduleModal
         appointment={rescheduleAppt}
         onClose={() => setRescheduleAppt(null)}
         onSubmit={handleSubmitReschedule}
+        onDirectMove={handleDirectReschedule}
       />
 
       {/* Quick Automated Message Modal */}

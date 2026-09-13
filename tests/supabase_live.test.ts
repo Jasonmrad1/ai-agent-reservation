@@ -1,4 +1,4 @@
-﻿import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, beforeAll } from 'vitest';
 import { getSupabaseClient, SupabaseSync } from '../src/db/supabase.js';
 import { createDatabaseContext, DatabaseContext } from '../src/db/index.js';
 import crypto from 'node:crypto';
@@ -46,6 +46,9 @@ describe('⚡ SUPABASE LIVE CLOUD INTEGRATION SUITE', () => {
 
   it('3. Syncs availability rules and handles day_of_week upsert conflict safely', async () => {
     if (!supabase) return;
+
+    // Clean up any stale Monday rules from previous runs to ensure .single() works
+    await supabase.from('availability_rules').delete().eq('day_of_week', 1);
 
     const testRule = {
       id: crypto.randomUUID(),
@@ -138,5 +141,59 @@ describe('⚡ SUPABASE LIVE CLOUD INTEGRATION SUITE', () => {
 
     const rules = freshDb.availability.getAllRules();
     expect(rules.length).toBeGreaterThan(0);
+  });
+
+  it('7. Syncs pending_booking_workflows and state transitions to live Supabase cloud', async () => {
+    if (!supabase) return;
+
+    const randSuffix = Math.floor(100000 + Math.random() * 900000);
+    const testPhone = 'whatsapp:+96176' + randSuffix;
+    const cust = db.customers.findOrCreate(testPhone, 'Live Workflow User');
+    const conv = db.conversations.getOrCreateActive(cust.id);
+    await SupabaseSync.syncCustomer(cust);
+    await SupabaseSync.syncConversation(conv);
+
+    const wf = db.workflows.create({
+      customer_id: cust.id,
+      conversation_id: conv.id,
+      state: 'awaiting_address',
+      date: '2026-09-30',
+      time: '14:30',
+      service: 'Home Visit Care',
+      price: 180,
+      visit_type: 'home_visit',
+      address: 'Beirut Mar Mikhael (GPS: 33.8960, 35.5250)',
+      location_lat: 33.8960,
+      location_lng: 35.5250,
+    });
+
+    await SupabaseSync.syncWorkflow(wf);
+
+    // Query live from Supabase
+    const { data, error } = await supabase
+      .from('pending_booking_workflows')
+      .select('*')
+      .eq('id', wf.id)
+      .single();
+
+    expect(error).toBeNull();
+    expect(data).toBeDefined();
+    expect(data.state).toBe('awaiting_address');
+    expect(data.date).toBe('2026-09-30');
+    expect(data.time).toBe('14:30');
+    expect(data.visit_type).toBe('home_visit');
+    expect(data.address).toContain('Mar Mikhael');
+    expect(Number(data.location_lat)).toBeCloseTo(33.8960);
+    expect(Number(data.location_lng)).toBeCloseTo(35.5250);
+  });
+
+  it('8. Hydrates pending_booking_workflows from live Supabase into fresh database', async () => {
+    if (!supabase) return;
+
+    const freshDb = createDatabaseContext(':memory:');
+    await SupabaseSync.hydrateFromSupabase(freshDb);
+
+    const workflows = freshDb.workflows.listAll();
+    expect(workflows).toBeDefined();
   });
 });

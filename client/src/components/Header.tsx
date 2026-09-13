@@ -4,7 +4,7 @@ import {
   IconChevronLeft,
   IconChevronRight,
   IconClock,
-  IconCar,
+  IconPlus,
 } from './Icons';
 
 interface HeaderProps {
@@ -18,6 +18,10 @@ interface HeaderProps {
   onTodayWeek: () => void;
   showHoursOverlay: boolean;
   onToggleHoursOverlay: () => void;
+  onNewAppointment?: () => void;
+  googleStatus?: { configured: boolean; connected: boolean; calendarId?: string } | null;
+  onConnectGoogle?: () => void;
+  onDisconnectGoogle?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -31,6 +35,10 @@ export const Header: React.FC<HeaderProps> = ({
   onTodayWeek,
   showHoursOverlay,
   onToggleHoursOverlay,
+  onNewAppointment,
+  googleStatus,
+  onConnectGoogle,
+  onDisconnectGoogle,
 }) => {
   const weekDates: Date[] = [];
   for (let i = 0; i < 7; i++) {
@@ -52,30 +60,22 @@ export const Header: React.FC<HeaderProps> = ({
 
   return (
     <header className="teams-top-bar">
-      {/* Left: Branding & Primary Tabs */}
+      {/* Left: Primary Tabs */}
       <div className="teams-left">
-        <div className="clinic-logo-badge">
-          <IconCalendar size={18} color="#00ff88" />
-          <span className="clinic-name">Doctor Schedule</span>
-        </div>
-
-        <div className="nav-divider"></div>
-
-        {/* Primary View Tabs */}
         <div className="nav-tabs-group">
           <button
             className={`nav-tab-btn ${activeTab === 'appointments' ? 'active' : ''}`}
             onClick={() => onTabChange('appointments')}
           >
             <IconCalendar size={14} />
-            <span>Scheduled Appointments</span>
+            <span>Appointments</span>
           </button>
           <button
             className={`nav-tab-btn ${activeTab === 'work_hours' ? 'active' : ''}`}
             onClick={() => onTabChange('work_hours')}
           >
             <IconClock size={14} />
-            <span>Set Work Hours</span>
+            <span>Work Hours</span>
           </button>
         </div>
       </div>
@@ -105,35 +105,82 @@ export const Header: React.FC<HeaderProps> = ({
               <span className="date-main-title">{mainMonthYear}</span>
               <span className="date-sub-range">{rangeSubtitle}</span>
             </div>
-
-            <div className="nav-divider"></div>
           </>
         )}
 
-        {/* Road Travel Commute Buffer Selector */}
-        <div className="nav-select-wrapper" title="Automatic road travel buffer before & after home visit appointments">
-          <IconCar size={14} color="#38bdf8" />
-          <span className="select-prefix">Travel Buffer:</span>
-          <select
-            value={commuteBufferMinutes}
-            onChange={(e) => onUpdateCommuteBuffer && onUpdateCommuteBuffer(Number(e.target.value))}
-            className="nav-buffer-select"
-          >
-            <option value="15">15 mins</option>
-            <option value="30">30 mins</option>
-            <option value="45">45 mins</option>
-            <option value="60">60 mins</option>
-          </select>
-        </div>
+        {onConnectGoogle && (
+          googleStatus?.connected ? (
+            <button
+              type="button"
+              className="google-cal-btn connected"
+              onClick={onDisconnectGoogle}
+              title="Google Calendar is connected & synced with your phone! Click to disconnect."
+              style={{
+                background: 'rgba(0, 245, 155, 0.1)',
+                color: 'var(--emerald-primary)',
+                border: '1px solid var(--emerald-border)',
+                borderRadius: '8px',
+                padding: '6px 12px',
+                fontSize: '12px',
+                fontWeight: 600,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                cursor: 'pointer',
+              }}
+            >
+              <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#00f59b', boxShadow: '0 0 8px #00f59b' }} />
+              <span>Google Synced</span>
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="google-cal-btn"
+              onClick={onConnectGoogle}
+              title="Connect Dr. Ziad's Google Calendar to sync with iPhone"
+              style={{
+                background: 'var(--bg-elevated)',
+                color: '#94a3b8',
+                border: '1px solid var(--border-default)',
+                borderRadius: '8px',
+                padding: '6px 12px',
+                fontSize: '12px',
+                fontWeight: 600,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                cursor: 'pointer',
+              }}
+            >
+              <IconCalendar size={13} />
+              <span>Connect Google Cal</span>
+            </button>
+          )
+        )}
 
-        {activeTab === 'appointments' && (
+        {activeTab === 'appointments' && onNewAppointment && (
           <button
-            className={`nav-toggle-btn ${showHoursOverlay ? 'active' : ''}`}
-            onClick={onToggleHoursOverlay}
-            title="Toggle working shifts highlight on the calendar"
+            className="btn-new-appointment"
+            onClick={onNewAppointment}
+            title="Book a new walk-in, phone, or in-person appointment"
+            style={{
+              background: 'linear-gradient(135deg, #00f59b 0%, #00dc8b 100%)',
+              color: '#000000',
+              border: 'none',
+              borderRadius: '8px',
+              padding: '6px 14px',
+              fontSize: '12.5px',
+              fontWeight: 700,
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              cursor: 'pointer',
+              boxShadow: '0 2px 8px rgba(0, 245, 155, 0.25)',
+              transition: 'all 0.15s ease',
+            }}
           >
-            <IconClock size={14} />
-            <span>{showHoursOverlay ? 'Shifts Visible' : 'Shifts Hidden'}</span>
+            <IconPlus size={14} color="#000000" />
+            <span>New Appointment</span>
           </button>
         )}
       </div>

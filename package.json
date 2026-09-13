@@ -9,6 +9,7 @@
     "build:client": "node client/build.js",
     "start": "node dist/index.js",
     "dev": "tsx watch src/index.ts",
+    "chat": "tsx scripts/chat_simulator.ts",
     "tunnel": "node tunnel.js",
     "test": "vitest run",
     "test:watch": "vitest"

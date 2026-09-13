@@ -1,6 +1,7 @@
 import { DatabaseContext } from '../db/index.js';
 import { CalendarProvider } from './provider.js';
 import { Appointment, VisitType } from '../types/index.js';
+import { computeFreeWindows } from '../utils/slots.js';
 
 export interface SchedulerOptions {
   db: DatabaseContext;
@@ -20,6 +21,7 @@ export interface BookAppointmentParams {
   startTime: string; // ISO 8601 string
   endTime?: string;  // ISO 8601 string
   notes?: string | null;
+  allowOverride?: boolean;
 }
 
 export interface RescheduleAppointmentParams {
@@ -28,6 +30,7 @@ export interface RescheduleAppointmentParams {
   newEndTime?: string;
   visitType?: VisitType;
   address?: string | null;
+  allowOverride?: boolean;
 }
 
 export interface ActiveShift {
@@ -150,7 +153,7 @@ export class SchedulingEngine {
     }
 
     const bufferMinutes = this.getHomeVisitBufferMinutes(dateStr);
-    const bufferMs = (visitType === 'home_visit' ? bufferMinutes : 0) * 60 * 1000;
+    const homeBufferMs = bufferMinutes * 60 * 1000;
     const slotDurationMs = durationMinutes * 60 * 1000;
     const stepMinutes = 30; // Check slots every 30 mins
 
@@ -170,73 +173,128 @@ export class SchedulingEngine {
     const availableSlots: string[] = [];
 
     for (const shift of shifts) {
-      let currentStartMs = shift.startMs;
+      const stepMs = stepMinutes * 60 * 1000;
+      const candidateTimesSet = new Set<number>();
 
-      while (currentStartMs + slotDurationMs <= shift.endMs) {
+      // 1. Shift start itself can host a full appointment
+      if (shift.startMs + slotDurationMs <= shift.endMs) {
+        candidateTimesSet.add(shift.startMs);
+      }
+
+      // 2. Standard clock grid (:00 and :30) anchored to the clock hour
+      const d = new Date(shift.startMs);
+      const m = d.getUTCMinutes();
+      const s = d.getUTCSeconds();
+      const ms = d.getUTCMilliseconds();
+      let nextGridMinutes = 0;
+      if (m === 0 && s === 0 && ms === 0) {
+        nextGridMinutes = 0;
+      } else if (m < 30 || (m === 30 && s === 0 && ms === 0)) {
+        nextGridMinutes = 30;
+      } else {
+        nextGridMinutes = 60;
+      }
+      d.setUTCMinutes(nextGridMinutes, 0, 0);
+      let clockStartMs = d.getTime();
+
+      while (clockStartMs + slotDurationMs <= shift.endMs) {
+        if (clockStartMs >= shift.startMs) {
+          candidateTimesSet.add(clockStartMs);
+        }
+        clockStartMs += stepMs;
+      }
+
+      // 3. Immediately after any existing appointment finishes (plus travel commute if either appointment is a home visit)
+      for (const appt of dbAppointments) {
+        const apptEndMs = new Date(appt.end_time).getTime();
+        const nextAvail = apptEndMs + ((appt.visit_type === 'home_visit' || visitType === 'home_visit') ? homeBufferMs : 0);
+        if (nextAvail >= shift.startMs && nextAvail + slotDurationMs <= shift.endMs) {
+          candidateTimesSet.add(nextAvail);
+        }
+      }
+
+      // 4. Immediately after any external calendar event finishes
+      for (const ev of calEvents) {
+        const evEndMs = ev.end.getTime();
+        const nextAvail = evEndMs + (visitType === 'home_visit' ? homeBufferMs : 0);
+        if (nextAvail >= shift.startMs && nextAvail + slotDurationMs <= shift.endMs) {
+          candidateTimesSet.add(nextAvail);
+        }
+      }
+
+      const sortedCandidates = Array.from(candidateTimesSet).sort((a, b) => a - b);
+
+      for (const currentStartMs of sortedCandidates) {
         const candidateStart = new Date(currentStartMs);
-        const candidateEnd = new Date(currentStartMs + slotDurationMs);
 
-        // For home visits: ensure the appointment + post-travel buffer ends within the shift.
-        // We do NOT subtract buffer from the start — the doctor is already at the office/location
-        // at shift start, so no pre-buffer is needed for the first appointment.
+        // For home visits: ensure appointment + post-travel buffer ends within the shift.
         if (visitType === 'home_visit') {
-          if (currentStartMs + slotDurationMs + bufferMs > shift.endMs) {
-            currentStartMs += stepMinutes * 60 * 1000;
+          if (currentStartMs + slotDurationMs + homeBufferMs > shift.endMs) {
             continue;
           }
         }
 
         // Check conflict with DB appointments + commute buffer
         let conflict = false;
+
         for (const appt of dbAppointments) {
           const apptStartMs = new Date(appt.start_time).getTime();
           const apptEndMs = new Date(appt.end_time).getTime();
 
-          // Direct overlap
+          // Direct overlap: candidate window overlaps this appointment
           if (currentStartMs < apptEndMs && (currentStartMs + slotDurationMs) > apptStartMs) {
             conflict = true;
             break;
           }
 
-          // Commute buffer between appointments
-          const needsCommute = visitType === 'home_visit' || appt.visit_type === 'home_visit';
-          const requiredGapMs = needsCommute ? bufferMinutes * 60 * 1000 : 0;
-
-          if (needsCommute) {
-            // Previous appointment -> candidate
-            if (apptEndMs <= currentStartMs && (currentStartMs - apptEndMs) < requiredGapMs) {
+          // Commute buffer rules:
+          // If EITHER the existing appointment OR the requested appointment is a HOME VISIT:
+          // There must be travel buffer between them!
+          // 1. Buffer BEFORE candidate: Doctor travels from previous visit/office to this home visit
+          if ((appt.visit_type === 'home_visit' || visitType === 'home_visit') && apptEndMs <= currentStartMs) {
+            if ((currentStartMs - apptEndMs) < homeBufferMs) {
               conflict = true;
               break;
             }
-            // Candidate -> subsequent appointment
-            if (apptStartMs >= (currentStartMs + slotDurationMs) && (apptStartMs - (currentStartMs + slotDurationMs)) < requiredGapMs) {
+          }
+          // 2. Buffer AFTER candidate: Doctor travels back from this home visit or to next visit
+          if ((visitType === 'home_visit' || appt.visit_type === 'home_visit') && apptStartMs >= (currentStartMs + slotDurationMs)) {
+            if ((apptStartMs - (currentStartMs + slotDurationMs)) < homeBufferMs) {
               conflict = true;
               break;
             }
           }
         }
 
-        // Check conflict with external Google Calendar events + travel buffer
-        if (!conflict) {
-          const commuteGap = (visitType === 'home_visit' ? bufferMinutes : 0) * 60 * 1000;
-          for (const ev of calEvents) {
-            const evStartMs = ev.start.getTime();
-            const evEndMs = ev.end.getTime();
+        if (conflict) continue;
 
-            if (currentStartMs - commuteGap < evEndMs && (currentStartMs + slotDurationMs + commuteGap) > evStartMs) {
-              conflict = true;
-              break;
+        // Check conflict with external Google Calendar events + travel buffer
+        const commuteGap = (visitType === 'home_visit' ? homeBufferMs : 0);
+        for (const ev of calEvents) {
+          if (ev.id) {
+            const matchedAppt = this.db.appointments.findByGoogleEventId(ev.id);
+            if (matchedAppt && matchedAppt.status === 'cancelled') {
+              continue;
             }
+          }
+          const evStartMs = ev.start.getTime();
+          const evEndMs = ev.end.getTime();
+
+          // Candidate directly overlaps event OR candidate (home visit) return buffer overlaps next event start
+          if (currentStartMs < evEndMs && (currentStartMs + slotDurationMs + commuteGap) > evStartMs) {
+            conflict = true;
+            break;
           }
         }
 
         if (!conflict) {
           const hh = String(candidateStart.getUTCHours()).padStart(2, '0');
           const mm = String(candidateStart.getUTCMinutes()).padStart(2, '0');
-          availableSlots.push(`${hh}:${mm}`);
+          const timeSlot = `${hh}:${mm}`;
+          if (!availableSlots.includes(timeSlot)) {
+            availableSlots.push(timeSlot);
+          }
         }
-
-        currentStartMs += stepMinutes * 60 * 1000;
       }
     }
 
@@ -258,59 +316,74 @@ export class SchedulingEngine {
     const bufferMinutes = this.getHomeVisitBufferMinutes();
     const bufferMs = (params.visitType === 'home_visit' ? bufferMinutes : 0) * 60 * 1000;
 
-    // Check if slot falls inside one of the active shifts for the day
-    const dateStr = startTime.toISOString().split('T')[0];
-    const shifts = this.getActiveShiftsForDate(dateStr);
-    if (shifts.length > 0) {
-      const fitsInShift = shifts.some((s) => {
-        if (params.visitType === 'home_visit') {
-          // No pre-buffer needed — doctor is already present at shift start.
-          // Only enforce that the appointment + post-travel buffer ends within the shift.
-          return (startTime.getTime() >= s.startMs && endTime.getTime() + bufferMs <= s.endMs);
+    if (!params.allowOverride) {
+      // Check if slot falls inside one of the active shifts for the day
+      const dateStr = startTime.toISOString().split('T')[0];
+      const shifts = this.getActiveShiftsForDate(dateStr);
+      if (shifts.length > 0) {
+        const fitsInShift = shifts.some((s) => {
+          if (params.visitType === 'home_visit') {
+            // No pre-buffer needed — doctor is already present at shift start.
+            // Only enforce that the appointment + post-travel buffer ends within the shift.
+            return (startTime.getTime() >= s.startMs && endTime.getTime() + bufferMs <= s.endMs);
+          }
+          return (startTime.getTime() >= s.startMs && endTime.getTime() <= s.endMs);
+        });
+        if (!fitsInShift) {
+          throw new Error(`Time slot conflict: Requested time is outside doctor's active working hours or travel buffer.`);
         }
-        return (startTime.getTime() >= s.startMs && endTime.getTime() <= s.endMs);
-      });
-      if (!fitsInShift) {
-        throw new Error(`Time slot conflict: Requested time is outside doctor's active working hours or travel buffer.`);
-      }
-    }
-
-    // Conflict check with existing DB appointments
-    const searchStart = new Date(startTime.getTime() - 2 * 60 * 60 * 1000).toISOString();
-    const searchEnd = new Date(endTime.getTime() + 2 * 60 * 60 * 1000).toISOString();
-    const existingAppointments = this.db.appointments.getAppointmentsInRange(searchStart, searchEnd);
-
-    for (const appt of existingAppointments) {
-      const apptStartMs = new Date(appt.start_time).getTime();
-      const apptEndMs = new Date(appt.end_time).getTime();
-
-      // Direct overlap
-      if (startTime.getTime() < apptEndMs && endTime.getTime() > apptStartMs) {
-        throw new Error(`Time slot conflict: Doctor already has an appointment or travel buffer at this time.`);
       }
 
-      // Commute buffer check
-      const needsCommute = params.visitType === 'home_visit' || appt.visit_type === 'home_visit';
-      const requiredGapMs = needsCommute ? bufferMinutes * 60 * 1000 : 0;
+      // Conflict check with existing DB appointments
+      const searchStart = new Date(startTime.getTime() - 2 * 60 * 60 * 1000).toISOString();
+      const searchEnd = new Date(endTime.getTime() + 2 * 60 * 60 * 1000).toISOString();
+      const existingAppointments = this.db.appointments.getAppointmentsInRange(searchStart, searchEnd);
 
-      if (needsCommute) {
-        if (apptEndMs <= startTime.getTime() && (startTime.getTime() - apptEndMs) < requiredGapMs) {
+      for (const appt of existingAppointments) {
+        const apptStartMs = new Date(appt.start_time).getTime();
+        const apptEndMs = new Date(appt.end_time).getTime();
+
+        // Direct overlap
+        if (startTime.getTime() < apptEndMs && endTime.getTime() > apptStartMs) {
           throw new Error(`Time slot conflict: Doctor already has an appointment or travel buffer at this time.`);
         }
-        if (apptStartMs >= endTime.getTime() && (apptStartMs - endTime.getTime()) < requiredGapMs) {
-          throw new Error(`Time slot conflict: Doctor already has an appointment or travel buffer at this time.`);
+
+        // Commute buffer check:
+        // If EITHER appointment is a home visit, travel time is required between them.
+        const bufferGapMs = bufferMinutes * 60 * 1000;
+        if ((appt.visit_type === 'home_visit' || params.visitType === 'home_visit') && apptEndMs <= startTime.getTime()) {
+          if ((startTime.getTime() - apptEndMs) < bufferGapMs) {
+            throw new Error(`Time slot conflict: Doctor already has an appointment or travel buffer at this time.`);
+          }
+        }
+        if ((params.visitType === 'home_visit' || appt.visit_type === 'home_visit') && apptStartMs >= endTime.getTime()) {
+          if ((apptStartMs - endTime.getTime()) < bufferGapMs) {
+            throw new Error(`Time slot conflict: Doctor already has an appointment or travel buffer at this time.`);
+          }
         }
       }
-    }
 
-    // Conflict check with Calendar events
-    const calCommuteGap = (params.visitType === 'home_visit' ? bufferMinutes : 0) * 60 * 1000;
-    const calEvents = await this.calendar.listEvents(
-      new Date(startTime.getTime() - calCommuteGap),
-      new Date(endTime.getTime() + calCommuteGap)
-    );
-    if (calEvents.length > 0) {
-      throw new Error(`Time slot conflict: Google Calendar has an existing event at this time.`);
+      // Conflict check with Calendar events
+      // Only home visits require a return commute buffer after the appointment
+      const calCommuteGap = (params.visitType === 'home_visit' ? bufferMinutes : 0) * 60 * 1000;
+      const calEvents = await this.calendar.listEvents(
+        startTime,
+        new Date(endTime.getTime() + calCommuteGap)
+      );
+      for (const ev of calEvents) {
+        if (ev.id) {
+          const matchedAppt = this.db.appointments.findByGoogleEventId(ev.id);
+          if (matchedAppt && matchedAppt.status === 'cancelled') {
+            this.calendar.deleteEvent(ev.id).catch(() => {});
+            continue;
+          }
+        }
+        const evStartMs = ev.start.getTime();
+        const evEndMs = ev.end.getTime();
+        if (startTime.getTime() < evEndMs && (endTime.getTime() + calCommuteGap) > evStartMs) {
+          throw new Error(`Time slot conflict: Google Calendar has an existing event at this time.`);
+        }
+      }
     }
 
     // 1. Create Google Calendar Event
@@ -372,46 +445,50 @@ export class SchedulingEngine {
     const bufferMinutes = this.getHomeVisitBufferMinutes();
     const bufferMs = (visitType === 'home_visit' ? bufferMinutes : 0) * 60 * 1000;
 
-    // Check shifts
-    const dateStr = newStart.toISOString().split('T')[0];
-    const shifts = this.getActiveShiftsForDate(dateStr);
-    if (shifts.length > 0) {
-      const fitsInShift = shifts.some((s) => {
-        if (visitType === 'home_visit') {
-          return (newStart.getTime() >= s.startMs && newEnd.getTime() + bufferMs <= s.endMs);
+    if (!params.allowOverride) {
+      // Check shifts
+      const dateStr = newStart.toISOString().split('T')[0];
+      const shifts = this.getActiveShiftsForDate(dateStr);
+      if (shifts.length > 0) {
+        const fitsInShift = shifts.some((s) => {
+          if (visitType === 'home_visit') {
+            return (newStart.getTime() >= s.startMs && newEnd.getTime() + bufferMs <= s.endMs);
+          }
+          return (newStart.getTime() >= s.startMs && newEnd.getTime() <= s.endMs);
+        });
+        if (!fitsInShift) {
+          throw new Error(`Time slot conflict: Requested time is outside doctor's active working hours or travel buffer.`);
         }
-        return (newStart.getTime() >= s.startMs && newEnd.getTime() <= s.endMs);
-      });
-      if (!fitsInShift) {
-        throw new Error(`Time slot conflict: Requested time is outside doctor's active working hours or travel buffer.`);
-      }
-    }
-
-    // Conflict check (excluding the current appointment itself)
-    const existingAppointments = this.db.appointments.getAppointmentsInRange(
-      new Date(newStart.getTime() - 2 * 60 * 60 * 1000).toISOString(),
-      new Date(newEnd.getTime() + 2 * 60 * 60 * 1000).toISOString()
-    );
-
-    for (const appt of existingAppointments) {
-      if (appt.id === existing.id) continue; // skip self
-
-      const apptStartMs = new Date(appt.start_time).getTime();
-      const apptEndMs = new Date(appt.end_time).getTime();
-
-      if (newStart.getTime() < apptEndMs && newEnd.getTime() > apptStartMs) {
-        throw new Error(`Time slot conflict: Doctor already has an appointment or travel buffer at this time.`);
       }
 
-      const needsCommute = visitType === 'home_visit' || appt.visit_type === 'home_visit';
-      const requiredGapMs = needsCommute ? bufferMinutes * 60 * 1000 : 0;
+      // Conflict check (excluding the current appointment itself)
+      const existingAppointments = this.db.appointments.getAppointmentsInRange(
+        new Date(newStart.getTime() - 2 * 60 * 60 * 1000).toISOString(),
+        new Date(newEnd.getTime() + 2 * 60 * 60 * 1000).toISOString()
+      );
 
-      if (needsCommute) {
-        if (apptEndMs <= newStart.getTime() && (newStart.getTime() - apptEndMs) < requiredGapMs) {
+      for (const appt of existingAppointments) {
+        if (appt.id === existing.id) continue; // skip self
+
+        const apptStartMs = new Date(appt.start_time).getTime();
+        const apptEndMs = new Date(appt.end_time).getTime();
+
+        if (newStart.getTime() < apptEndMs && newEnd.getTime() > apptStartMs) {
           throw new Error(`Time slot conflict: Doctor already has an appointment or travel buffer at this time.`);
         }
-        if (apptStartMs >= newEnd.getTime() && (apptStartMs - newEnd.getTime()) < requiredGapMs) {
-          throw new Error(`Time slot conflict: Doctor already has an appointment or travel buffer at this time.`);
+
+        // Commute buffer check:
+        // If EITHER appointment is a home visit, travel time is required between them.
+        const bufferGapMs = bufferMinutes * 60 * 1000;
+        if ((appt.visit_type === 'home_visit' || visitType === 'home_visit') && apptEndMs <= newStart.getTime()) {
+          if ((newStart.getTime() - apptEndMs) < bufferGapMs) {
+            throw new Error(`Time slot conflict: Doctor already has an appointment or travel buffer at this time.`);
+          }
+        }
+        if ((visitType === 'home_visit' || appt.visit_type === 'home_visit') && apptStartMs >= newEnd.getTime()) {
+          if ((apptStartMs - newEnd.getTime()) < bufferGapMs) {
+            throw new Error(`Time slot conflict: Doctor already has an appointment or travel buffer at this time.`);
+          }
         }
       }
     }
@@ -451,8 +528,8 @@ export class SchedulingEngine {
     daysCount: number = 7,
     visitType: VisitType = 'in_office',
     maxOpenDays: number = 7
-  ): Promise<Array<{ date: string; day_name: string; is_closed: boolean; hours?: string; available_slots: string[] }>> {
-    const results: Array<{ date: string; day_name: string; is_closed: boolean; hours?: string; available_slots: string[] }> = [];
+  ): Promise<Array<{ date: string; day_name: string; is_closed: boolean; hours?: string; available_slots: string[]; free_windows: Array<{ from: string; to: string; from12: string; to12: string }> }>> {
+    const results: Array<{ date: string; day_name: string; is_closed: boolean; hours?: string; available_slots: string[]; free_windows: Array<{ from: string; to: string; from12: string; to12: string }> }> = [];
     const [year, month, day] = startDateStr.split('-').map(Number);
     const startUtc = new Date(Date.UTC(year, month - 1, day));
     const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -471,6 +548,7 @@ export class SchedulingEngine {
           day_name: dayName,
           is_closed: true,
           available_slots: [],
+          free_windows: [],
         });
       } else {
         const hoursSummary = shifts.map((s) => `${s.startStr} to ${s.endStr}`).join(', ');
@@ -480,6 +558,7 @@ export class SchedulingEngine {
           is_closed: false,
           hours: hoursSummary,
           available_slots: slots,
+          free_windows: computeFreeWindows(slots),
         });
       }
     }

@@ -246,9 +246,10 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
 
     const allConflicts: Appointment[] = [];
     const savedOverrides = [];
+    const todayStr = new Date().toISOString().split('T')[0];
 
     for (const ov of overrides) {
-      if (!ov.date) continue;
+      if (!ov.date || ov.date < todayStr) continue;
       const saved = db.availability.setOverride({
         date: ov.date,
         is_unavailable: ov.is_unavailable !== undefined ? Boolean(ov.is_unavailable) : true,
@@ -334,6 +335,117 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
     });
   });
 
+  // Google Calendar Integration Endpoints
+  router.get('/auth/google', async (req: Request, res: Response) => {
+    const key = (req.query.key as string) || '';
+    if (key !== adminSecret) {
+      res.status(401).send('Unauthorized: Invalid admin key');
+      return;
+    }
+
+    const clientId = process.env.GOOGLE_CALENDAR_CLIENT_ID;
+    const clientSecret = process.env.GOOGLE_CALENDAR_CLIENT_SECRET;
+    const redirectUri = process.env.GOOGLE_CALENDAR_REDIRECT_URI || `${req.protocol}://${req.get('host')}/oauth2callback`;
+
+    if (!clientId || !clientSecret) {
+      res.status(400).send(`
+        <!DOCTYPE html>
+        <html>
+        <head><title>Google Calendar Configuration Required</title></head>
+        <body style="background:#000;color:#fff;font-family:-apple-system,sans-serif;padding:40px;text-align:center;">
+          <h2 style="color:#fb7185;">Google Calendar Credentials Missing</h2>
+          <p style="color:#94a3b8;max-width:500px;margin:16px auto;line-height:1.6;">
+            Please add <code>GOOGLE_CALENDAR_CLIENT_ID</code> and <code>GOOGLE_CALENDAR_CLIENT_SECRET</code> to your <code>.env</code> file.
+          </p>
+          <a href="/admin?key=${key}" style="display:inline-block;margin-top:20px;padding:10px 20px;background:#00f59b;color:#000;text-decoration:none;border-radius:8px;font-weight:700;">&larr; Back to Dashboard</a>
+        </body>
+        </html>
+      `);
+      return;
+    }
+
+    try {
+      const { google } = await import('googleapis');
+      const oauth2Client = new google.auth.OAuth2(clientId, clientSecret, redirectUri);
+      const authUrl = oauth2Client.generateAuthUrl({
+        access_type: 'offline',
+        prompt: 'consent',
+        scope: [
+          'https://www.googleapis.com/auth/calendar.events',
+          'https://www.googleapis.com/auth/calendar.readonly',
+        ],
+        state: key,
+      });
+
+      res.redirect(authUrl);
+    } catch (err: any) {
+      res.status(500).send(`Failed to start Google OAuth: ${err?.message || err}`);
+    }
+  });
+
+  router.get('/oauth2callback', async (req: Request, res: Response) => {
+    const code = req.query.code as string;
+    const adminKey = (req.query.state as string) || adminSecret;
+
+    if (!code) {
+      res.status(400).send('Missing authorization code from Google');
+      return;
+    }
+
+    try {
+      const clientId = process.env.GOOGLE_CALENDAR_CLIENT_ID;
+      const clientSecret = process.env.GOOGLE_CALENDAR_CLIENT_SECRET;
+      const redirectUri = process.env.GOOGLE_CALENDAR_REDIRECT_URI || `${req.protocol}://${req.get('host')}/oauth2callback`;
+
+      const { google } = await import('googleapis');
+      const oauth2Client = new google.auth.OAuth2(clientId, clientSecret, redirectUri);
+      const { tokens } = await oauth2Client.getToken(code);
+
+      if (tokens.refresh_token) {
+        db.settings.set('google_calendar_refresh_token', tokens.refresh_token);
+        db.settings.set('google_calendar_connected_at', new Date().toISOString());
+      }
+
+      res.send(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>Google Calendar Connected</title>
+          <meta http-equiv="refresh" content="2;url=/admin?key=${adminKey}&google_connected=1">
+          <style>
+            body { background: #000; color: #fff; font-family: -apple-system, sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; }
+            .badge { background: rgba(0, 245, 155, 0.15); color: #00f59b; border: 1px solid #00f59b; padding: 10px 20px; border-radius: 24px; font-weight: 700; font-size: 16px; margin-bottom: 12px; }
+          </style>
+        </head>
+        <body>
+          <div class="badge">✓ Google Calendar Connected Successfully</div>
+          <p style="color: #94a3b8;">Redirecting back to your doctor dashboard...</p>
+        </body>
+        </html>
+      `);
+    } catch (err: any) {
+      res.status(500).send(`Failed to exchange Google OAuth code: ${err?.message || err}`);
+    }
+  });
+
+  router.get('/api/google-calendar/status', requireAdminAuth, (req: Request, res: Response) => {
+    const refreshToken = db.settings.get('google_calendar_refresh_token', '');
+    const connectedAt = db.settings.get('google_calendar_connected_at', '');
+    const hasConfig = Boolean(process.env.GOOGLE_CALENDAR_CLIENT_ID && process.env.GOOGLE_CALENDAR_CLIENT_SECRET);
+    res.json({
+      configured: hasConfig,
+      connected: Boolean(refreshToken),
+      connectedAt: connectedAt || null,
+      calendarId: process.env.GOOGLE_CALENDAR_ID || 'primary',
+    });
+  });
+
+  router.post('/api/google-calendar/disconnect', requireAdminAuth, (req: Request, res: Response) => {
+    db.settings.delete('google_calendar_refresh_token');
+    db.settings.delete('google_calendar_connected_at');
+    res.json({ success: true, connected: false });
+  });
+
   // 2. Appointments
   router.get('/api/appointments', requireAdminAuth, (req: Request, res: Response) => {
     const appointments = db.appointments.listUpcoming(100);
@@ -395,6 +507,218 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
     try {
       const result = await billing.completeAppointmentAndBill(String(req.params.id));
       res.json({ success: true, ...result });
+    } catch (err: any) {
+      res.status(400).json({ error: err?.message || String(err) });
+    }
+  });
+
+  // Direct edit appointment details (notes, address, service, visit_type)
+  router.patch('/api/appointments/:id', requireAdminAuth, async (req: Request, res: Response) => {
+    const appointmentId = String(req.params.id);
+    const appt = db.appointments.findById(appointmentId);
+    if (!appt) {
+      res.status(404).json({ error: 'Appointment not found' });
+      return;
+    }
+
+    const { service, visit_type, address, notes, start_time, end_time } = req.body;
+    db.appointments.update(appointmentId, {
+      service: service !== undefined ? service : appt.service,
+      visit_type: visit_type !== undefined ? visit_type : appt.visit_type,
+      address: address !== undefined ? address : appt.address,
+      notes: notes !== undefined ? notes : appt.notes,
+      start_time: start_time !== undefined ? start_time : appt.start_time,
+      end_time: end_time !== undefined ? end_time : appt.end_time,
+    });
+
+    const updated = db.appointments.findById(appointmentId);
+    res.json({ success: true, appointment: updated });
+  });
+
+  // Doctor manually creates an appointment (walk-in, phone call, in-person)
+  router.post('/api/appointments/manual', requireAdminAuth, async (req: Request, res: Response) => {
+    const {
+      phone,
+      name,
+      date,
+      time,
+      visit_type,
+      address,
+      service,
+      price,
+      notes,
+      override,
+      send_whatsapp,
+    } = req.body;
+
+    if (!phone || !date || !time) {
+      res.status(400).json({ error: 'Missing required fields: phone, date, and time are required.' });
+      return;
+    }
+
+    const cleanVisitType = visit_type === 'home_visit' ? 'home_visit' : 'in_office';
+    if (cleanVisitType === 'home_visit' && (!address || !String(address).trim())) {
+      res.status(400).json({ error: 'Address is required for home visits.' });
+      return;
+    }
+
+    let cleanPhone = String(phone).trim();
+    if (!cleanPhone.startsWith('whatsapp:') && !cleanPhone.startsWith('+')) {
+      cleanPhone = cleanPhone.startsWith('961') ? `+${cleanPhone}` : `+961${cleanPhone.replace(/^0+/, '')}`;
+    }
+
+    try {
+      // Find or create customer
+      const customer = db.customers.findOrCreate(cleanPhone, name || undefined);
+
+      const startTime = new Date(`${date}T${time}:00`);
+      if (isNaN(startTime.getTime())) {
+        res.status(400).json({ error: 'Invalid date or time format.' });
+        return;
+      }
+      const durationMins = req.body.duration_minutes ? Number(req.body.duration_minutes) : 60;
+      const endTime = new Date(startTime.getTime() + durationMins * 60 * 1000);
+
+      const apptService = service || 'General Consultation';
+      const apptPrice = price !== undefined && !isNaN(Number(price)) ? Number(price) : 100;
+
+      let appt: Appointment;
+      if (scheduler) {
+        appt = await scheduler.bookAppointment({
+          customerId: customer.id,
+          customerPhone: customer.phone,
+          customerName: name || customer.name,
+          visitType: cleanVisitType,
+          address: cleanVisitType === 'home_visit' ? String(address).trim() : null,
+          service: apptService,
+          price: apptPrice,
+          startTime: startTime.toISOString(),
+          endTime: endTime.toISOString(),
+          notes: notes ? String(notes).trim() : null,
+          allowOverride: Boolean(override),
+        });
+      } else {
+        appt = db.appointments.create({
+          customer_id: customer.id,
+          visit_type: cleanVisitType,
+          address: cleanVisitType === 'home_visit' ? String(address).trim() : null,
+          service: apptService,
+          price: apptPrice,
+          start_time: startTime.toISOString(),
+          end_time: endTime.toISOString(),
+          status: 'booked',
+          notes: notes ? String(notes).trim() : null,
+        });
+      }
+
+      // Optionally notify patient via WhatsApp
+      let whatsappSent = false;
+      if (send_whatsapp && gateway && !customer.opted_out) {
+        try {
+          const visitDetails = cleanVisitType === 'home_visit'
+            ? `Home Visit at ${String(address).trim()}`
+            : 'In-Office Consultation at the clinic';
+          const confirmMsg = `Hello ${name || customer.name || 'there'}! Your appointment for ${apptService} (${visitDetails}) has been scheduled for ${date} at ${time}. We look forward to seeing you!`;
+          const sendRes = await gateway.sendMessage(customer.phone, confirmMsg, customer.id);
+          const conv = db.conversations.getOrCreateActive(customer.id);
+          db.messages.create(conv.id, 'outbound', confirmMsg, sendRes.messageSid, 'sent');
+          whatsappSent = true;
+        } catch {
+          // Keep appointment even if notification fails
+        }
+      }
+
+      res.json({
+        success: true,
+        appointment: appt,
+        customer,
+        whatsappSent,
+      });
+    } catch (err: any) {
+      res.status(400).json({ error: err?.message || String(err) });
+    }
+  });
+
+  // Doctor directly reschedules an appointment with optional override and WhatsApp ping
+  router.post('/api/appointments/:id/reschedule-direct', requireAdminAuth, async (req: Request, res: Response) => {
+    const appointmentId = String(req.params.id);
+    const { date, time, visit_type, address, notes, override, send_whatsapp } = req.body;
+
+    if (!date || !time) {
+      res.status(400).json({ error: 'Date and time are required for rescheduling.' });
+      return;
+    }
+
+    const appt = db.appointments.findById(appointmentId);
+    if (!appt) {
+      res.status(404).json({ error: 'Appointment not found' });
+      return;
+    }
+
+    const cleanVisitType = visit_type || appt.visit_type;
+    const cleanAddress = address !== undefined ? address : appt.address;
+
+    if (cleanVisitType === 'home_visit' && (!cleanAddress || !String(cleanAddress).trim())) {
+      res.status(400).json({ error: 'Address is required for home visits.' });
+      return;
+    }
+
+    const newStart = new Date(`${date}T${time}:00`);
+    if (isNaN(newStart.getTime())) {
+      res.status(400).json({ error: 'Invalid date or time format.' });
+      return;
+    }
+
+    const existingDurationMs = (new Date(appt.end_time).getTime() - new Date(appt.start_time).getTime()) || (60 * 60 * 1000);
+    const newEnd = new Date(newStart.getTime() + existingDurationMs);
+
+    try {
+      let updatedAppt: Appointment;
+      if (scheduler) {
+        updatedAppt = await scheduler.rescheduleAppointment({
+          appointmentId: appt.id,
+          newStartTime: newStart.toISOString(),
+          newEndTime: newEnd.toISOString(),
+          visitType: cleanVisitType,
+          address: cleanAddress,
+          allowOverride: Boolean(override),
+        });
+      } else {
+        db.appointments.reschedule(
+          appt.id,
+          newStart.toISOString(),
+          newEnd.toISOString(),
+          cleanVisitType,
+          cleanAddress
+        );
+        updatedAppt = db.appointments.findById(appt.id)!;
+      }
+
+      // Update notes if provided or log manual reschedule
+      const logNote = `[Directly Rescheduled by Doctor to ${date} at ${time}${override ? ' (Override)' : ''}]`;
+      const combinedNotes = [appt.notes || '', notes || '', logNote].filter(Boolean).join('\n');
+      db.appDb.db.prepare('UPDATE appointments SET notes = ? WHERE id = ?').run(combinedNotes, appt.id);
+
+      const customer = db.customers.findById(appt.customer_id);
+      let whatsappSent = false;
+      if (send_whatsapp && gateway && customer && !customer.opted_out) {
+        try {
+          const visitDetails = cleanVisitType === 'home_visit' ? 'Home Visit' : 'In-Office Consultation';
+          const msg = `Hello ${customer.name || 'there'}! Your ${appt.service} appointment has been rescheduled to ${date} at ${time} (${visitDetails}). See you then!`;
+          const sendRes = await gateway.sendMessage(customer.phone, msg, customer.id);
+          const conv = db.conversations.getOrCreateActive(customer.id);
+          db.messages.create(conv.id, 'outbound', msg, sendRes.messageSid, 'sent');
+          whatsappSent = true;
+        } catch {
+          // Continue if send fails
+        }
+      }
+
+      res.json({
+        success: true,
+        appointment: db.appointments.findById(appt.id),
+        whatsappSent,
+      });
     } catch (err: any) {
       res.status(400).json({ error: err?.message || String(err) });
     }
@@ -569,7 +893,7 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
   // 5. Admin Dashboard Web UI - Microsoft Teams Calendar Experience (React App)
   router.use(express.static(path.resolve(process.cwd(), 'public')));
 
-  router.get('/dashboard', (req: Request, res: Response) => {
+  const sendAppHtml = (req: Request, res: Response) => {
     const key = (req.query.key as string) || '';
     const indexPath = path.resolve(process.cwd(), 'public', 'index.html');
     if (!fs.existsSync(indexPath)) {
@@ -581,7 +905,10 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
     const keyScript = `<script>window.__ADMIN_KEY__ = ${JSON.stringify(key)};</script>`;
     html = html.replace('</head>', `  ${keyScript}\n</head>`);
     res.type('html').send(html);
-  });
+  };
+
+  router.get('/dashboard', sendAppHtml);
+  router.get('/simulator', sendAppHtml);
 
   return router;
 }

@@ -26,11 +26,15 @@ export const CHECK_AVAILABILITY_TOOL: FunctionDeclaration = {
       },
       visit_type: {
         type: SchemaType.STRING,
-        description: 'Either "in_office" or "home_visit". Defaults to "in_office".',
+        description: 'Either "in_office" or "home_visit". Pass "home_visit" if the customer asked for home visit, or "in_office" if they asked for clinic/office consultation. If the customer has NOT yet specified whether they want in-office or home visit, omit or leave null so availability is calculated for both.',
       },
       days_ahead: {
         type: SchemaType.NUMBER,
         description: 'Number of upcoming days to check for open slots (e.g. 7 or 14 for next week inquiries). Default is 7.',
+      },
+      duration_minutes: {
+        type: SchemaType.NUMBER,
+        description: 'Duration of the appointment in minutes. Default is 60 (standard consultation or home visit). Use 30 for short follow-up or checkup, 90/120 for extended sessions.',
       },
     },
     required: ['date'],
@@ -55,9 +59,13 @@ export const BOOK_APPOINTMENT_TOOL: FunctionDeclaration = {
         type: SchemaType.STRING,
         description: 'Either "in_office" or "home_visit".',
       },
+      duration_minutes: {
+        type: SchemaType.NUMBER,
+        description: 'Duration of the appointment in minutes. Default is 60 (standard). Use 30 for quick follow-ups, 90 or 120 for extended sessions.',
+      },
       service: {
         type: SchemaType.STRING,
-        description: 'Name of the service (e.g. "General Consultation", "Home Visit Care").',
+        description: 'Name of the service (e.g. "General Consultation", "Home Visit Care"). Defaults to "General Consultation" or "Home Visit Care" if omitted.',
       },
       patient_name: {
         type: SchemaType.STRING,
@@ -75,8 +83,12 @@ export const BOOK_APPOINTMENT_TOOL: FunctionDeclaration = {
         type: SchemaType.STRING,
         description: 'Any special symptoms, medical notes, or directives provided by the patient.',
       },
+      is_new_appointment: {
+        type: SchemaType.BOOLEAN,
+        description: 'Set to true if the patient explicitly wants a new/additional appointment rather than rescheduling an existing one.',
+      },
     },
-    required: ['date', 'time', 'visit_type', 'service'],
+    required: ['date', 'time', 'visit_type'],
   },
 };
 
