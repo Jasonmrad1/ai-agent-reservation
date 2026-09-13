@@ -156,7 +156,7 @@ export const App: React.FC = () => {
     // Check if redirected back from Google OAuth
     const params = new URLSearchParams(window.location.search);
     if (params.get('google_connected') === '1') {
-      showToast('🎉 Google Calendar connected and synced successfully!');
+      showToast('Google Calendar connected and synced successfully!');
       window.history.replaceState({}, '', window.location.pathname + `?key=${adminKey}`);
     }
   }, [loadAppointments, loadAvailability, loadSettings, loadGoogleStatus, adminKey, showToast]);

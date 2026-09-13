@@ -13,6 +13,7 @@ import {
   IconHome,
   IconMapPin,
   IconRotateCcw,
+  IconZap,
 } from './Icons';
 
 export interface DirectMoveParams {
@@ -363,7 +364,7 @@ export const RescheduleModal: React.FC<RescheduleModalProps> = ({
                       gap: '6px',
                     }}
                   >
-                    ⚡ Enable Override & Move Anyway
+                    <IconZap size={13} /> Enable Override & Move Anyway
                   </button>
                 </div>
               )}

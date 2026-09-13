@@ -12,6 +12,7 @@ import {
   IconChevronLeft,
   IconChevronRight,
   IconRotateCcw,
+  IconZap,
 } from './Icons';
 
 interface WorkHoursViewProps {
@@ -843,7 +844,10 @@ export const WorkHoursView: React.FC<WorkHoursViewProps> = ({
 
         {/* Schedule Presets (Clean Single Dropdown) */}
         <div className="presets-bar" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <span className="presets-label" style={{ fontSize: '11.5px', color: 'var(--text-muted)' }}>⚡ Quick Presets:</span>
+          <span className="presets-label" style={{ fontSize: '11.5px', color: 'var(--text-muted)', display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+            <IconZap size={13} />
+            <span>Quick Presets:</span>
+          </span>
           <select
             className="nav-buffer-select"
             style={{

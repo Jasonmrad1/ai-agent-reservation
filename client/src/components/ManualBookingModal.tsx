@@ -11,6 +11,7 @@ import {
   IconAlertCircle,
   IconCheck,
   IconPlus,
+  IconZap,
 } from './Icons';
 
 export interface ManualBookingData {
@@ -231,7 +232,7 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({
                       gap: '6px',
                     }}
                   >
-                    ⚡ Enable Override & Book Anyway
+                    <IconZap size={13} /> Enable Override & Book Anyway
                   </button>
                 </div>
               )}
@@ -386,39 +387,45 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({
             </label>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px' }}>
               {[
-                { label: '⚡ Short', mins: 30, desc: '30 min' },
-                { label: '⭐ Standard', mins: 60, desc: '60 min (Default)' },
-                { label: '⏳ Long', mins: 90, desc: '90 min' },
-                { label: '⌛ Double', mins: 120, desc: '2 hours' },
-              ].map((tier) => (
-                <button
-                  key={tier.mins}
-                  type="button"
-                  onClick={() => setDurationMinutes(tier.mins)}
-                  style={{
-                    padding: '8px 4px',
-                    borderRadius: '8px',
-                    border: durationMinutes === tier.mins
-                      ? '1px solid var(--emerald-primary)'
-                      : '1px solid var(--border-default)',
-                    background: durationMinutes === tier.mins
-                      ? 'rgba(0, 245, 155, 0.12)'
-                      : 'var(--bg-input)',
-                    color: durationMinutes === tier.mins ? 'var(--emerald-primary)' : '#94a3b8',
-                    cursor: 'pointer',
-                    fontSize: '12px',
-                    fontWeight: 600,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    gap: '2px',
-                    transition: 'all 0.15s ease',
-                  }}
-                >
-                  <span>{tier.label}</span>
-                  <span style={{ fontSize: '10px', opacity: 0.75 }}>{tier.desc}</span>
-                </button>
-              ))}
+                { label: 'Short', mins: 30, desc: '30 min', icon: IconZap },
+                { label: 'Standard', mins: 60, desc: '60 min (Default)', icon: IconClock },
+                { label: 'Long', mins: 90, desc: '90 min', icon: IconClock },
+                { label: 'Double', mins: 120, desc: '2 hours', icon: IconClock },
+              ].map((tier) => {
+                const TierIcon = tier.icon;
+                return (
+                  <button
+                    key={tier.mins}
+                    type="button"
+                    onClick={() => setDurationMinutes(tier.mins)}
+                    style={{
+                      padding: '8px 4px',
+                      borderRadius: '8px',
+                      border: durationMinutes === tier.mins
+                        ? '1px solid var(--emerald-primary)'
+                        : '1px solid var(--border-default)',
+                      background: durationMinutes === tier.mins
+                        ? 'rgba(0, 245, 155, 0.12)'
+                        : 'var(--bg-input)',
+                      color: durationMinutes === tier.mins ? 'var(--emerald-primary)' : '#94a3b8',
+                      cursor: 'pointer',
+                      fontSize: '12px',
+                      fontWeight: 600,
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      gap: '3px',
+                      transition: 'all 0.15s ease',
+                    }}
+                  >
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                      <TierIcon size={12} />
+                      {tier.label}
+                    </span>
+                    <span style={{ fontSize: '10px', opacity: 0.75 }}>{tier.desc}</span>
+                  </button>
+                );
+              })}
             </div>
           </div>
 
