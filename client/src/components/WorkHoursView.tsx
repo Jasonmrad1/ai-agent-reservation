@@ -780,7 +780,7 @@ export const WorkHoursView: React.FC<WorkHoursViewProps> = ({
                     <span>Prev Week</span>
                   </button>
                   <span className="week-scope-badge" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontWeight: 600 }}>
-                    <IconCalendar size={14} color="#00ff88" />
+                    <IconCalendar size={14} color="var(--amber-primary)" />
                     <span>
                       <strong>{weekRelativeLabel}:</strong> {selectedWeekMonday.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} – {weekEndSunday.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                     </span>
@@ -823,7 +823,7 @@ export const WorkHoursView: React.FC<WorkHoursViewProps> = ({
                   {onResetWeekOverrides && (
                     <button
                       type="button"
-                      className="btn btn-secondary week-reset-btn"
+                      className="btn btn-danger week-reset-btn"
                       style={{ marginLeft: '4px' }}
                       onClick={() => {
                         const start = formatDateIso(selectedWeekMonday);
@@ -885,8 +885,8 @@ export const WorkHoursView: React.FC<WorkHoursViewProps> = ({
                   <span className="legend-dot shift"></span> Working Shift (Click & drag track to add, drag handles to resize)
                 </span>
                 {scopeMode === 'week' && (
-                  <span className="legend-item" style={{ color: '#38bdf8' }}>
-                    <span className="legend-dot" style={{ background: '#38bdf8' }}></span> Specific Week Customization Active
+                  <span className="legend-item" style={{ color: 'var(--emerald-primary)' }}>
+                    <span className="legend-dot" style={{ background: 'var(--emerald-primary)' }}></span> Specific Week Customization Active
                   </span>
                 )}
               </div>
@@ -1365,13 +1365,13 @@ export const WorkHoursView: React.FC<WorkHoursViewProps> = ({
           {/* Commute Buffer Card */}
           <div className="extra-card">
             <div className="extra-card-header">
-              <IconCar size={18} color="#38bdf8" />
+              <IconCar size={18} color="var(--cyan-primary)" />
               <div>
                 <h4 className="extra-card-title">Home Visit Commute Buffer</h4>
                 <p className="extra-card-desc">
                   Travel time reserved on road before &amp; after visits
                   {scopeMode === 'week' && selectedBuffer !== defaultBuffer && (
-                    <span style={{ marginLeft: '8px', color: '#38bdf8', fontWeight: 600 }}>
+                    <span style={{ marginLeft: '8px', color: 'var(--cyan-primary)', fontWeight: 600 }}>
                       — Week override active: {selectedBuffer} min (default: {defaultBuffer} min)
                     </span>
                   )}

@@ -411,7 +411,7 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
                           </div>
                           {isHome && (
                             <div className="meeting-commute-tag">
-                              <IconCar size={10} color="#38bdf8" />
+                              <IconCar size={10} color="var(--cyan-primary)" />
                               <span>+{commuteBufferMinutes}m Commute Buffer</span>
                             </div>
                           )}

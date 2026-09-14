@@ -727,7 +727,7 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({
                 type="checkbox"
                 checked={sendWhatsApp}
                 onChange={(e) => setSendWhatsApp(e.target.checked)}
-                style={{ marginTop: '3px', cursor: 'pointer', accentColor: '#00f59b' }}
+                style={{ marginTop: '3px', cursor: 'pointer', accentColor: 'var(--emerald-primary)' }}
               />
               <div>
                 <div style={{ fontSize: '13px', fontWeight: 600, color: '#e2e8f0' }}>

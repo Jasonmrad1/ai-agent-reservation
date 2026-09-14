@@ -60,12 +60,12 @@ export const QuickMessageModal: React.FC<QuickMessageModalProps> = ({
                 width: '38px',
                 height: '38px',
                 borderRadius: '10px',
-                background: 'rgba(56, 189, 248, 0.12)',
-                border: '1px solid rgba(56, 189, 248, 0.25)',
+                background: 'rgba(16, 185, 129, 0.12)',
+                border: '1px solid rgba(16, 185, 129, 0.25)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                color: '#38bdf8',
+                color: 'var(--emerald-primary)',
               }}
             >
               <IconMessage size={18} />

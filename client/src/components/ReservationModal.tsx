@@ -378,14 +378,14 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
                           display: 'inline-flex',
                           alignItems: 'center',
                           gap: '6px',
-                          color: '#38bdf8',
+                          color: 'var(--cyan-primary)',
                           fontSize: '12px',
                           fontWeight: 600,
                           textDecoration: 'none',
                           padding: '6px 10px',
                           borderRadius: '6px',
-                          background: 'rgba(56, 189, 248, 0.08)',
-                          border: '1px solid rgba(56, 189, 248, 0.2)',
+                          background: 'var(--cyan-subtle)',
+                          border: '1px solid var(--cyan-border)',
                         }}
                       >
                         <span>Open in Google Maps</span>
@@ -471,7 +471,7 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
                             fontWeight: 700,
                             textTransform: 'uppercase',
                             letterSpacing: '0.04em',
-                            color: isInbound ? '#38bdf8' : 'var(--emerald-primary)',
+                            color: isInbound ? '#94a3b8' : 'var(--emerald-primary)',
                             marginBottom: '4px',
                           }}
                         >
