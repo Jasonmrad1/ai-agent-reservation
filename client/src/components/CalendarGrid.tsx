@@ -10,6 +10,7 @@ interface CalendarGridProps {
   showHoursOverlay?: boolean;
   commuteBufferMinutes?: number;
   onSelectAppointment: (appt: Appointment) => void;
+  onSlotClick?: (date: string, time: string) => void;
 }
 
 const START_HOUR = 7;
@@ -101,6 +102,7 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
   showHoursOverlay = true,
   commuteBufferMinutes = 30,
   onSelectAppointment,
+  onSlotClick,
 }) => {
   const weekDates: Date[] = [];
   for (let i = 0; i < 7; i++) {
@@ -121,6 +123,19 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
   for (let h = START_HOUR; h <= END_HOUR; h++) {
     timeLabels.push(`${String(h).padStart(2, '0')}:00`);
   }
+
+  const handleTrackClick = (e: React.MouseEvent<HTMLDivElement>, colDateKey: string) => {
+    if (!onSlotClick) return;
+    const target = e.target as HTMLElement;
+    if (target.closest('.teams-meeting-card')) return;
+
+    const rect = e.currentTarget.getBoundingClientRect();
+    const clickY = e.clientY - rect.top;
+    const clickedMin = Math.floor(clickY / PX_PER_MIN) + START_HOUR * 60;
+    const slotMin = Math.max(START_HOUR * 60, Math.min(END_HOUR * 60 - 30, Math.floor(clickedMin / 30) * 30));
+    const timeStr = minutesToTimeStr(slotMin);
+    onSlotClick(colDateKey, timeStr);
+  };
 
   return (
     <main className="calendar-app-container">
@@ -290,7 +305,11 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
                   </div>
 
                   {/* Column Track */}
-                  <div className={`day-col-track ${isActive ? '' : 'day-closed'}`}>
+                  <div
+                    className={`day-col-track ${isActive ? '' : 'day-closed'}`}
+                    onClick={(e) => handleTrackClick(e, colDateKey)}
+                    title="Click on empty slot to schedule appointment"
+                  >
                     {/* Realtime "Now" indicator line on today */}
                     {isToday && isNowInGrid && (
                       <div className="current-time-line" style={{ top: `${nowY}px` }}>

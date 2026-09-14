@@ -53,6 +53,7 @@ export const App: React.FC = () => {
   const [quickMsgAppt, setQuickMsgAppt] = useState<Appointment | null>(null);
   const [isWorkHoursOpen, setIsWorkHoursOpen] = useState<boolean>(false);
   const [isManualBookingOpen, setIsManualBookingOpen] = useState<boolean>(false);
+  const [manualBookingDefaults, setManualBookingDefaults] = useState<{ date?: string; time?: string }>({});
 
   // Toast
   const [toast, setToast] = useState<string | null>(null);
@@ -561,7 +562,10 @@ export const App: React.FC = () => {
         onTodayWeek={handleTodayWeek}
         showHoursOverlay={showHoursOverlay}
         onToggleHoursOverlay={() => setShowHoursOverlay(!showHoursOverlay)}
-        onNewAppointment={() => setIsManualBookingOpen(true)}
+        onNewAppointment={() => {
+          setManualBookingDefaults({});
+          setIsManualBookingOpen(true);
+        }}
         googleStatus={googleStatus}
         onConnectGoogle={handleConnectGoogle}
         onDisconnectGoogle={handleDisconnectGoogle}
@@ -576,6 +580,10 @@ export const App: React.FC = () => {
           showHoursOverlay={showHoursOverlay}
           commuteBufferMinutes={commuteBufferMinutes}
           onSelectAppointment={(appt) => setSelectedAppt(appt)}
+          onSlotClick={(date, time) => {
+            setManualBookingDefaults({ date, time });
+            setIsManualBookingOpen(true);
+          }}
         />
       )}
 
@@ -612,6 +620,8 @@ export const App: React.FC = () => {
         isOpen={isManualBookingOpen}
         onClose={() => setIsManualBookingOpen(false)}
         onSubmit={handleManualBooking}
+        defaultDate={manualBookingDefaults.date}
+        defaultTime={manualBookingDefaults.time}
       />
 
       {/* Reservation Details Modal */}

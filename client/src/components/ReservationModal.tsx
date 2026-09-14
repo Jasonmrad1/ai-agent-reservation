@@ -79,12 +79,12 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
                 width: '42px',
                 height: '42px',
                 borderRadius: '10px',
-                background: isHome ? 'rgba(244, 63, 94, 0.12)' : 'rgba(0, 255, 136, 0.12)',
-                border: `1px solid ${isHome ? 'rgba(244, 63, 94, 0.25)' : 'rgba(0, 255, 136, 0.25)'}`,
+                background: isHome ? 'rgba(244, 63, 94, 0.12)' : 'rgba(16, 185, 129, 0.12)',
+                border: `1px solid ${isHome ? 'rgba(244, 63, 94, 0.25)' : 'rgba(16, 185, 129, 0.25)'}`,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                color: isHome ? '#f43f5e' : '#00ff88',
+                color: isHome ? '#f43f5e' : 'var(--emerald-primary)',
               }}
             >
               {isHome ? <IconHome size={20} /> : <IconBuilding size={20} />}
@@ -144,8 +144,8 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
               padding: '12px 18px',
               background: 'transparent',
               border: 'none',
-              borderBottom: activeTab === 'details' ? '2px solid #00ff88' : '2px solid transparent',
-              color: activeTab === 'details' ? '#00ff88' : '#64748b',
+              borderBottom: activeTab === 'details' ? '2px solid var(--emerald-primary)' : '2px solid transparent',
+              color: activeTab === 'details' ? 'var(--emerald-primary)' : '#64748b',
               fontWeight: 600,
               fontSize: '13px',
               cursor: 'pointer',
@@ -160,8 +160,8 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
               padding: '12px 18px',
               background: 'transparent',
               border: 'none',
-              borderBottom: activeTab === 'chat' ? '2px solid #00ff88' : '2px solid transparent',
-              color: activeTab === 'chat' ? '#00ff88' : '#64748b',
+              borderBottom: activeTab === 'chat' ? '2px solid var(--emerald-primary)' : '2px solid transparent',
+              color: activeTab === 'chat' ? 'var(--emerald-primary)' : '#64748b',
               fontWeight: 600,
               fontSize: '13px',
               cursor: 'pointer',
@@ -212,14 +212,14 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
                       width: '44px',
                       height: '44px',
                       borderRadius: '10px',
-                      background: 'rgba(0, 255, 136, 0.12)',
+                      background: 'rgba(16, 185, 129, 0.12)',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      color: '#00ff88',
+                      color: 'var(--emerald-primary)',
                     }}
                   >
-                    <IconCalendar size={22} color="#00ff88" />
+                    <IconCalendar size={22} color="var(--emerald-primary)" />
                   </div>
                   <div>
                     <div style={{ fontSize: '15px', fontWeight: 700, color: '#ffffff' }}>
@@ -347,8 +347,8 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
                       Visit Location
                     </div>
                     <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
-                      <div style={{ color: isHome ? '#f43f5e' : '#00ff88', paddingTop: '2px' }}>
-                        <IconMapPin size={18} color={isHome ? '#f43f5e' : '#00ff88'} />
+                      <div style={{ color: isHome ? '#f43f5e' : 'var(--emerald-primary)', paddingTop: '2px' }}>
+                        <IconMapPin size={18} color={isHome ? '#f43f5e' : 'var(--emerald-primary)'} />
                       </div>
                       <div style={{ fontSize: '13px', color: '#e2e8f0', lineHeight: 1.5 }}>
                         {isHome ? (
@@ -471,7 +471,7 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
                             fontWeight: 700,
                             textTransform: 'uppercase',
                             letterSpacing: '0.04em',
-                            color: isInbound ? '#38bdf8' : '#00ff88',
+                            color: isInbound ? '#38bdf8' : 'var(--emerald-primary)',
                             marginBottom: '4px',
                           }}
                         >

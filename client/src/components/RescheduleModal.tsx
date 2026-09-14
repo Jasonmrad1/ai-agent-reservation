@@ -174,12 +174,12 @@ export const RescheduleModal: React.FC<RescheduleModalProps> = ({
                 width: '38px',
                 height: '38px',
                 borderRadius: '10px',
-                background: activeTab === 'direct' ? 'rgba(0, 245, 155, 0.12)' : 'rgba(168, 85, 247, 0.15)',
-                border: activeTab === 'direct' ? '1px solid rgba(0, 245, 155, 0.3)' : '1px solid rgba(168, 85, 247, 0.3)',
+                background: activeTab === 'direct' ? 'rgba(16, 185, 129, 0.12)' : 'rgba(168, 85, 247, 0.15)',
+                border: activeTab === 'direct' ? '1px solid rgba(16, 185, 129, 0.3)' : '1px solid rgba(168, 85, 247, 0.3)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                color: activeTab === 'direct' ? '#00f59b' : '#c084fc',
+                color: activeTab === 'direct' ? 'var(--emerald-primary)' : '#c084fc',
                 transition: 'all 0.2s ease',
               }}
             >
@@ -460,10 +460,10 @@ export const RescheduleModal: React.FC<RescheduleModalProps> = ({
                       padding: '10px 14px',
                       borderRadius: '8px',
                       background:
-                        directVisitType === 'in_office' ? 'rgba(0, 245, 155, 0.12)' : 'rgba(255, 255, 255, 0.03)',
+                        directVisitType === 'in_office' ? 'rgba(16, 185, 129, 0.12)' : 'rgba(255, 255, 255, 0.03)',
                       border:
-                        directVisitType === 'in_office' ? '1px solid #00f59b' : '1px solid var(--border-subtle)',
-                      color: directVisitType === 'in_office' ? '#00f59b' : '#94a3b8',
+                        directVisitType === 'in_office' ? '1px solid var(--emerald-primary)' : '1px solid var(--border-subtle)',
+                      color: directVisitType === 'in_office' ? 'var(--emerald-primary)' : '#94a3b8',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',

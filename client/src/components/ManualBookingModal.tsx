@@ -34,6 +34,7 @@ interface ManualBookingModalProps {
   onClose: () => void;
   onSubmit: (data: ManualBookingData) => Promise<void>;
   defaultDate?: string;
+  defaultTime?: string;
 }
 
 export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({
@@ -41,13 +42,14 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({
   onClose,
   onSubmit,
   defaultDate,
+  defaultTime,
 }) => {
   const todayStr = new Date().toISOString().split('T')[0];
 
   const [phone, setPhone] = useState('');
   const [name, setName] = useState('');
   const [date, setDate] = useState(defaultDate || todayStr);
-  const [time, setTime] = useState('10:00');
+  const [time, setTime] = useState(defaultTime || '10:00');
   const [durationMinutes, setDurationMinutes] = useState<number>(60);
   const [visitType, setVisitType] = useState<'in_office' | 'home_visit'>('in_office');
   const [address, setAddress] = useState('');
@@ -59,6 +61,19 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({
 
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  React.useEffect(() => {
+    if (isOpen) {
+      setDate(defaultDate || todayStr);
+      setTime(defaultTime || '10:00');
+      setPhone('');
+      setName('');
+      setAddress('');
+      setNotes('');
+      setOverride(false);
+      setErrorMessage(null);
+    }
+  }, [isOpen, defaultDate, defaultTime, todayStr]);
 
   if (!isOpen) return null;
 
@@ -142,12 +157,12 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({
                 width: '38px',
                 height: '38px',
                 borderRadius: '10px',
-                background: 'rgba(0, 245, 155, 0.12)',
-                border: '1px solid rgba(0, 245, 155, 0.25)',
+                background: 'rgba(16, 185, 129, 0.12)',
+                border: '1px solid rgba(16, 185, 129, 0.25)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                color: '#00f59b',
+                color: 'var(--emerald-primary)',
               }}
             >
               <IconPlus size={18} />
@@ -451,10 +466,10 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({
                   padding: '11px 14px',
                   borderRadius: '8px',
                   background:
-                    visitType === 'in_office' ? 'rgba(0, 245, 155, 0.12)' : 'rgba(255, 255, 255, 0.03)',
+                    visitType === 'in_office' ? 'rgba(16, 185, 129, 0.12)' : 'rgba(255, 255, 255, 0.03)',
                   border:
-                    visitType === 'in_office' ? '1px solid #00f59b' : '1px solid var(--border-subtle)',
-                  color: visitType === 'in_office' ? '#00f59b' : '#94a3b8',
+                    visitType === 'in_office' ? '1px solid var(--emerald-primary)' : '1px solid var(--border-subtle)',
+                  color: visitType === 'in_office' ? 'var(--emerald-primary)' : '#94a3b8',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',

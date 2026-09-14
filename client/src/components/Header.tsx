@@ -77,14 +77,6 @@ export const Header: React.FC<HeaderProps> = ({
             <IconClock size={14} />
             <span>Work Hours</span>
           </button>
-          <button
-            className={`nav-tab-btn ${activeTab === 'simulator' ? 'active' : ''}`}
-            onClick={() => onTabChange('simulator')}
-            title="Interactive WhatsApp conversation simulator"
-          >
-            <span className="simulator-tab-dot" />
-            <span>Simulator</span>
-          </button>
         </div>
       </div>
 
