@@ -119,4 +119,36 @@ describe('🇱🇧 BEIRUT TIMEZONE & SAME-DAY PAST SLOTS FILTERING', () => {
     expect(parsedKhamis?.date).toBe('2026-09-17');
     expect(parsedKhamis?.time).toBe('11:00');
   });
+
+  it('6. Enforces 30m travel commute buffer for same-day home visits at 2:54 PM', async () => {
+    // Clinic open until 18:00
+    db.availability.updateRule(2, '09:00', '18:00', true);
+
+    // Current time: 2:54 PM (14:54 Beirut time / 11:54 UTC)
+    const mockNow = new Date('2026-09-15T11:54:00.000Z');
+
+    // Home visit requires 30m buffer -> 14:54 + 30m = 15:24 -> 15:00 is NOT available!
+    const homeSlots = await scheduler.getAvailableSlots('2026-09-15', 'home_visit', 60, mockNow);
+    expect(homeSlots).not.toContain('15:00');
+    expect(homeSlots).toContain('15:30');
+    expect(homeSlots).toContain('16:00');
+    expect(homeSlots).toContain('16:30');
+
+    const homeWindows = computeFreeWindows(homeSlots, 60);
+    expect(homeWindows[0].from).toBe('15:30');
+    expect(homeWindows[0].from12).toBe('3:30 PM');
+
+    // In-office visit at 2:54 PM requires 15m notice -> 14:54 + 15m = 15:09 -> 15:00 is NOT available
+    const officeSlots = await scheduler.getAvailableSlots('2026-09-15', 'in_office', 60, mockNow);
+    expect(officeSlots).not.toContain('15:00');
+    expect(officeSlots).toContain('15:30');
+    expect(officeSlots).toContain('16:00');
+    expect(officeSlots).toContain('16:30');
+    expect(officeSlots).toContain('17:00');
+
+    const officeWindows = computeFreeWindows(officeSlots, 60);
+    expect(officeWindows[0].from).toBe('15:30');
+    expect(officeWindows[0].from12).toBe('3:30 PM');
+  });
 });
+

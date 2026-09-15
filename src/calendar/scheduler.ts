@@ -230,11 +230,14 @@ export class SchedulingEngine {
       for (const currentStartMs of sortedCandidates) {
         const candidateStart = new Date(currentStartMs);
 
-        // Same-day past slot filter: if querying for TODAY in Beirut time,
-        // do not offer slots that have already passed in local clock time.
+        // Same-day past & lead-time filter: if querying for TODAY in Beirut time,
+        // do not offer slots that are in the past or lack required commute/advance notice.
+        // - Home visit: requires at least bufferMinutes (e.g. 30m) travel commute from current time.
+        // - In-office visit: requires at least 15m advance notice.
         if (dateStr === beirutNow.dateStr) {
           const candMinutes = candidateStart.getUTCHours() * 60 + candidateStart.getUTCMinutes();
-          if (candMinutes <= beirutNow.totalMinutes) {
+          const minLeadTimeMinutes = visitType === 'home_visit' ? bufferMinutes : 15;
+          if (candMinutes < beirutNow.totalMinutes + minLeadTimeMinutes) {
             continue;
           }
         }
