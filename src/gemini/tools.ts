@@ -34,7 +34,7 @@ export const CHECK_AVAILABILITY_TOOL: FunctionDeclaration = {
       },
       duration_minutes: {
         type: SchemaType.NUMBER,
-        description: 'Duration of the appointment in minutes. Default is 60 (standard consultation or home visit). Use 30 for short follow-up or checkup, 90/120 for extended sessions.',
+        description: 'Duration of the appointment in minutes. Default is 60 minutes. Do not pass 30 unless the user explicitly requested a short 30-minute follow-up.',
       },
     },
     required: ['date'],
