@@ -92,8 +92,8 @@ async function runAllEdgeCases() {
     await resetPhone(p2);
 
     // Turn 1: Requests home visit with time but NO address
-    console.log('   Turn 1 > "Can Dr. Ziad do a home visit on Monday at 2:30 PM?"');
-    const r1 = await sendMsg(p2, 'Can Dr. Ziad do a home visit on Monday at 2:30 PM?', 'Karim Nader');
+    console.log('   Turn 1 > "Can Dr. Ziad do a home visit on Monday at 11:00 AM?"');
+    const r1 = await sendMsg(p2, 'Can Dr. Ziad do a home visit on Monday at 11:00 AM?', 'Karim Nader');
     assert(!/All set|تم تأكيد موعدك/i.test(r1.reply), 'Must NOT book home visit without address');
     assert(/address|location|pin|عنوان|موقع/i.test(r1.reply), 'Must ask for home address or location pin');
     assert(r1.appointments?.length === 0, 'No appointments booked yet');
@@ -123,19 +123,19 @@ async function runAllEdgeCases() {
     const p3 = '+96171000003';
     await resetPhone(p3);
 
-    // Initial booking: Tuesday at 9 AM in-office
-    console.log('   Turn 1 > Initial booking for Tuesday at 9 AM in clinic');
-    await sendMsg(p3, 'Tuesday at 9 AM in clinic', 'Sami Khoury');
+    // Initial booking: Tuesday at 2 PM in-office
+    console.log('   Turn 1 > Initial booking for Tuesday at 2 PM in clinic');
+    await sendMsg(p3, 'Tuesday at 2 PM in clinic', 'Sami Khoury');
 
-    // Reschedule request: Move to Tuesday at 3 PM
-    console.log('   Turn 2 > "Can I move my appointment to Tuesday at 3 PM?"');
-    const r2 = await sendMsg(p3, 'Can I move my appointment to Tuesday at 3 PM?', 'Sami Khoury');
+    // Reschedule request: Move to Tuesday at 3:30 PM
+    console.log('   Turn 2 > "Can I move my appointment to Tuesday at 3:30 PM?"');
+    const r2 = await sendMsg(p3, 'Can I move my appointment to Tuesday at 3:30 PM?', 'Sami Khoury');
     assert(/rescheduled|moved|updated|تعديل|تم|changed|all set|confirmed/i.test(r2.reply), 'Recognizes reschedule intent and confirms new time');
     assert(r2.appointments?.length === 1, 'Still exactly 1 appointment (not duplicate)');
 
     const appt = r2.appointments![0];
     const newDate = new Date(appt.start_time);
-    assert(newDate.getUTCHours() === 15 || newDate.getHours() === 15, 'Start time updated to 15:00 (3 PM)');
+    assert(newDate.getUTCHours() === 15 || newDate.getHours() === 15, 'Start time updated to 15:30 (3:30 PM)');
 
     console.log('   🎯 Test 3 PASSED!\n');
     passed++;
@@ -157,8 +157,8 @@ async function runAllEdgeCases() {
     await sendMsg(p4, 'Wednesday at 8:30 AM in clinic', 'Nour Salem');
 
     // 2nd booking explicitly asking for another / additional appointment
-    console.log('   Turn 2 > "I want to book an additional separate appointment for my sister on Wednesday at 12 PM in clinic"');
-    const r2 = await sendMsg(p4, 'I want to book an additional separate appointment for my sister on Wednesday at 12 PM in clinic', 'Nour Salem');
+    console.log('   Turn 2 > "I want to book an additional separate appointment for my sister on Wednesday at 10:30 AM in clinic"');
+    const r2 = await sendMsg(p4, 'I want to book an additional separate appointment for my sister on Wednesday at 10:30 AM in clinic', 'Nour Salem');
     console.log('   [Test 4 Debug] Reply:', JSON.stringify(r2.reply));
     console.log('   [Test 4 Debug] Appts:', JSON.stringify(r2.appointments));
     assert(/confirmed|all set|تم تأكيد|حجز/i.test(r2.reply), 'Confirmed additional appointment');
@@ -204,8 +204,8 @@ async function runAllEdgeCases() {
     const p6 = '+96171000006';
     await resetPhone(p6);
 
-    console.log('   Turn 1 > "Marhaba hakim, bade maw3ad taleta se3a 11 bil 3iyade"');
-    const r1 = await sendMsg(p6, 'Marhaba hakim, bade maw3ad taleta se3a 11 bil 3iyade', 'Charbel Abi Nader');
+    console.log('   Turn 1 > "Marhaba hakim, bade maw3ad taleta se3a 2 bil 3iyade"');
+    const r1 = await sendMsg(p6, 'Marhaba hakim, bade maw3ad taleta se3a 2 bil 3iyade', 'Charbel Abi Nader');
     assert(/zabbattelak|maw3ad|tamam|confirmed|all set|salemeh|تم/i.test(r1.reply), 'Responds warmly in Arabizi/Arabic');
     assert(r1.appointments?.length === 1, 'Appointment booked in clinic');
 

@@ -100,7 +100,7 @@ export function detectLanguage(text: string = ''): 'english' | 'arabizi' | 'arab
   return 'english';
 }
 
-export function formatEnglishDate(isoStr: string): string {
+export function formatEnglishDate(isoStr: string, endIsoStr?: string): string {
   try {
     const d = new Date(isoStr);
     if (isNaN(d.getTime())) return isoStr;
@@ -111,13 +111,26 @@ export function formatEnglishDate(isoStr: string): string {
     const mins = d.getUTCMinutes().toString().padStart(2, '0');
     const ampm = hours >= 12 ? 'PM' : 'AM';
     const h12 = hours % 12 === 0 ? 12 : hours % 12;
-    return `${weekday}, ${month} ${day} at ${h12}:${mins} ${ampm}`;
+    const startDisplay = `${h12}:${mins} ${ampm}`;
+
+    // Calculate end time (if not provided, default to +60 minutes for consultation)
+    const endD = endIsoStr ? new Date(endIsoStr) : new Date(d.getTime() + 60 * 60 * 1000);
+    if (!isNaN(endD.getTime())) {
+      const endHours = endD.getUTCHours();
+      const endMins = endD.getUTCMinutes().toString().padStart(2, '0');
+      const endAmpm = endHours >= 12 ? 'PM' : 'AM';
+      const endH12 = endHours % 12 === 0 ? 12 : endHours % 12;
+      const endDisplay = `${endH12}:${endMins} ${endAmpm}`;
+      return `${weekday}, ${month} ${day} from ${startDisplay} to ${endDisplay}`;
+    }
+
+    return `${weekday}, ${month} ${day} at ${startDisplay}`;
   } catch {
     return isoStr;
   }
 }
 
-export function formatLebDate(isoStr: string): string {
+export function formatLebDate(isoStr: string, endIsoStr?: string): string {
   try {
     const d = new Date(isoStr);
     if (isNaN(d.getTime())) return isoStr;
@@ -129,13 +142,25 @@ export function formatLebDate(isoStr: string): string {
     const mins = d.getUTCMinutes().toString().padStart(2, '0');
     const ampm = hours >= 12 ? 'PM' : 'AM';
     const h12 = hours % 12 === 0 ? 12 : hours % 12;
-    return `nhar l ${dayName} (${d.getUTCDate()} ${monthName}) se3a ${h12}:${mins} ${ampm}`;
+    const startDisplay = `${h12}:${mins} ${ampm}`;
+
+    const endD = endIsoStr ? new Date(endIsoStr) : new Date(d.getTime() + 60 * 60 * 1000);
+    if (!isNaN(endD.getTime())) {
+      const endHours = endD.getUTCHours();
+      const endMins = endD.getUTCMinutes().toString().padStart(2, '0');
+      const endAmpm = endHours >= 12 ? 'PM' : 'AM';
+      const endH12 = endHours % 12 === 0 ? 12 : endHours % 12;
+      const endDisplay = `${endH12}:${endMins} ${endAmpm}`;
+      return `nhar l ${dayName} (${d.getUTCDate()} ${monthName}) mn ${startDisplay} lal ${endDisplay}`;
+    }
+
+    return `nhar l ${dayName} (${d.getUTCDate()} ${monthName}) se3a ${startDisplay}`;
   } catch {
     return isoStr;
   }
 }
 
-export function formatArabicDate(isoStr: string): string {
+export function formatArabicDate(isoStr: string, endIsoStr?: string): string {
   try {
     const d = new Date(isoStr);
     if (isNaN(d.getTime())) return isoStr;
@@ -148,7 +173,19 @@ export function formatArabicDate(isoStr: string): string {
     const mins = d.getUTCMinutes().toString().padStart(2, '0');
     const ampm = hours >= 12 ? 'ظهراً' : 'صباحاً';
     const h12 = hours % 12 === 0 ? 12 : hours % 12;
-    return `يوم ${weekday} ${day} ${month} الساعة ${h12}:${mins} ${ampm}`;
+    const startDisplay = `${h12}:${mins} ${ampm}`;
+
+    const endD = endIsoStr ? new Date(endIsoStr) : new Date(d.getTime() + 60 * 60 * 1000);
+    if (!isNaN(endD.getTime())) {
+      const endHours = endD.getUTCHours();
+      const endMins = endD.getUTCMinutes().toString().padStart(2, '0');
+      const endAmpm = endHours >= 12 ? 'ظهراً' : 'صباحاً';
+      const endH12 = endHours % 12 === 0 ? 12 : endHours % 12;
+      const endDisplay = `${endH12}:${endMins} ${endAmpm}`;
+      return `يوم ${weekday} ${day} ${month} من الساعة ${startDisplay} حتى الساعة ${endDisplay}`;
+    }
+
+    return `يوم ${weekday} ${day} ${month} الساعة ${startDisplay}`;
   } catch {
     return isoStr;
   }
@@ -171,22 +208,28 @@ export function extractAllSlotsFromText(text: string): Array<{ date: string; tim
     if (ampm === 'PM' && hour < 12) hour += 12;
     if (ampm === 'AM' && hour === 12) hour = 0;
 
-    const d = new Date(`${month} ${day}, ${year} UTC`);
-    if (!Number.isNaN(d.getTime())) {
-      results.push({
-        date: d.toISOString().split('T')[0],
-        time: `${String(hour).padStart(2, '0')}:${min}`,
-      });
+    if (hour >= 0 && hour <= 23) {
+      const d = new Date(`${month} ${day}, ${year} UTC`);
+      if (!Number.isNaN(d.getTime())) {
+        results.push({
+          date: d.toISOString().split('T')[0],
+          time: `${String(hour).padStart(2, '0')}:${min}`,
+        });
+      }
     }
   }
 
   // 2. ISO format with time: "2026-09-15T09:00:00"
   const isoRegex = /\b(\d{4}-\d{2}-\d{2})[T\s](\d{1,2}):(\d{2})(?::\d{2})?(?:\.\d{3})?Z?\b/gi;
   while ((match = isoRegex.exec(text)) !== null) {
-    results.push({
-      date: match[1],
-      time: `${match[2].padStart(2, '0')}:${match[3]}`,
-    });
+    const h = Number(match[2]);
+    const m = Number(match[3]);
+    if (h >= 0 && h <= 23 && m >= 0 && m <= 59) {
+      results.push({
+        date: match[1],
+        time: `${match[2].padStart(2, '0')}:${match[3]}`,
+      });
+    }
   }
 
   return results;
@@ -238,8 +281,7 @@ export function parseDateTimeFromMessage(
       const regex = new RegExp(`\\b${dayName}\\b`, 'i');
       if (regex.test(lower)) {
         const currentDay = referenceDate.getUTCDay();
-        let daysUntil = (dayNum - currentDay + 7) % 7;
-        if (daysUntil === 0) daysUntil = 7; // next occurrence
+        const daysUntil = (dayNum - currentDay + 7) % 7;
         const d = new Date(referenceDate.getTime() + daysUntil * 86400000);
         targetDate = d.toISOString().split('T')[0];
         break;
@@ -263,28 +305,34 @@ export function parseDateTimeFromMessage(
   }
 
   // 3. Time detection
-  // Look specifically for patterns like "at 9", "9 am", "2pm", "14:00", "9:30"
+  // Look specifically for patterns like "at 9", "9 am", "2pm", "14:00", "9:30", "8 15", "8:15"
   let targetTime: string | undefined;
-  const strongTimeRegex = /(?:(?:at|@|se3a|à|on|from|between|around)\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)?)|(?:\b(\d{1,2}):(\d{2})\s*(am|pm)?\b)|(?:\b(\d{1,2})\s*(am|pm)\b)|(?:\b(\d{1,2})(?::(\d{2}))?\s*(?:till|to|-)\s*\d)/i;
+  const strongTimeRegex = /(?:(?:at|@|se3a|à|on|from|between|around)\s+(\d{1,2})(?:[:\s](\d{2}))?\s*(am|pm)?)|(?:\b(\d{1,2}):(\d{2})\s*(am|pm)?\b)|(?:\b(\d{1,2})\s+(\d{2})\s*(am|pm)?\b)|(?:\b(\d{1,2})\s*(am|pm)\b)|(?:\b(\d{1,2})(?:[:\s](\d{2}))?\s*(?:till|to|-)\s*\d)/i;
   const strongMatch = lower.match(strongTimeRegex);
 
   if (strongMatch) {
-    const rawHour = strongMatch[1] || strongMatch[4] || strongMatch[7] || strongMatch[9];
-    const rawMin = strongMatch[2] || strongMatch[5] || strongMatch[10] || '00';
-    const rawAmpm = (strongMatch[3] || strongMatch[6] || strongMatch[8] || '').toUpperCase();
+    const rawHour = strongMatch[1] || strongMatch[4] || strongMatch[7] || strongMatch[10] || strongMatch[12];
+    const rawMin = strongMatch[2] || strongMatch[5] || strongMatch[8] || strongMatch[13] || '00';
+    const rawAmpm = (strongMatch[3] || strongMatch[6] || strongMatch[9] || strongMatch[11] || '').toUpperCase();
 
     let hour = parseInt(rawHour, 10);
-    if (rawAmpm === 'PM' && hour < 12) hour += 12;
-    if (rawAmpm === 'AM' && hour === 12) hour = 0;
+    const min = parseInt(rawMin, 10);
 
-    // If no AM/PM specified, infer typical clinic hours: 1..6 -> 13..18 (PM)
-    if (!rawAmpm) {
-      if (hour >= 1 && hour <= 6) {
-        hour += 12;
+    if (hour >= 0 && hour <= 23 && min >= 0 && min <= 59) {
+      if (rawAmpm === 'PM' && hour < 12) hour += 12;
+      if (rawAmpm === 'AM' && hour === 12) hour = 0;
+
+      // If no AM/PM specified, infer typical clinic hours: 1..6 -> 13..18 (PM)
+      if (!rawAmpm) {
+        if (hour >= 1 && hour <= 6) {
+          hour += 12;
+        }
+      }
+
+      if (hour >= 0 && hour <= 23) {
+        targetTime = `${String(hour).padStart(2, '0')}:${String(min).padStart(2, '0')}`;
       }
     }
-
-    targetTime = `${String(hour).padStart(2, '0')}:${rawMin}`;
   }
 
   if (targetDate || targetTime) {
@@ -785,7 +833,7 @@ Guidelines:
     - Conclude: "Please choose one of the available openings above and let us know if you prefer an in-office consultation or a home visit."
   * NEVER invent times not in available_slots. NEVER list individual slot start times unless there is only one slot.
 - NO MONEY & NO SERVICE SELECTION: NEVER mention prices ($), fees, or costs. Never ask patients to pick between medical services. Every visit is simply an appointment with Dr. Ziad (In-Office Consultation or Home Visit).
-- If an appointment was booked: provide an enthusiastic, crystal-clear confirmation card with Date, Time, and Location (In-Office vs Home Visit + address). Do NOT include prices or service names. Do NOT use asterisks.
+- If an appointment was booked: provide an enthusiastic, crystal-clear confirmation card with Date & Time window (showing from Start Time to End Time, e.g. "Monday, Sep 14 from 9:00 AM to 10:00 AM"), and Location (In-Office vs Home Visit + address). Do NOT include prices or service names. Do NOT use asterisks.
 - If booking had an error / missing address:
   * Acknowledge the requested appointment enthusiastically, and ask warmly for their home address or WhatsApp location pin to confirm the home visit right away.
 - If an appointment was cancelled:
@@ -793,7 +841,7 @@ Guidelines:
   * If the patient mentioned wanting to reschedule or rebook:
     - Present a mini schedule of upcoming openings from 'upcoming_open_days' (using clean From [Start] to [End] shift intervals).
     - Conclude by asking them to pick from the available openings above and whether they prefer an in-office consultation or a home visit.
-- If an appointment was rescheduled: confirm the new date, time, and visit type without asterisks.
+- If an appointment was rescheduled: confirm the new date, time window (from Start Time to End Time), and visit type without asterisks.
 - If clinic overview / services & policies were retrieved ('get_services_and_policies'):
   * Present the clinic working hours using the EXACT 'clinic_working_hours' array returned in the Backend Result. Do NOT list prices or money.
   * Mention the cancellation policy (up to 2 hours before appointment).
@@ -850,7 +898,7 @@ Guidelines:
         if (params.toolResult.error) {
           return `We couldn't complete the booking: ${params.toolResult.error}.`;
         }
-        const timeDisplay = formatEnglishDate(params.toolResult.start_time);
+        const timeDisplay = formatEnglishDate(params.toolResult.start_time, params.toolResult.end_time);
         const locDisplay = params.toolResult.visit_type === 'home_visit'
           ? `Home Visit (${params.toolResult.address || 'Address provided'})`
           : 'In-Office at Clinic';
@@ -861,7 +909,7 @@ Guidelines:
         if (params.toolResult.error) {
           return `We couldn't reschedule your appointment: ${params.toolResult.error}.`;
         }
-        const timeDisplay = formatEnglishDate(params.toolResult.start_time);
+        const timeDisplay = formatEnglishDate(params.toolResult.start_time, params.toolResult.end_time);
         return `Your appointment has been successfully rescheduled to ${timeDisplay}. See you then!`;
       }
 
@@ -902,7 +950,7 @@ Guidelines:
         if (params.toolResult.error) {
           return `Impossible de confirmer le rendez-vous: ${params.toolResult.error}.`;
         }
-        const timeDisplay = formatEnglishDate(params.toolResult.start_time);
+        const timeDisplay = formatEnglishDate(params.toolResult.start_time, params.toolResult.end_time);
         const locDisplay = params.toolResult.visit_type === 'home_visit'
           ? `Visite à domicile (${params.toolResult.address || 'Adresse indiquée'})`
           : 'Au cabinet du Dr. Ziad';
@@ -913,7 +961,7 @@ Guidelines:
         if (params.toolResult.error) {
           return `Impossible de reporter: ${params.toolResult.error}.`;
         }
-        const timeDisplay = formatEnglishDate(params.toolResult.start_time);
+        const timeDisplay = formatEnglishDate(params.toolResult.start_time, params.toolResult.end_time);
         return `Votre rendez-vous a bien été déplacé au ${timeDisplay}. À très bientôt!`;
       }
 
@@ -953,15 +1001,17 @@ Guidelines:
         if (params.toolResult.error) {
           return `تعذر تثبيت الموعد: ${params.toolResult.error}`;
         }
+        const timeDisplay = formatArabicDate(params.toolResult.start_time, params.toolResult.end_time);
         const locDisplay = params.toolResult.visit_type === 'home_visit' ? 'زيارة منزلية' : 'في العيادة';
-        return `تم تأكيد موعدك بنجاح مع الدكتور زياد (${locDisplay}). ألف سلامة ونتطلع لرؤيتك!`;
+        return `تم تأكيد موعدك بنجاح مع الدكتور زياد (${timeDisplay} - ${locDisplay}). ألف سلامة ونتطلع لرؤيتك!`;
       }
 
       if (params.toolName === 'reschedule_appointment') {
         if (params.toolResult.error) {
           return `تعذر تعديل الموعد: ${params.toolResult.error}`;
         }
-        return `تم تعديل موعدك بنجاح. تكرم عينك!`;
+        const timeDisplay = formatArabicDate(params.toolResult.start_time, params.toolResult.end_time);
+        return `تم تعديل موعدك بنجاح (${timeDisplay}). تكرم عينك!`;
       }
 
       if (params.toolName === 'cancel_appointment') {
@@ -1000,7 +1050,7 @@ Guidelines:
       if (params.toolResult.error) {
         return `Ma zabbat l 7ajez: ${params.toolResult.error}`;
       }
-      const timeDisplay = formatLebDate(params.toolResult.start_time);
+      const timeDisplay = formatLebDate(params.toolResult.start_time, params.toolResult.end_time);
       const locDisplay = params.toolResult.visit_type === 'home_visit' 
         ? `zyara 3al beit (${params.toolResult.address || ''})` 
         : `bil 3iyade`;
@@ -1011,7 +1061,7 @@ Guidelines:
       if (params.toolResult.error) {
         return `Ma zabbat l ta2jeel: ${params.toolResult.error}`;
       }
-      const timeDisplay = formatLebDate(params.toolResult.start_time);
+      const timeDisplay = formatLebDate(params.toolResult.start_time, params.toolResult.end_time);
       return `Zabbattelak l maw3ad l jdid ${timeDisplay}. Tekram 3aynak!`;
     }
 
@@ -1486,7 +1536,7 @@ export class AgentCore {
       text: msg.body,
     }));
 
-    const existingAppointment = db.appointments.findLatestActiveByCustomerId(customer.id);
+    const existingAppointment = db.appointments.findLatestActiveByCustomerOrPhone(customer.id, customer.phone);
 
     // If the patient is requesting a BRAND NEW (additional) appointment, clear the active workflow
     // so they are asked for visit type fresh instead of inheriting the previous appointment's type.
@@ -1759,7 +1809,7 @@ export class AgentCore {
         });
       } else if (!incomingText.includes('📍 Shared Location') && !hasDateTimeKeywords && !/\b(cancel|reschedule|change|no|stop|ghayyer|elghe)\b/i.test(incomingText)) {
         const address = incomingText.trim();
-        await this.executeTool(
+        const bookRes = await this.executeTool(
           {
             name: 'book_appointment',
             args: {
@@ -1776,6 +1826,10 @@ export class AgentCore {
           conversation,
           db
         );
+
+        if (bookRes && bookRes.error) {
+          return `I am sorry, but that time slot (${activeWorkflow.date} at ${activeWorkflow.time}) is no longer available: ${bookRes.error}. Would you like to pick another time?\n\nعذراً، هذا الوقت لم يعد متاحاً: ${bookRes.error}. هل ترغب باختيار وقت آخر؟`;
+        }
 
         if (db.workflows) {
           db.workflows.transition(activeWorkflow.id, 'booked');
@@ -1997,7 +2051,7 @@ ${upcomingScheduleDays.join('\n')}`;
 
     // Smart auto-booking / auto-rescheduling chain: If check_availability was called, but the patient explicitly asked to book or move a specific slot
     if (toolCall.name === 'check_availability' && toolResult && Array.isArray(toolResult.available_slots)) {
-      const parsedSlot = parseDateTimeFromMessage(incomingText);
+      const parsedSlot = parseDateTimeFromMessage(incomingText) || extractSlotFromText(incomingText);
       const isRescheduleIntent = /\b(move|reschedule|change|postpone|ghayyer|bade 8ayer|badal|te2jeel)\b/i.test(incomingText);
       const isBookingIntent = /\b(book|maw3ad|appointment|rendez-vous|visit|clinic|in-office|home visit|consultation|se3a|at \d)\b/i.test(incomingText);
       const reqTime = parsedSlot?.time;
@@ -2006,6 +2060,8 @@ ${upcomingScheduleDays.join('\n')}`;
       const isOffice = /\b(in[- ]?office|clinic|cabinet|bil 3iyade|3iyade|3al 3iyade|بالعيادة|في العيادة|عيادة)\b/i.test(incomingText);
       const specifiedVisitType: VisitType | null = isHome ? 'home_visit' : (isOffice ? 'in_office' : null);
       const hasRequiredInfo = specifiedVisitType === 'in_office' || (specifiedVisitType === 'home_visit' && (customer.address || incomingText.includes('📍')));
+
+      console.log(`[Agent] 🔍 Auto-chain check: hasExisting=${Boolean(existingAppointment)}, isResched=${isRescheduleIntent}, reqTime=${reqTime}, isAvail=${isAvailable}`);
 
       if (existingAppointment && isRescheduleIntent && isAvailable) {
         console.log(`[Agent] ⚡ Reschedule slot ${reqTime} on ${toolCall.args.date} is confirmed available. Auto-rescheduling appointment...`);
@@ -2021,6 +2077,10 @@ ${upcomingScheduleDays.join('\n')}`;
         console.log(`[Agent] 📋 Auto-reschedule result:`, JSON.stringify(toolResult));
       } else if (isBookingIntent && isAvailable && specifiedVisitType && hasRequiredInfo) {
         console.log(`[Agent] ⚡ Slot ${reqTime} on ${toolCall.args.date} is confirmed available and patient specified visit type (${specifiedVisitType}). Auto-booking appointment...`);
+        const familyMatch = incomingText.match(/\b(sister|brother|mother|father|son|daughter|wife|husband|mom|dad|طفل|ابن|بنت|زوج|زوجة|اخت|أخت|اخ|أخ|ام|أم|اب|أب)\b/i);
+        const patientName = familyMatch ? `${familyMatch[0]} of ${customer.name || 'Patient'}` : customer.name;
+        const isNewAppointment = Boolean(existingAppointment) && /\b(another|additional|second|separate|sister|brother|mother|father|son|daughter|wife|husband|mom|dad|تاني|ثاني|أخرى|إضافي)\b/i.test(incomingText);
+
         toolCall = {
           name: 'book_appointment',
           args: {
@@ -2028,9 +2088,10 @@ ${upcomingScheduleDays.join('\n')}`;
             time: reqTime,
             visit_type: specifiedVisitType,
             service: specifiedVisitType === 'home_visit' ? 'Home Visit Care' : 'General Consultation',
-            patient_name: customer.name,
+            patient_name: patientName,
             patient_phone: customer.phone,
             address: specifiedVisitType === 'home_visit' ? (customer.address || 'Address on file') : undefined,
+            is_new_appointment: isNewAppointment,
           },
         };
         toolResult = await this.executeTool(toolCall, customer, conversation, db);
@@ -2288,7 +2349,11 @@ ${upcomingScheduleDays.join('\n')}`;
               (rawService.includes('acupunc') && sLower.includes('acupunc')) ||
               (rawService.includes('consult') && sLower.includes('consult'));
           }) || (visitType === 'home_visit' ? CLINIC_SERVICES.find((s) => s.name.includes('Home')) || CLINIC_SERVICES[0] : CLINIC_SERVICES[0]);
-          const startTimeIso = new Date(`${args.date}T${args.time}:00.000Z`).toISOString();
+          const startD = new Date(`${args.date}T${args.time}:00.000Z`);
+          if (isNaN(startD.getTime())) {
+            return { error: 'Invalid date or time provided. Please check the requested time.' };
+          }
+          const startTimeIso = startD.toISOString();
 
           const patientName = args.patient_name || args.customer_name || customer.name;
           const patientPhone = args.patient_phone || args.customer_phone || customer.phone;
@@ -2316,7 +2381,9 @@ ${upcomingScheduleDays.join('\n')}`;
           // treat booking as moving / rescheduling their existing appointment UNLESS they requested a new / additional appointment!
           const activeAppt = db.appointments.findLatestActiveByCustomerOrPhone(customer.id, customer.phone);
           const lastInbound = db.messages.getRecentMessages(conversation.id, 2).reverse().find((m) => m.direction === 'inbound')?.body || '';
-          const isExplicitNew = args.is_new_appointment === true || /\b(new|another|second|extra|additional|tani|jdid|منفصل|جديد|اضافي)\b/i.test(lastInbound);
+          const isExplicitNew = args.is_new_appointment === true ||
+            Boolean(args.patient_name && args.patient_name.includes(' of ')) ||
+            /\b(new|another|second|extra|additional|sister|brother|mother|father|son|daughter|wife|husband|mom|dad|tani|jdid|منفصل|جديد|اضافي|أخرى|إضافي|اخت|أخت|اخ|أخ)\b/i.test(lastInbound);
           if (activeAppt && activeAppt.id && activeAppt.start_time !== startTimeIso && !isExplicitNew) {
             const oldTime = activeAppt.start_time;
             const resched = await this.scheduler.rescheduleAppointment({
@@ -2425,7 +2492,11 @@ ${upcomingScheduleDays.join('\n')}`;
             return { error: 'No upcoming active appointment found to reschedule.' };
           }
 
-          const newStartIso = new Date(`${args.new_date}T${args.new_time}:00.000Z`).toISOString();
+          const newStartD = new Date(`${args.new_date}T${args.new_time}:00.000Z`);
+          if (isNaN(newStartD.getTime())) {
+            return { error: 'Invalid date or time provided. Please check the requested time.' };
+          }
+          const newStartIso = newStartD.toISOString();
           const oldTime = activeAppt.start_time;
 
           const resched = await this.scheduler.rescheduleAppointment({

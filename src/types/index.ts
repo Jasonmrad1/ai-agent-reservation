@@ -6,6 +6,7 @@ export type WorkflowState =
   | 'idle'
   | 'collecting_preferences'
   | 'slot_selected'
+  | 'awaiting_slot'
   | 'awaiting_visit_type'
   | 'awaiting_address'
   | 'ready_to_book'
@@ -48,6 +49,7 @@ export interface Customer {
   id: string;
   phone: string; // WhatsApp phone e.g. "whatsapp:+1234567890" or "+1234567890"
   name?: string | null;
+  address?: string | null;
   opted_out: boolean;
   created_at: string;
   updated_at: string;

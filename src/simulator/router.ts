@@ -1,12 +1,14 @@
 import { Router, Request, Response } from 'express';
 import { DatabaseContext } from '../db/index.js';
-import { GeminiSchedulingAgent } from '../gemini/agent.js';
-import { ReminderRunner } from '../jobs/reminders.js';
+import { AgentCore } from '../gemini/index.js';
+import { ReminderRunner } from '../reminders/runner.js';
 import { validateInboundMessage, resetRateLimit } from '../security/guardrails.js';
+
+export type GeminiSchedulingAgent = AgentCore;
 
 export interface SimulatorRouterOptions {
   db: DatabaseContext;
-  agent: GeminiSchedulingAgent;
+  agent: AgentCore;
   reminders?: ReminderRunner;
 }
 
@@ -87,7 +89,7 @@ export function createSimulatorRouter(options: SimulatorRouterOptions): Router {
       const lower = incomingText.toLowerCase();
       if (lower === '#reset' || lower === '/reset' || lower === '#clear' || lower === '/clear') {
         console.log(`[Simulator] 🔄 Reset command received for ${fromPhone}. Wiping test appointments and chat session...`);
-        const activeAppts = db.appointments.findUpcomingByCustomerId(customer.id);
+        const activeAppts = db.appointments.findUpcomingByCustomerId(customer.id, customer.phone);
         for (const appt of activeAppts) {
           if (agent && agent['scheduler']) {
             try {
@@ -158,7 +160,7 @@ export function createSimulatorRouter(options: SimulatorRouterOptions): Router {
       // 7. Store outbound reply in message history
       db.messages.create(conversation.id, 'outbound', replyText, 'SIM_OUT_' + Date.now(), 'sent');
 
-      const updatedAppointments = db.appointments.findUpcomingByCustomerId(customer.id);
+      const updatedAppointments = db.appointments.findUpcomingByCustomerId(customer.id, customer.phone);
 
       return res.json({
         reply: replyText,
@@ -181,7 +183,7 @@ export function createSimulatorRouter(options: SimulatorRouterOptions): Router {
       const phone = normalizePhone(req.body?.phone);
       const customer = db.customers.findByPhone(phone);
       if (customer) {
-        const activeAppts = db.appointments.findUpcomingByCustomerId(customer.id);
+        const activeAppts = db.appointments.findUpcomingByCustomerId(customer.id, customer.phone);
         for (const appt of activeAppts) {
           db.appointments.updateStatus(appt.id, 'cancelled');
         }

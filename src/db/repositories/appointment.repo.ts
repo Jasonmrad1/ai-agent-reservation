@@ -114,12 +114,28 @@ export class AppointmentRepository {
     return this.mapRow(row);
   }
 
-  public findUpcomingByCustomerId(customerId: string): Appointment[] {
-    const rows = this.db.prepare(`
+  public findUpcomingByCustomerId(customerId: string, phone?: string): Appointment[] {
+    let rows = this.db.prepare(`
       SELECT * FROM appointments
       WHERE customer_id = ? AND status IN ('booked', 'confirmed', 'rescheduled')
       ORDER BY start_time ASC
     `).all(customerId) as any[];
+
+    if (phone) {
+      const digits = phone.replace(/\D/g, '');
+      const phoneRows = this.db.prepare(`
+        SELECT a.* FROM appointments a
+        JOIN customers c ON a.customer_id = c.id
+        WHERE (c.phone = ? OR c.phone LIKE ? OR replace(replace(replace(c.phone, '+', ''), 'whatsapp:', ''), ' ', '') = ?)
+          AND a.status IN ('booked', 'confirmed', 'rescheduled')
+        ORDER BY a.start_time ASC
+      `).all(phone, `%${digits}%`, digits) as any[];
+
+      const map = new Map<string, any>();
+      for (const r of rows) map.set(r.id, r);
+      for (const r of phoneRows) map.set(r.id, r);
+      rows = Array.from(map.values()).sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime());
+    }
 
     return rows.map(this.mapRow);
   }
