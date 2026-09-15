@@ -1441,7 +1441,7 @@ export class AgentCore {
 
     // 2. Check if message is directly from Doctor / Clinic Admin
     const custDigits = (customer.phone || '').replace(/\D/g, '');
-    const adminDigits = ((this.notifier as any)?.adminNumber || process.env.ADMIN_WHATSAPP_NUMBER || '+96171476193').replace(/\D/g, '');
+    const adminDigits = ((this.notifier as any)?.adminNumber || process.env.ADMIN_WHATSAPP_NUMBER || '').replace(/\D/g, '');
     const isDoctor = Boolean(custDigits && adminDigits && (custDigits === adminDigits || custDigits.endsWith(adminDigits) || adminDigits.endsWith(custDigits)));
 
     // Direct Doctor Commands & Sensitivity

@@ -132,8 +132,8 @@ GEMINI_MODEL=gemini-2.5-flash
 # WhatsApp / Twilio
 TWILIO_ACCOUNT_SID=your_twilio_account_sid
 TWILIO_AUTH_TOKEN=your_twilio_auth_token
-TWILIO_WHATSAPP_NUMBER=whatsapp:+14155238886
-ADMIN_WHATSAPP_NUMBER=whatsapp:+96171476193
+TWILIO_WHATSAPP_NUMBER=whatsapp:+1XXXXXXXXXX
+ADMIN_WHATSAPP_NUMBER=whatsapp:+1XXXXXXXXXX
 
 # Security & Admin
 ADMIN_SESSION_SECRET=your_secure_admin_secret
