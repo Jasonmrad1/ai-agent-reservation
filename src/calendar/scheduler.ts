@@ -2,6 +2,7 @@ import { DatabaseContext } from '../db/index.js';
 import { CalendarProvider } from './provider.js';
 import { Appointment, VisitType } from '../types/index.js';
 import { computeFreeWindows } from '../utils/slots.js';
+import { getBeirutTimeInfo } from '../utils/timezone.js';
 
 export interface SchedulerOptions {
   db: DatabaseContext;
@@ -145,13 +146,15 @@ export class SchedulingEngine {
   public async getAvailableSlots(
     dateStr: string,
     visitType: VisitType,
-    durationMinutes: number = this.defaultSlotDurationMinutes
+    durationMinutes: number = this.defaultSlotDurationMinutes,
+    referenceNow?: Date
   ): Promise<string[]> {
     const shifts = this.getActiveShiftsForDate(dateStr);
     if (shifts.length === 0) {
       return [];
     }
 
+    const beirutNow = getBeirutTimeInfo(referenceNow || new Date());
     const bufferMinutes = this.getHomeVisitBufferMinutes(dateStr);
     const homeBufferMs = bufferMinutes * 60 * 1000;
     const slotDurationMs = durationMinutes * 60 * 1000;
@@ -226,6 +229,15 @@ export class SchedulingEngine {
 
       for (const currentStartMs of sortedCandidates) {
         const candidateStart = new Date(currentStartMs);
+
+        // Same-day past slot filter: if querying for TODAY in Beirut time,
+        // do not offer slots that have already passed in local clock time.
+        if (dateStr === beirutNow.dateStr) {
+          const candMinutes = candidateStart.getUTCHours() * 60 + candidateStart.getUTCMinutes();
+          if (candMinutes <= beirutNow.totalMinutes) {
+            continue;
+          }
+        }
 
         // For home visits: ensure appointment + post-travel buffer ends within the shift.
         if (visitType === 'home_visit') {
@@ -527,7 +539,8 @@ export class SchedulingEngine {
     startDateStr: string,
     daysCount: number = 7,
     visitType: VisitType = 'in_office',
-    maxOpenDays: number = 7
+    maxOpenDays: number = 7,
+    referenceNow?: Date
   ): Promise<Array<{ date: string; day_name: string; is_closed: boolean; hours?: string; available_slots: string[]; free_windows: Array<{ from: string; to: string; from12: string; to12: string }> }>> {
     const results: Array<{ date: string; day_name: string; is_closed: boolean; hours?: string; available_slots: string[]; free_windows: Array<{ from: string; to: string; from12: string; to12: string }> }> = [];
     const [year, month, day] = startDateStr.split('-').map(Number);
@@ -540,7 +553,7 @@ export class SchedulingEngine {
       const dayName = dayNames[curDate.getUTCDay()];
 
       const shifts = this.getActiveShiftsForDate(curDateStr);
-      const slots = await this.getAvailableSlots(curDateStr, visitType);
+      const slots = await this.getAvailableSlots(curDateStr, visitType, this.defaultSlotDurationMinutes, referenceNow);
 
       if (shifts.length === 0 || slots.length === 0) {
         results.push({

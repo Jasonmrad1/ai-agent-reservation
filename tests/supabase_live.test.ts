@@ -66,11 +66,12 @@ describe('⚡ SUPABASE LIVE CLOUD INTEGRATION SUITE', () => {
       .from('availability_rules')
       .select('*')
       .eq('day_of_week', 1)
-      .single();
+      .limit(1);
 
     expect(error).toBeNull();
-    expect(Boolean(data.is_active)).toBe(true);
-    expect(data.start_time).toBe('09:00');
+    expect(data && data.length > 0).toBe(true);
+    expect(Boolean(data![0].is_active)).toBe(true);
+    expect(data![0].start_time).toBe('09:00');
   });
 
   it('4. Inserts appointment and syncs to Supabase cloud table', async () => {

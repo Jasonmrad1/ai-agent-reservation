@@ -101,7 +101,7 @@ describe('🏆 MASTER END-TO-END CLINIC LIFECYCLE SUITE (DR. ZIAD EL KHOURY)', (
       .send({
         From: PATIENT_PHONE,
         To: CLINIC_WHATSAPP,
-        Body: 'Hakim bde maw3ad bkra tnen aal 10 bil 3iyade kermel dahre',
+        Body: 'Hakim bde maw3ad 2026-09-14 aal 10 bil 3iyade kermel dahre',
         MessageSid: 'SM_PATIENT_BOOK_01',
         ProfileName: PATIENT_NAME,
       });

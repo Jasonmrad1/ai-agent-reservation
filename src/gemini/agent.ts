@@ -7,6 +7,7 @@ import { AGENT_TOOLS, CLINIC_SERVICES, CLINIC_POLICIES } from './tools.js';
 import { SYSTEM_PROMPT, DOCTOR_ASSISTANT_SYSTEM_PROMPT } from './prompts.js';
 import { withRetry } from '../utils/retry.js';
 import { computeFreeWindows } from '../utils/slots.js';
+import { getBeirutTimeInfo, getBeirutTodayStr, BEIRUT_TIMEZONE } from '../utils/timezone.js';
 
 export interface ToolCall {
   name: string;
@@ -269,23 +270,26 @@ export function parseDateTimeFromMessage(
     saturday: 6, sat: 6, sabit: 6, elsabit: 6, samedi: 6, 'السبت': 6,
   };
 
+  const refInfo = getBeirutTimeInfo(referenceDate);
   let targetDate: string | undefined;
 
-  if (/\b(tomorrow|bkra|bokra|demain|غداً|بكرة|بكره)\b/i.test(lower)) {
-    const d = new Date(referenceDate.getTime() + 86400000);
-    targetDate = d.toISOString().split('T')[0];
-  } else if (/\b(today|lyom|elyom|aujourd'hui|اليوم)\b/i.test(lower)) {
-    targetDate = referenceDate.toISOString().split('T')[0];
-  } else {
-    for (const [dayName, dayNum] of Object.entries(weekdayMap)) {
-      const regex = new RegExp(`\\b${dayName}\\b`, 'i');
-      if (regex.test(lower)) {
-        const currentDay = referenceDate.getUTCDay();
-        const daysUntil = (dayNum - currentDay + 7) % 7;
-        const d = new Date(referenceDate.getTime() + daysUntil * 86400000);
-        targetDate = d.toISOString().split('T')[0];
-        break;
-      }
+  for (const [dayName, dayNum] of Object.entries(weekdayMap)) {
+    const regex = new RegExp(`\\b${dayName}\\b`, 'i');
+    if (regex.test(lower)) {
+      const currentDay = refInfo.dayOfWeek;
+      const daysUntil = (dayNum - currentDay + 7) % 7;
+      const d = new Date(referenceDate.getTime() + daysUntil * 86400000);
+      targetDate = getBeirutTimeInfo(d).dateStr;
+      break;
+    }
+  }
+
+  if (!targetDate) {
+    if (/\b(tomorrow|bkra|bokra|demain|غداً|بكرة|بكره)\b/i.test(lower)) {
+      const d = new Date(referenceDate.getTime() + 86400000);
+      targetDate = getBeirutTimeInfo(d).dateStr;
+    } else if (/\b(today|lyom|elyom|aujourd'hui|اليوم)\b/i.test(lower)) {
+      targetDate = refInfo.dateStr;
     }
   }
 
@@ -307,7 +311,7 @@ export function parseDateTimeFromMessage(
   // 3. Time detection
   // Look specifically for patterns like "at 9", "9 am", "2pm", "14:00", "9:30", "8 15", "8:15"
   let targetTime: string | undefined;
-  const strongTimeRegex = /(?:(?:at|@|se3a|à|on|from|between|around)\s+(\d{1,2})(?:[:\s](\d{2}))?\s*(am|pm)?)|(?:\b(\d{1,2}):(\d{2})\s*(am|pm)?\b)|(?:\b(\d{1,2})\s+(\d{2})\s*(am|pm)?\b)|(?:\b(\d{1,2})\s*(am|pm)\b)|(?:\b(\d{1,2})(?:[:\s](\d{2}))?\s*(?:till|to|-)\s*\d)/i;
+  const strongTimeRegex = /(?:(?:at|@|se3a|3al|aal|al|3a|à|on|from|between|around)\s+(\d{1,2})(?:[:\s](\d{2}))?\s*(am|pm)?)|(?:\b(\d{1,2}):(\d{2})\s*(am|pm)?\b)|(?:\b(\d{1,2})\s+(\d{2})\s*(am|pm)?\b)|(?:\b(\d{1,2})\s*(am|pm)\b)|(?:\b(\d{1,2})(?:[:\s](\d{2}))?\s*(?:till|to|-)\s*\d)/i;
   const strongMatch = lower.match(strongTimeRegex);
 
   if (strongMatch) {
@@ -1415,11 +1419,12 @@ export class AgentCore {
 
     const lower = incomingText.toLowerCase();
 
-    // 1. Dynamic Calendar & Time Context
+    // 1. Dynamic Calendar & Time Context (Asia/Beirut Timezone)
     const now = new Date();
-    const todayStr = now.toISOString().split('T')[0];
-    const dayOfWeek = now.toLocaleDateString('en-US', { weekday: 'long' });
-    const timeStr = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+    const beirutNow = getBeirutTimeInfo(now);
+    const todayStr = beirutNow.dateStr;
+    const dayOfWeek = beirutNow.dayName;
+    const timeStr = `${beirutNow.timeStr12} (${beirutNow.timeStr24} Beirut Time)`;
     
     const dayNamesLeb: Record<number, string> = {
       0: 'Ahad (Sunday)',
@@ -1433,10 +1438,9 @@ export class AgentCore {
     const upcomingScheduleDays: string[] = [];
     for (let i = 0; i <= 10; i++) {
       const d = new Date(now.getTime() + i * 24 * 60 * 60 * 1000);
-      const iso = d.toISOString().split('T')[0];
-      const dow = d.getDay();
+      const dInfo = getBeirutTimeInfo(d);
       const label = i === 0 ? ' [Today]' : i === 1 ? ' [Bkra / Tomorrow]' : '';
-      upcomingScheduleDays.push(`- ${iso} = ${dayNamesLeb[dow]}${label}`);
+      upcomingScheduleDays.push(`- ${dInfo.dateStr} = ${dayNamesLeb[dInfo.dayOfWeek]}${label}`);
     }
 
     // 2. Check if message is directly from Doctor / Clinic Admin
@@ -1719,7 +1723,7 @@ export class AgentCore {
         }
       }
 
-      const targetDate = new Date().toISOString().split('T')[0];
+      const targetDate = getBeirutTodayStr();
       const openDays = await this.scheduler.getAvailableSlotsAcrossRange(targetDate, 7, 'home_visit', 4);
       const activeWindows = openDays.filter((d) => !d.is_closed && d.free_windows.length > 0).slice(0, 4);
       const scheduleLines = activeWindows.map((d) => {
@@ -1738,7 +1742,7 @@ export class AgentCore {
         return `تكرم عينك! تم تسجيل رغبتكم في حجز زيارة منزلية 🏠.\n\nأي يوم ووقت يناسبكم؟ إليكم الأوقات المتاحة للزيارات منزلية هذا الأسبوع:\n${scheduleLines.join('\n')}\n\nيرجى إعلامنا باليوم والوقت المفضلين لديكم مع تزويدنا بعنوان المنزل أو إرسال موقعكم عبر الواتساب.`;
       }
       const nameStr = customer.name ? ` ${customer.name}` : '';
-      return `Great${nameStr}! We have noted that you would like a **Home Visit** 🏠.\n\nWhich day and time works best for you? Here are our available times for home visits this week:\n${scheduleLines.join('\n')}\n\nPlease let us know your preferred day and time, along with your home address or WhatsApp location pin!`;
+      return `Great${nameStr}! We have noted that you would like a Home Visit 🏠.\n\nWhich day and time works best for you? Here are our available times for home visits this week:\n${scheduleLines.join('\n')}\n\nPlease let us know your preferred day and time, along with your home address or WhatsApp location pin!`;
     }
 
     if (isBareOfficeSelection) {
@@ -1760,7 +1764,7 @@ export class AgentCore {
         }
       }
 
-      const targetDate = new Date().toISOString().split('T')[0];
+      const targetDate = getBeirutTodayStr();
       const openDays = await this.scheduler.getAvailableSlotsAcrossRange(targetDate, 7, 'in_office', 4);
       const activeWindows = openDays.filter((d) => !d.is_closed && d.free_windows.length > 0).slice(0, 4);
       const scheduleLines = activeWindows.map((d) => {
@@ -2249,7 +2253,7 @@ ${upcomingScheduleDays.join('\n')}`;
           explicitVisitType = activeWf.visit_type;
         }
 
-        const targetDate = args.date || new Date().toISOString().split('T')[0];
+        const targetDate = args.date || getBeirutTodayStr();
         const daysAhead = args.days_ahead || 7;
         const duration = Number(args.duration_minutes) || 60;
 
@@ -2533,7 +2537,7 @@ ${upcomingScheduleDays.join('\n')}`;
             db.workflows.cancelActiveByCustomerId(customer.id);
           }
 
-          const todayStr = new Date().toISOString().split('T')[0];
+          const todayStr = getBeirutTodayStr();
           const upcomingOpenDays = await this.scheduler.getAvailableSlotsAcrossRange(todayStr, 7, 'in_office', 4);
 
           return {
