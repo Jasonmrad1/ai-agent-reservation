@@ -2056,9 +2056,17 @@ ${upcomingScheduleDays.join('\n')}`;
     // Smart auto-booking / auto-rescheduling chain: If check_availability was called, but the patient explicitly asked to book or move a specific slot
     if (toolCall.name === 'check_availability' && toolResult && Array.isArray(toolResult.available_slots)) {
       const parsedSlot = parseDateTimeFromMessage(incomingText) || extractSlotFromText(incomingText);
-      const isRescheduleIntent = /\b(move|reschedule|change|postpone|ghayyer|bade 8ayer|badal|te2jeel)\b/i.test(incomingText);
+      const isSameTimePhrase = /\b(same time|same slot|same hour|nafs el wa2et|nafs l wa2et|nafs lwa2et|نفس الوقت|نفس الساعة)\b/i.test(incomingText);
+      const isRescheduleIntent = isSameTimePhrase || /\b(move|reschedule|change|postpone|ghayyer|bade 8ayer|badal|te2jeel)\b/i.test(incomingText);
       const isBookingIntent = /\b(book|maw3ad|appointment|rendez-vous|visit|clinic|in-office|home visit|consultation|se3a|at \d)\b/i.test(incomingText);
-      const reqTime = parsedSlot?.time;
+      
+      // If patient said "same time" and has an existing appointment, inherit its time
+      let reqTime = parsedSlot?.time;
+      if (!reqTime && isSameTimePhrase && existingAppointment) {
+        const existingD = new Date(existingAppointment.start_time);
+        reqTime = `${String(existingD.getUTCHours()).padStart(2, '0')}:${String(existingD.getUTCMinutes()).padStart(2, '0')}`;
+      }
+
       const isAvailable = reqTime && toolResult.available_slots.includes(reqTime);
       const isHome = /\b(home visit|home|beit|zyara|منزل|زيارة منزلية)\b/i.test(incomingText);
       const isOffice = /\b(in[- ]?office|clinic|cabinet|bil 3iyade|3iyade|3al 3iyade|بالعيادة|في العيادة|عيادة)\b/i.test(incomingText);
@@ -2167,24 +2175,59 @@ ${upcomingScheduleDays.join('\n')}`;
         });
       }
 
+      // 🛡️ ANTI-HALLUCINATION GUARD:
+      // If Gemini drafted a text reply claiming an appointment was successfully rescheduled,
+      // but toolCall was only check_availability, execute reschedule_appointment now!
+      const claimsRescheduled = /successfully rescheduled|has been rescheduled|تم تعديل موعدك|تم تغيير موعدك|تم تأكيد تعديل الموعد|rescheduled your appointment/i.test(reply);
+      if (claimsRescheduled && toolCall.name === 'check_availability' && existingAppointment) {
+        console.warn(`[Agent] 🚨 Intercepted direct text claiming reschedule without reschedule tool execution! Executing reschedule now...`);
+        const slot = parseDateTimeFromMessage(incomingText, new Date(existingAppointment.start_time)) ||
+          parseDateTimeFromMessage(reply, new Date(existingAppointment.start_time)) ||
+          extractSlotFromText(reply, existingAppointment.start_time);
+
+        let reschedDate = toolCall.args.date || slot?.date;
+        let reschedTime = slot?.time;
+        if (!reschedTime) {
+          const existingD = new Date(existingAppointment.start_time);
+          reschedTime = `${String(existingD.getUTCHours()).padStart(2, '0')}:${String(existingD.getUTCMinutes()).padStart(2, '0')}`;
+        }
+
+        if (reschedDate && reschedTime) {
+          try {
+            await this.scheduler.rescheduleAppointment({
+              appointmentId: existingAppointment.id,
+              newStartTime: new Date(`${reschedDate}T${reschedTime}:00.000Z`).toISOString(),
+              visitType: existingAppointment.visit_type,
+              address: existingAppointment.address,
+            });
+            console.log(`[Agent] ✅ Anti-hallucination auto-rescheduled appointment ${existingAppointment.id} to ${reschedDate} at ${reschedTime}`);
+          } catch (reschedErr: any) {
+            console.error(`[Agent] ❌ Anti-hallucination reschedule failed:`, reschedErr);
+          }
+        }
+      }
+
       if (toolCall.name === 'check_availability') {
         const slot = parseDateTimeFromMessage(incomingText, existingAppointment?.start_time ? new Date(existingAppointment.start_time) : new Date()) ||
           extractSlotFromText(incomingText, existingAppointment?.start_time);
 
-        if (slot && slot.date && slot.time && db.workflows) {
+        const targetDate = toolCall.args?.date || slot?.date;
+        const targetTime = slot?.time;
+
+        if (targetDate && targetTime && db.workflows) {
           const currentWf = db.workflows.findActiveByCustomerId(customer.id);
           if (currentWf) {
             db.workflows.update(currentWf.id, {
-              date: slot.date,
-              time: slot.time,
+              date: targetDate,
+              time: targetTime,
               state: currentWf.visit_type ? currentWf.state : 'awaiting_visit_type',
             });
           } else {
             db.workflows.create({
               customer_id: customer.id,
               conversation_id: conversation.id,
-              date: slot.date,
-              time: slot.time,
+              date: targetDate,
+              time: targetTime,
               state: 'awaiting_visit_type',
             });
           }
@@ -2205,20 +2248,23 @@ ${upcomingScheduleDays.join('\n')}`;
         const slot = parseDateTimeFromMessage(incomingText, existingAppointment?.start_time ? new Date(existingAppointment.start_time) : new Date()) ||
           extractSlotFromText(incomingText, existingAppointment?.start_time);
 
-        if (slot && slot.date && slot.time && db.workflows) {
+        const targetDate = toolCall.args?.date || slot?.date;
+        const targetTime = slot?.time;
+
+        if (targetDate && targetTime && db.workflows) {
           const currentWf = db.workflows.findActiveByCustomerId(customer.id);
           if (currentWf) {
             db.workflows.update(currentWf.id, {
-              date: slot.date,
-              time: slot.time,
+              date: targetDate,
+              time: targetTime,
               state: currentWf.visit_type ? currentWf.state : 'awaiting_visit_type',
             });
           } else {
             db.workflows.create({
               customer_id: customer.id,
               conversation_id: conversation.id,
-              date: slot.date,
-              time: slot.time,
+              date: targetDate,
+              time: targetTime,
               state: 'awaiting_visit_type',
             });
           }

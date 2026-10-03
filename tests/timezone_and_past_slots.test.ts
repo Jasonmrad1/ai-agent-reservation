@@ -150,5 +150,64 @@ describe('🇱🇧 BEIRUT TIMEZONE & SAME-DAY PAST SLOTS FILTERING', () => {
     expect(officeWindows[0].from).toBe('15:30');
     expect(officeWindows[0].from12).toBe('3:30 PM');
   });
+
+  it('7. Correctly recognizes "same time but on thursday" to auto-reschedule home visit', async () => {
+    const { createApp } = await import('../src/app.js');
+    const { MockWhatsAppGateway } = await import('../src/twilio/client.js');
+    const { MockGeminiClient } = await import('../src/gemini/agent.js');
+    const request = (await import('supertest')).default;
+
+    const mockGateway = new MockWhatsAppGateway();
+    const geminiClient = new MockGeminiClient();
+    const appInstance = createApp({
+      db,
+      gateway: mockGateway,
+      calendar,
+      geminiClient,
+      config: {
+        port: 3000,
+        nodeEnv: 'test',
+        adminSessionSecret: 'test-secret',
+        homeVisitBufferMinutes: 30,
+        defaultSlotDurationMinutes: 60,
+      },
+    });
+
+    const { app } = appInstance;
+
+    // Create active home visit for Wednesday 2026-10-07 at 09:00
+    const customer = db.customers.findOrCreate('whatsapp:+96171476193', 'Jason Mrad');
+    const appt = db.appointments.create({
+      customer_id: customer.id,
+      service: 'Home Visit Care',
+      visit_type: 'home_visit',
+      address: 'Zeatreh',
+      start_time: '2026-10-07T09:00:00.000Z',
+      end_time: '2026-10-07T10:00:00.000Z',
+      price: 180,
+      status: 'booked',
+    });
+
+    geminiClient.mockToolCall = {
+      name: 'check_availability',
+      args: { date: '2026-10-08', visit_type: 'home_visit' },
+    };
+
+    const res = await request(app)
+      .post('/api/webhook/whatsapp')
+      .send({
+        From: 'whatsapp:+96171476193',
+        Body: 'same time but on thursday',
+        MessageSid: 'SM_RESCHED_SAME_TIME_01',
+        ProfileName: 'Jason Mrad',
+      });
+
+    expect(res.status).toBe(200);
+
+    // Verify appointment was actually mutated in database to Oct 8 at 09:00
+    const updated = db.appointments.findById(appt.id);
+    expect(updated?.start_time).toBe('2026-10-08T09:00:00.000Z');
+    expect(updated?.status).toBe('rescheduled');
+  });
 });
 
