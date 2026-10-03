@@ -2154,6 +2154,19 @@ ${upcomingScheduleDays.join('\n')}`;
     }
 
     // 6. Draft grounded reply from backend tool result
+    if (toolResult && toolResult.error) {
+      console.warn(`[Agent] ⚠️ Tool ${toolCall.name} returned an error:`, toolResult.error);
+      if (toolCall.name === 'book_appointment') {
+        return `I apologize, but we could not confirm that appointment: ${toolResult.error}. Would you like to select another available opening?\n\nعذراً، لم نتمكن من تأكيد هذا الموعد: ${toolResult.error}. هل ترغب باختيار وقت آخر متاح؟`;
+      }
+      if (toolCall.name === 'reschedule_appointment') {
+        return `I apologize, but we could not update your appointment: ${toolResult.error}. Would you like to pick another available opening?\n\nعذراً، لم نتمكن من تعديل الموعد: ${toolResult.error}. هل ترغب باختيار وقت آخر متاح؟`;
+      }
+      if (toolCall.name === 'cancel_appointment') {
+        return `We could not cancel the appointment at this time: ${toolResult.error}. Please let us know if you need assistance.\n\nلم نتمكن من إلغاء الموعد: ${toolResult.error}.`;
+      }
+    }
+
     console.log(`[Agent] ✍️ Drafting grounded reply from tool result...`);
     try {
       let reply = await this.client.generateReplyFromToolResult({
@@ -2178,8 +2191,14 @@ ${upcomingScheduleDays.join('\n')}`;
       // 🛡️ ANTI-HALLUCINATION GUARD:
       // If Gemini drafted a text reply claiming an appointment was successfully rescheduled,
       // but toolCall was only check_availability, execute reschedule_appointment now!
+      // If it fails for ANY reason, OVERRIDE the reply so we NEVER tell the patient it succeeded when it didn't!
       const claimsRescheduled = /successfully rescheduled|has been rescheduled|تم تعديل موعدك|تم تغيير موعدك|تم تأكيد تعديل الموعد|rescheduled your appointment/i.test(reply);
-      if (claimsRescheduled && toolCall.name === 'check_availability' && existingAppointment) {
+      if (claimsRescheduled && toolCall.name === 'check_availability') {
+        if (!existingAppointment) {
+          console.warn(`[Agent] 🚨 Intercepted direct text claiming reschedule with NO active appointment! Overriding false success message.`);
+          return `I apologize, but we could not find an active appointment to reschedule. Would you like to book a new appointment instead?\n\nعذراً، لم نجد موعداً نشطاً لنقله. هل ترغب بحجز موعد جديد بدلاً من ذلك؟`;
+        }
+
         console.warn(`[Agent] 🚨 Intercepted direct text claiming reschedule without reschedule tool execution! Executing reschedule now...`);
         const slot = parseDateTimeFromMessage(incomingText, new Date(existingAppointment.start_time)) ||
           parseDateTimeFromMessage(reply, new Date(existingAppointment.start_time)) ||
@@ -2203,7 +2222,12 @@ ${upcomingScheduleDays.join('\n')}`;
             console.log(`[Agent] ✅ Anti-hallucination auto-rescheduled appointment ${existingAppointment.id} to ${reschedDate} at ${reschedTime}`);
           } catch (reschedErr: any) {
             console.error(`[Agent] ❌ Anti-hallucination reschedule failed:`, reschedErr);
+            // DO NOT SEND THE SUCCESS MESSAGE! Send honest failure message:
+            return `I apologize, but we could not update your appointment to that time (${reschedDate} at ${reschedTime}): ${reschedErr.message}. Would you like to pick another available opening?\n\nعذراً، لم نتمكن من تعديل الموعد إلى هذا الوقت: ${reschedErr.message}. هل ترغب باختيار وقت آخر متاح؟`;
           }
+        } else {
+          // If we could not resolve the date and time, NEVER send false success
+          return `We would be happy to reschedule your appointment! Which day and time works best for you?\n\nيسعدنا تعديل موعدك! ما هو اليوم والوقت الأنسب لك؟`;
         }
       }
 
