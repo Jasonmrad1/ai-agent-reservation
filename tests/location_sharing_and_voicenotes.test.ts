@@ -162,7 +162,7 @@ describe('📍 WHATSAPP LOCATION SHARING & 🎙️ VOICE NOTE HANDLING SUITE', (
       .post('/api/webhook/whatsapp')
       .send({
         From: PATIENT_PHONE,
-        Body: 'wed from 12 to 1',
+        Body: 'September 23 from 12 to 1',
         MessageSid: 'SM_STATE_01',
         ProfileName: PATIENT_NAME,
       });

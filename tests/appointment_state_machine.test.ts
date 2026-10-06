@@ -105,7 +105,7 @@ describe('🏛️ DURABLE APPOINTMENT STATE MACHINE & PERSISTED WORKFLOWS', () =
       .post('/api/webhook/whatsapp')
       .send({
         From: PATIENT_PHONE,
-        Body: 'Can I book Wednesday from 12 to 1?',
+        Body: 'Can I book September 23 from 12 to 1?',
         MessageSid: 'SM_TURN_01',
         ProfileName: PATIENT_NAME,
       });

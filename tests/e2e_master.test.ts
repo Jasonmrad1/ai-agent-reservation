@@ -111,7 +111,7 @@ describe('🏆 MASTER END-TO-END CLINIC LIFECYCLE SUITE (DR. ZIAD EL KHOURY)', (
     // Verify patient received confirmation
     const patientBookingConfirm = gateway.sentMessages.find((m) => m.to === PATIENT_PHONE);
     expect(patientBookingConfirm).toBeDefined();
-    expect(patientBookingConfirm?.body).toContain('confirmed');
+    expect(patientBookingConfirm?.body).toMatch(/confirmed|Zabbattelak/i);
 
     // Verify Dr. Ziad received WhatsApp alert on his personal phone
     const doctorAlert = gateway.sentMessages.find((m) => m.to === DOCTOR_PHONE);

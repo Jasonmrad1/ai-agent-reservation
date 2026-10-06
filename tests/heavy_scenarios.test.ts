@@ -92,7 +92,7 @@ describe('🔥 HEAVY SCENARIOS & STRESS SUITE: Complete Clinic System Validation
       db,
     });
 
-    expect(turn3Reply).toContain('confirmed');
+    expect(turn3Reply).toMatch(/confirmed|Zabbattelak/i);
 
     const upcoming = db.appointments.findUpcomingByCustomerId(customer.id);
     expect(upcoming.length).toBe(1);
@@ -224,7 +224,7 @@ describe('🔥 HEAVY SCENARIOS & STRESS SUITE: Complete Clinic System Validation
       db,
     });
 
-    expect(reply).toContain('cancelled');
+    expect(reply).toMatch(/cancelled|Tlagha/i);
     const dbAppt = db.appointments.findById(appt.id);
     expect(dbAppt?.status).toBe('cancelled');
 
@@ -259,7 +259,7 @@ describe('🔥 HEAVY SCENARIOS & STRESS SUITE: Complete Clinic System Validation
       db,
     });
 
-    expect(reply).toContain('confirmed');
+    expect(reply).toMatch(/confirmed|Zabbattelak/i);
 
     const slots = await scheduler.getAvailableSlots('2026-09-17', 'in_office');
     expect(slots).not.toContain('11:00');
@@ -341,7 +341,7 @@ describe('🔥 HEAVY SCENARIOS & STRESS SUITE: Complete Clinic System Validation
     expect(gateway.sentMessages.length).toBeGreaterThanOrEqual(1);
 
     const confirmReply = reminders.handleConfirmationResponse(cust.id, 'YES');
-    expect(confirmReply).toContain('confirmed');
+    expect(confirmReply).toMatch(/confirmed|Zabbattelak/i);
 
     const confirmedAppt = db.appointments.findById(appt.id);
     expect(confirmedAppt?.status).toBe('confirmed');

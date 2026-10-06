@@ -619,150 +619,7 @@ export class LiveGeminiClient implements GeminiClient {
       }
     }
 
-    // Heuristic intent classification if all external LLM models fail or are rate-limited
-    console.warn('[Agent] ⚠️ All Gemini models throttled, falling back to local heuristic classifier.');
-    const lower = params.incomingMessage.toLowerCase();
-    const lang = detectLanguage(params.incomingMessage);
-    const historyText = (params.conversationHistory || []).map((h) => (h.parts || []).map((p) => p.text || '').join(' ')).join(' ').toLowerCase();
-    const isHomeContext = lower.includes('beit') || lower.includes('home') || lower.includes('zyara') || lower.includes('manzil') || historyText.includes('home visit') || historyText.includes('zyara') || historyText.includes('beit');
-    const visitType = isHomeContext ? 'home_visit' : 'in_office';
-    
-    if (lower.includes('ghil') || lower.includes('cancel') || lower.includes('ilgha') || lower.includes('elghe') || lower.includes('laghe') || lower.includes('ma baddi')) {
-      return {
-        toolCalls: [{
-          name: 'cancel_appointment',
-          args: { reason: 'Patient requested cancellation' },
-        }],
-      };
-    }
-
-    const parsedDateTime = parseDateTimeFromMessage(params.incomingMessage);
-    if (parsedDateTime && (parsedDateTime.date || parsedDateTime.time)) {
-      const tomorrow = new Date(Date.now() + 86400000).toISOString().split('T')[0];
-      return {
-        toolCalls: [{
-          name: 'check_availability',
-          args: {
-            date: parsedDateTime.date || tomorrow,
-            time: parsedDateTime.time,
-            visit_type: visitType,
-          },
-        }],
-      };
-    }
-
-    if (lower.includes('fade') || lower.includes('fadi') || lower.includes('mawa3eed') || lower.includes('slots') || lower.includes('available') || lower.includes('aymta') || lower.includes('free')) {
-      const tomorrow = new Date();
-      tomorrow.setDate(tomorrow.getDate() + 1);
-      return {
-        toolCalls: [{
-          name: 'check_availability',
-          args: {
-            date: tomorrow.toISOString().split('T')[0],
-            visit_type: visitType,
-          },
-        }],
-      };
-    }
-
-    if (lower.includes('reschedule') || lower.includes('ajjel') || lower.includes('move') || lower.includes('ghayer')) {
-      return {
-        toolCalls: [{
-          name: 'reschedule_appointment',
-          args: {
-            new_date: new Date(Date.now() + 86400000).toISOString().split('T')[0],
-            new_time: '11:00',
-          },
-        }],
-      };
-    }
-
-    if (
-      lower.includes('chest pain') ||
-      lower.includes('waja3 bi sadre') ||
-      lower.includes('waja3 seder') ||
-      lower.includes('shortness of breath') ||
-      lower.includes('dii2et nafas') ||
-      lower.includes('di2et nafas') ||
-      lower.includes('emergency') ||
-      lower.includes('tari2a') ||
-      lower.includes('bleeding heavily')
-    ) {
-      return {
-        toolCalls: [{
-          name: 'escalate_to_human',
-          args: { reason: 'Emergency triage: acute medical symptoms reported', urgency: 'high' },
-        }],
-      };
-    }
-
-    if (
-      lower.includes('number') ||
-      lower.includes('phone') ||
-      lower.includes('ra2em') ||
-      lower.includes('mobile') ||
-      lower.includes('numéro') ||
-      lower.includes('numero') ||
-      lower.includes('call') ||
-      lower.includes('d2el') ||
-      lower.includes('direct')
-    ) {
-      if (lower.includes('doctor') || lower.includes('hakim') || lower.includes('7akim') || lower.includes('ziad') || lower.includes('personal') || lower.includes('kallim') || lower.includes('e7ke') || lower.includes('speak')) {
-        return {
-          toolCalls: [{
-            name: 'escalate_to_human',
-            args: { reason: 'Patient requested doctor direct contact / phone number', urgency: 'medium' },
-          }],
-        };
-      }
-    }
-
-    if (lower.includes('human') || lower.includes('doctor') || lower.includes('hakim') || lower.includes('7akim') || lower.includes('person') || lower.includes('speak with staff')) {
-      return {
-        toolCalls: [{
-          name: 'escalate_to_human',
-          args: { reason: 'Patient requested to speak with doctor or staff', urgency: 'medium' },
-        }],
-      };
-    }
-
-    if (lower.includes('[voice_note]') || lower.includes('voice note') || lower.includes('audio note')) {
-      if (lang === 'arabizi') {
-        return {
-          text: "Ahla fik! L assistant taba3 l 3iyade byeste2bel messages ktebe 💬. Rja2 b3at talabak aw l wa2et l byenasbak ktebe, aw ektob 'hakim' kermel Dr. Ziad aw l team yetwasalo ma3ak direct!",
-        };
-      }
-      return {
-        text: "Thank you for reaching out! Our clinic scheduling assistant currently processes written messages 💬. Please type your appointment request or question here (or type 'human' if you would like Dr. Ziad / clinic staff to contact you directly), and we'll take care of it right away!",
-      };
-    }
-
-    // If this is an ongoing conversation, continue naturally without repeating welcome greetings
-    if (params.conversationHistory && params.conversationHistory.length > 0) {
-      if (lang === 'arabizi') {
-        return {
-          text: "Tekram! Ayya nhar w se3a byenasbak kermel nshouflak l mawa3eed l fadiye, aw baddak t7ajez bil 3iyade aw zyara 3al beit?",
-        };
-      }
-      if (lang === 'arabic') {
-        return {
-          text: "تكرم عينك! يرجى إعلامنا باليوم والوقت الأنسب لك، وهل تفضل الموعد في العيادة أم زيارة منزلية؟",
-        };
-      }
-      return {
-        text: "I would be happy to help! Which date and time works best for you, and would you prefer an in-office consultation or a home visit?",
-      };
-    }
-
-    if (lang === 'english') {
-      return {
-        text: "Hello! Welcome to Dr. Ziad El Khoury's clinic. How may I assist you today? Would you like to book an in-office consultation or a home visit?",
-      };
-    }
-
-    return {
-      text: "Ahla fik! Kif fina nse3dak l yom bi 3iyadetna? Baddak t7ajez maw3ad bil 3iyade aw zyara 3al beit?",
-    };
+    throw new Error('AI service unavailable; no appointment action was inferred');
   }
 
   public async generateReplyFromToolResult(params: {
@@ -1417,8 +1274,13 @@ export class AgentCore {
       if (lang==='french') return "Cela peut ?tre une urgence. Appelez le 140 (Croix-Rouge libanaise) ou allez aux urgences imm?diatement. N'attendez pas une r?ponse WhatsApp. La r?servation est suspendue pour examen humain.";
       return 'This may be an emergency. Call 140 (Lebanese Red Cross) or go to the nearest emergency department immediately. Do not wait for a WhatsApp response. Booking is paused for human review.';
     }
-    const rawReply = await this.internalProcessMessage(context);
-    return sanitizeWhatsAppText(rawReply);
+    try {
+      const rawReply = await this.internalProcessMessage(context);
+      return sanitizeWhatsAppText(rawReply);
+    } catch {
+      context.db.alerts.create({type:'system_error',title:'Assistant request failed',details:'No success confirmation was sent. Review conversation.',customer_id:context.customer.id});
+      return 'The assistant could not complete your request. Please try again or ask for the clinic team. No appointment change is confirmed.';
+    }
   }
 
   private async internalProcessMessage(context: {
@@ -2009,61 +1871,13 @@ ${upcomingScheduleDays.join('\n')}`;
     if (geminiRes.text && (!geminiRes.toolCalls || geminiRes.toolCalls.length === 0)) {
       console.log(`[Agent] 💬 Gemini responded with direct text: "${geminiRes.text}"`);
 
-      // 🛡️ ANTI-HALLUCINATION GUARD:
-      // If Gemini drafted a text message claiming an appointment has been booked or confirmed,
-      // but NO tool call was executed, execute book_appointment now so it is saved to DB and Google Calendar!
-      const claimsBooking = /successfully confirmed|has been confirmed|تم تأكيد موعدك|تم تثبيت موعدك|confirmed your appointment|booked your appointment/i.test(geminiRes.text);
-      if (claimsBooking) {
-        console.warn(`[Agent] 🚨 Intercepted direct text confirmation without tool call! Verifying booking in database...`);
-        const slot = parseDateTimeFromMessage(geminiRes.text, existingAppointment?.start_time ? new Date(existingAppointment.start_time) : new Date()) ||
-          extractSlotFromText(geminiRes.text, existingAppointment?.start_time) ||
-          (activeWorkflow && activeWorkflow.date && activeWorkflow.time ? { date: activeWorkflow.date, time: activeWorkflow.time } : null) ||
-          parseDateTimeFromMessage(historyMessages.slice(-2).map((m) => m.body).join(' '));
-
-        const isHome = /home visit|زيارة منزلية/i.test(geminiRes.text);
-        const visitType: VisitType = isHome ? 'home_visit' : 'in_office';
-
-        if (slot && slot.date && slot.time) {
-          try {
-            const bookedAppt = await this.scheduler.bookAppointment({
-              customerId: customer.id,
-              customerPhone: customer.phone,
-              customerName: customer.name,
-              visitType,
-              address: isHome ? (customer.address || 'Patient Address') : null,
-              service: visitType === 'home_visit' ? 'Home Visit Care' : 'General Consultation',
-              price: visitType === 'home_visit' ? 180 : 120,
-              startTime: beirutDateTimeToUtc(slot.date, slot.time).toISOString(),
-              notes: 'Auto-booked from direct confirmation response',
-            });
-            console.log(`[Agent] ✅ Successfully saved appointment to DB and Google Calendar: ${bookedAppt.id}`);
-            if (activeWorkflow && db.workflows) {
-              db.workflows.transition(activeWorkflow.id, 'booked');
-            }
-          } catch (err: any) {
-            console.error(`[Agent] ❌ Booking failed for direct confirmation slot:`, err);
-            return `I apologize, but that time slot (${slot.date} at ${slot.time}) could not be booked: ${err.message}. Would you like to select another available opening?\n\nعذراً، لم نتمكن من حجز هذا الموعد: ${err.message}. هل ترغب باختيار وقت آخر متاح؟`;
-          }
-        }
+      if (/confirm|booked|rescheduled|cancelled|canceled|تأكيد|حجز|تعديل|إلغاء/i.test(geminiRes.text)) {
+        return 'No appointment change has been confirmed. Please tell us your preferred date, time, and clinic or home visit.';
       }
-
-      const slot = extractSlotFromText(geminiRes.text);
-      if (slot && db.workflows) {
-        if (activeWorkflow) {
-          db.workflows.update(activeWorkflow.id, {
-            date: slot.date,
-            time: slot.time,
-            state: 'awaiting_visit_type',
-          });
-        } else {
-          db.workflows.create({
-            customer_id: customer.id,
-            conversation_id: conversation.id,
-            date: slot.date,
-            time: slot.time,
-            state: 'awaiting_visit_type',
-          });
-        }
+      const requested=parseDateTimeFromMessage(incomingText);
+      if (requested?.date && requested.time && db.workflows) {
+        if (activeWorkflow) db.workflows.update(activeWorkflow.id,{date:requested.date,time:requested.time,state:'awaiting_visit_type'});
+        else db.workflows.create({customer_id:customer.id,conversation_id:conversation.id,date:requested.date,time:requested.time,state:'awaiting_visit_type'});
       }
       return geminiRes.text;
     }
@@ -2086,6 +1900,7 @@ ${upcomingScheduleDays.join('\n')}`;
     }
 
     // 5. Deterministic tool execution
+    if (geminiRes.toolCalls.length !== 1) return 'Please request one appointment action at a time. No changes were made.';
     let toolCall = geminiRes.toolCalls[0];
     console.log(`[Agent] 🛠️ Tool invoked: ${toolCall.name} | Args:`, JSON.stringify(toolCall.args));
     let toolResult = await this.executeTool(toolCall, customer, conversation, db);
@@ -2205,6 +2020,10 @@ ${upcomingScheduleDays.join('\n')}`;
       }
     }
 
+    if (['book_appointment','reschedule_appointment','cancel_appointment'].includes(toolCall.name)) {
+      return this.client.getFallbackToolReply({toolName:toolCall.name,toolArgs:toolCall.args,toolResult,userQuery:incomingText});
+    }
+
     console.log(`[Agent] ✍️ Drafting grounded reply from tool result...`);
     try {
       let reply = await this.client.generateReplyFromToolResult({
@@ -2227,46 +2046,8 @@ ${upcomingScheduleDays.join('\n')}`;
       }
 
       // 🛡️ ANTI-HALLUCINATION GUARD:
-      // If Gemini drafted a text reply claiming an appointment was successfully rescheduled,
-      // but toolCall was only check_availability, execute reschedule_appointment now!
-      // If it fails for ANY reason, OVERRIDE the reply so we NEVER tell the patient it succeeded when it didn't!
-      const claimsRescheduled = /successfully rescheduled|has been rescheduled|تم تعديل موعدك|تم تغيير موعدك|تم تأكيد تعديل الموعد|rescheduled your appointment/i.test(reply);
-      if (claimsRescheduled && toolCall.name === 'check_availability') {
-        if (!existingAppointment) {
-          console.warn(`[Agent] 🚨 Intercepted direct text claiming reschedule with NO active appointment! Overriding false success message.`);
-          return `I apologize, but we could not find an active appointment to reschedule. Would you like to book a new appointment instead?\n\nعذراً، لم نجد موعداً نشطاً لنقله. هل ترغب بحجز موعد جديد بدلاً من ذلك؟`;
-        }
-
-        console.warn(`[Agent] 🚨 Intercepted direct text claiming reschedule without reschedule tool execution! Executing reschedule now...`);
-        const slot = parseDateTimeFromMessage(incomingText, new Date(existingAppointment.start_time)) ||
-          parseDateTimeFromMessage(reply, new Date(existingAppointment.start_time)) ||
-          extractSlotFromText(reply, existingAppointment.start_time);
-
-        let reschedDate = toolCall.args.date || slot?.date;
-        let reschedTime = slot?.time;
-        if (!reschedTime) {
-          const existingD = new Date(existingAppointment.start_time);
-          reschedTime = getBeirutTimeInfo(existingD).timeStr24;
-        }
-
-        if (reschedDate && reschedTime) {
-          try {
-            await this.scheduler.rescheduleAppointment({
-              appointmentId: existingAppointment.id,
-              newStartTime: beirutDateTimeToUtc(reschedDate, reschedTime).toISOString(),
-              visitType: existingAppointment.visit_type,
-              address: existingAppointment.address,
-            });
-            console.log(`[Agent] ✅ Anti-hallucination auto-rescheduled appointment ${existingAppointment.id} to ${reschedDate} at ${reschedTime}`);
-          } catch (reschedErr: any) {
-            console.error(`[Agent] ❌ Anti-hallucination reschedule failed:`, reschedErr);
-            // DO NOT SEND THE SUCCESS MESSAGE! Send honest failure message:
-            return `I apologize, but we could not update your appointment to that time (${reschedDate} at ${reschedTime}): ${reschedErr.message}. Would you like to pick another available opening?\n\nعذراً، لم نتمكن من تعديل الموعد إلى هذا الوقت: ${reschedErr.message}. هل ترغب باختيار وقت آخر متاح؟`;
-          }
-        } else {
-          // If we could not resolve the date and time, NEVER send false success
-          return `We would be happy to reschedule your appointment! Which day and time works best for you?\n\nيسعدنا تعديل موعدك! ما هو اليوم والوقت الأنسب لك؟`;
-        }
+      if (toolCall.name === 'check_availability' && /confirmed|booked|rescheduled|cancelled|تأكيد|حجز|تعديل|إلغاء/i.test(reply)) {
+        reply=this.client.getFallbackToolReply({toolName:toolCall.name,toolArgs:toolCall.args,toolResult,userQuery:incomingText});
       }
 
       if (toolCall.name === 'check_availability') {
@@ -2344,6 +2125,14 @@ ${upcomingScheduleDays.join('\n')}`;
     db: DatabaseContext
   ): Promise<any> {
     const { name, args } = toolCall;
+    if (!AGENT_TOOLS.some(tool=>tool.name===name) || !args || typeof args!=='object' || Array.isArray(args)) return {error:'Invalid tool request'};
+    for (const [key,value] of Object.entries(args)) {
+      if (typeof value==='string' && value.length>5000) return {error:'Tool argument exceeds maximum length'};
+      if (['days_ahead','duration_minutes'].includes(key) && (!Number.isInteger(value) || Number(value)<1 || Number(value)>(key==='days_ahead' ? 31 : 480))) return {error:'Invalid '+key+' range'};
+      if (['date','new_date'].includes(key) && (typeof value!=='string' || !/^\d{4}-\d{2}-\d{2}$/.test(value))) return {error:'Invalid date'};
+      if (['time','new_time'].includes(key) && (typeof value!=='string' || !/^([01]\d|2[0-3]):[0-5]\d$/.test(value))) return {error:'Invalid time'};
+      if (key==='visit_type' && value!=null && !['home_visit','in_office'].includes(String(value))) return {error:'Invalid visit type'};
+    }
 
     switch (name) {
       case 'check_availability': {
