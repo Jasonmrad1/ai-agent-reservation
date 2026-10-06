@@ -28,6 +28,8 @@ export interface BookAppointmentParams {
 }
 
 export interface RescheduleAppointmentParams {
+  service?: string;
+  notes?: string | null;
   appointmentId: string;
   newStartTime: string;
   newEndTime?: string;
@@ -500,7 +502,13 @@ export class SchedulingEngine {
       }
     }
 
-    const op=this.journal('move',{appointmentId:existing.id,eventId:existing.google_event_id,newStart:newStart.toISOString(),newEnd:newEnd.toISOString(),visitType,address},reservation);
+    const travel=visitType==='home_visit' ? bufferMinutes*60000 : 0;
+    const events=await this.calendar.listEvents(new Date(newStart.getTime()-travel),new Date(newEnd.getTime()+travel));
+    for (const event of events) {
+      if (event.id && event.id===existing.google_event_id) continue;
+      if (newStart.getTime()-travel < event.end.getTime() && newEnd.getTime()+travel > event.start.getTime()) throw new Error('Time slot conflict: Google Calendar has an existing event at this time');
+    }
+    const op=this.journal('move',{appointmentId:existing.id,eventId:existing.google_event_id,newStart:newStart.toISOString(),newEnd:newEnd.toISOString(),visitType,address,service:params.service,notes:params.notes},reservation);
     return await this.applyCalendarOperation(op);
     } finally {
       if (!this.hasPendingReservation(reservation)) this.db.appDb.db.prepare('DELETE FROM scheduling_reservations WHERE id = ?').run(reservation);
@@ -711,12 +719,16 @@ export class SchedulingEngine {
       } else {
         if (p.eventId) {
           if (op.kind==='cancel') await this.calendar.deleteEvent(p.eventId);
-          else await this.calendar.updateEvent(p.eventId,{summary:undefined as any,start:new Date(p.newStart),end:new Date(p.newEnd),location:p.visitType==='home_visit' ? p.address : 'Office Clinic'});
+          else await this.calendar.updateEvent(p.eventId,{summary:p.service as any,description:p.notes ?? undefined,start:new Date(p.newStart),end:new Date(p.newEnd),location:p.visitType==='home_visit' ? p.address : 'Office Clinic'});
         }
         sql.exec('BEGIN IMMEDIATE');
         try {
           if (op.kind==='cancel') this.db.appointments.cancel(p.appointmentId,p.reason);
-          else this.db.appointments.reschedule(p.appointmentId,p.newStart,p.newEnd,p.visitType,p.address);
+          else {
+            this.db.appointments.reschedule(p.appointmentId,p.newStart,p.newEnd,p.visitType,p.address);
+            const changes:any={};if(p.service!==undefined) changes.service=p.service;if(p.notes!==undefined) changes.notes=p.notes;
+            if(Object.keys(changes).length) this.db.appointments.update(p.appointmentId,changes);
+          }
           result=this.db.appointments.findById(p.appointmentId)!;this.finishOperation(op);sql.exec('COMMIT');
         } catch (e) {sql.exec('ROLLBACK');throw e;}
       }

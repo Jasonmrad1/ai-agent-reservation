@@ -519,18 +519,15 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
       return;
     }
 
-    const { service, visit_type, address, notes, start_time, end_time } = req.body;
-    db.appointments.update(appointmentId, {
-      service: service !== undefined ? service : appt.service,
-      visit_type: visit_type !== undefined ? visit_type : appt.visit_type,
-      address: address !== undefined ? address : appt.address,
-      notes: notes !== undefined ? notes : appt.notes,
-      start_time: start_time !== undefined ? start_time : appt.start_time,
-      end_time: end_time !== undefined ? end_time : appt.end_time,
-    });
+    const { service, visit_type, address, notes, start_time, end_time } = req.body || {};
+    try {
+      if (!scheduler) throw new Error('Scheduler is required for appointment edits');
+      if (service!==undefined && (typeof service!=='string' || !service.trim() || service.length>200)) throw new Error('Invalid service');
+      if (notes!==undefined && notes!==null && (typeof notes!=='string' || notes.length>5000)) throw new Error('Invalid notes');
+      const updated=await scheduler.rescheduleAppointment({appointmentId,newStartTime:start_time ?? appt.start_time,newEndTime:end_time ?? appt.end_time,visitType:visit_type ?? appt.visit_type,address:address ?? appt.address,service,notes});
+      res.json({success:true,appointment:updated});
+    } catch(error:any) {res.status(400).json({error:error.message || 'Appointment edit failed'});}
 
-    const updated = db.appointments.findById(appointmentId);
-    res.json({ success: true, appointment: updated });
   });
 
   // Doctor manually creates an appointment (walk-in, phone call, in-person)
