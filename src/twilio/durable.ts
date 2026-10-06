@@ -15,8 +15,13 @@ export class DurableWhatsAppGateway implements WhatsAppGateway {
       if(existing) return {messageSid:existing.message_sid || 'OUTBOX_'+existing.id,status:existing.status==='accepted' ? 'sent' : 'queued',to:existing.recipient,body:existing.body};
     }
     const conv=this.db.conversations.getOrCreateActive(customer.id);
-    this.db.appDb.db.prepare("INSERT INTO outbound_jobs (id,recipient,body,customer_id,conversation_id,status,created_at,options,idempotency_key) VALUES (?,?,?,?,?,'pending',?,?,?)").run(id,to,body,customer.id,conv.id,new Date().toISOString(),JSON.stringify(options),options.idempotencyKey || null);
-    this.db.messages.create(conv.id,'outbound',body,'OUTBOX_'+id,'queued');
+    const sql=this.db.appDb.db;
+    sql.exec('BEGIN IMMEDIATE');
+    try {
+      sql.prepare("INSERT INTO outbound_jobs (id,recipient,body,customer_id,conversation_id,status,created_at,options,idempotency_key) VALUES (?,?,?,?,?,'pending',?,?,?)").run(id,to,body,customer.id,conv.id,new Date().toISOString(),JSON.stringify(options),options.idempotencyKey || null);
+      this.db.messages.create(conv.id,'outbound',body,'OUTBOX_'+id,'queued');
+      sql.exec('COMMIT');
+    } catch(error) {sql.exec('ROLLBACK');throw error;}
     return this.attempt(id);
   }
   private async attempt(id:string):Promise<SendMessageResult> {
