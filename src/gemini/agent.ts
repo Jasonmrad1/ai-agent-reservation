@@ -1273,6 +1273,7 @@ export class AgentCore {
     const lower = incomingText.toLowerCase();
 
     const choicesKey = `appointment_choices_${conversation.id}`;
+    if (/\b(cancel|reschedule|move|postpone)\b/i.test(incomingText)) db.settings.delete(`additional_booking_${conversation.id}`);
     const selectedKey = `selected_appointment_${conversation.id}`;
     const upcoming = db.appointments.findUpcomingByCustomerId(customer.id);
     const action = /\b(cancel|elghe|ilgha|laghe)\b/i.test(incomingText) ? 'cancel' : /\b(reschedule|move|postpone|ghayyer)\b/i.test(incomingText) ? 'reschedule' : /^(yes|confirm|oui|tamam)$/i.test(incomingText.trim()) ? 'confirm' : null;
@@ -1426,6 +1427,7 @@ export class AgentCore {
       /\bcan\s+i\s+(reserve|book|make|add|get|have)\s+(a\s+)?(new|another)?\s*(appointment|maw3ad)\b/i.test(incomingText);
 
     if (isNewAppointmentRequest && db.workflows) {
+      db.settings.set(`additional_booking_${conversation.id}`,String(Date.now()+24*60*60*1000));
       // Cancel the existing booked workflow so there is no lingering visit_type assumption
       db.workflows.cancelActiveByCustomerId(customer.id);
     }
@@ -2250,6 +2252,8 @@ ${upcomingScheduleDays.join('\n')}`;
 
           // If customer ALREADY has an active confirmed appointment on a different date/time,
           // treat booking as moving / rescheduling their existing appointment UNLESS they requested a new / additional appointment!
+          const additionalKey=`additional_booking_${conversation.id}`;
+          if(Number(db.settings.get(additionalKey,'0'))>Date.now() && db.workflows.findActiveByCustomerId(customer.id)) args.is_new_appointment=true;
           const activeAppt = this.selectedAppointment(customer, conversation, db, args.appointment_id, args.is_new_appointment === true);
           const lastInbound = db.messages.getRecentMessages(conversation.id, 2).reverse().find((m) => m.direction === 'inbound')?.body || '';
           const isExplicitNew = args.is_new_appointment === true ||
@@ -2310,6 +2314,7 @@ ${upcomingScheduleDays.join('\n')}`;
             notes: combinedNotes,
           });
 
+          db.settings.delete(additionalKey);
           // Update workflow state to booked
           if (db.workflows) {
             const activeWf = db.workflows.findActiveByCustomerId(customer.id);
