@@ -1,5 +1,6 @@
 import { DurableWhatsAppGateway } from './twilio/durable.js';
 import {backupSqliteFile} from './db/backup.js';
+import {readiness} from './readiness.js';
 import fs from 'fs';
 import { createAdminAuth } from './security/admin-auth.js';
 import path from 'path';
@@ -47,6 +48,7 @@ export interface CreateAppOptions {
 export function createApp(options: CreateAppOptions = {}): AppInstance {
   const cfg = options.config || defaultAppConfig;
   validateConfig(cfg);
+  if(cfg.nodeEnv==='production' && cfg.mode!=='simulator' && options.skipSignatureVerification)throw new Error('Production webhook signature verification cannot be disabled');
 
   // 1. Database
   if(!options.db && cfg.nodeEnv==='production' && cfg.databaseUrl!==':memory:' && fs.existsSync(cfg.databaseUrl)) backupSqliteFile(cfg.databaseUrl,path.join(path.dirname(cfg.databaseUrl),'backups'));
@@ -122,6 +124,7 @@ export function createApp(options: CreateAppOptions = {}): AppInstance {
   app.get('/health', (_req, res) => {
     res.json({ status: 'ok', uptime: process.uptime(), timestamp: new Date().toISOString() });
   });
+  app.get('/ready',(_req,res)=>{const r=readiness(db,cfg);res.status(r.ready ? 200 : 503).json({ready:r.ready,mode:r.mode});});
 
   app.get('/simulator', (_req, res) => res.redirect('/admin/simulator'));
 
@@ -151,6 +154,7 @@ export function createApp(options: CreateAppOptions = {}): AppInstance {
 
   // Admin Dashboard & API
   const adminAuth = createAdminAuth(db, cfg.adminSessionSecret, { secure: cfg.nodeEnv === 'production', legacyQuery: cfg.nodeEnv === 'test', publicBaseUrl: cfg.publicBaseUrl });
+  app.get('/admin/api/readiness',adminAuth.middleware,(_req,res)=>res.json(readiness(db,cfg)));
   const adminRouter = createAdminRouter({
     auth: adminAuth,
     calendarRedirectUri: cfg.googleCalendarRedirectUri,

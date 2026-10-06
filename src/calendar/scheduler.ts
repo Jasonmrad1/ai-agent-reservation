@@ -667,6 +667,7 @@ export class SchedulingEngine {
   }
 
   private validateWindow(start: Date, end: Date, rawStart: string, visitType: VisitType, override?: boolean): void {
+    if(this.db.settings.get('timezone_storage_version')!=='utc-v1')throw new Error('Legacy appointment times require review before scheduling');
     if (!Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime())) throw new Error('Invalid appointment date or time');
     this.getActiveShiftsForDate(getBeirutTimeInfo(start).dateStr);
     if (visitType !== 'in_office' && visitType !== 'home_visit') throw new Error('Invalid visit type');
