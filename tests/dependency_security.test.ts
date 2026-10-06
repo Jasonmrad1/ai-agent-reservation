@@ -6,3 +6,6 @@ it('locks proxy-addr with the IP spoofing fix',()=>safe('proxy-addr','2.0.8'));
 it('locks qs with the denial-of-service fixes',()=>safe('qs','6.16.0'));
 it('locks source-map-js with the event-loop denial-of-service fix',()=>safe('source-map-js','1.2.2'));
 it('removes UUID or locks checked buffer bounds in Google dependencies',()=>safe('uuid','11.1.1',true));
+it('locks the test runner without vulnerable worker and mocker dependencies',()=>{
+ safe('vitest','5.0.3');safe('tinypool','2.1.2',true);safe('@vitest/mocker','4.1.11',true);
+});
