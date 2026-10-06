@@ -104,6 +104,7 @@ describe('🛡️ CLINIC SECURITY, GUARDRAILS & RESET COMMAND SUITE', () => {
         db,
         gateway: mockGateway,
         skipSignatureVerification: true,
+        allowTestReset: true,
       });
 
       // 1. Create a customer with an active booked appointment

@@ -13,6 +13,7 @@ export interface WebhookHandlerOptions {
   skipSignatureVerification?: boolean;
   publicBaseUrl?: string;
   asyncProcessing?: boolean;
+  allowTestReset?: boolean;
   processMessage?: (context: {
     customer: any;
     conversation: any;
@@ -134,7 +135,7 @@ export function createWebhookRouter(options: WebhookHandlerOptions) {
 
     // 6.1 Testing Reset Command (#reset, /reset, #clear)
     const trimmedInput = incomingText.trim().toLowerCase();
-    if (trimmedInput === '#reset' || trimmedInput === '/reset' || trimmedInput === '#clear' || trimmedInput === '/clear') {
+    if (options.allowTestReset && ['#reset','/reset','#clear','/clear'].includes(trimmedInput)) {
       console.log(`[Twilio Webhook] 🔄 Received test reset command from ${fromPhone}. Clearing patient chat and test bookings...`);
       const activeAppts = db.appointments.findUpcomingByCustomerId(customer.id);
       for (const appt of activeAppts) {
