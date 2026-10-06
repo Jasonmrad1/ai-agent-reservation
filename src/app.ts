@@ -52,7 +52,7 @@ export function createApp(options: CreateAppOptions = {}): AppInstance {
 
   // 1. Database
   if(!options.db && cfg.nodeEnv==='production' && cfg.databaseUrl!==':memory:' && fs.existsSync(cfg.databaseUrl)) backupSqliteFile(cfg.databaseUrl,path.join(path.dirname(cfg.databaseUrl),'backups'));
-  const db = options.db || createDatabaseContext(cfg.databaseUrl,{encryptionKey:cfg.settingsEncryptionKey,syncEnabled:cfg.mode==='clinic'});
+  const db = options.db || createDatabaseContext(cfg.databaseUrl,{encryptionKey:cfg.settingsEncryptionKey,syncEnabled:cfg.mode==='clinic',initialHomeVisitBufferMinutes:cfg.homeVisitBufferMinutes});
   const replica = new ReplicaWorker(db,cfg.mode==='clinic' ? getSupabaseClient(cfg) : null,cfg.supabaseUrl);
 
   // 2. Gateway
@@ -178,7 +178,7 @@ export function createApp(options: CreateAppOptions = {}): AppInstance {
   app.use('/admin', adminRouter);
 
   // WhatsApp Simulator API (Zero-Twilio Testing Framework)
-  const sandboxDb = createDatabaseContext(!cfg.databaseUrl || cfg.databaseUrl === ':memory:' ? ':memory:' : path.join(path.dirname(cfg.databaseUrl),'simulator.sqlite'), { syncEnabled: false });
+  const sandboxDb = createDatabaseContext(!cfg.databaseUrl || cfg.databaseUrl === ':memory:' ? ':memory:' : path.join(path.dirname(cfg.databaseUrl),'simulator.sqlite'), { syncEnabled: false,initialHomeVisitBufferMinutes:cfg.homeVisitBufferMinutes });
   const sandboxGateway = new MockWhatsAppGateway();
   const sandboxCalendar = new InMemoryCalendarProvider();
   const sandboxScheduler = new SchedulingEngine({ db: sandboxDb, calendar: sandboxCalendar });
@@ -192,6 +192,7 @@ export function createApp(options: CreateAppOptions = {}): AppInstance {
     reminders: new ReminderRunner({ db: sandboxDb, gateway: sandboxGateway, scheduler: sandboxScheduler, notifier: sandboxNotifier }),
   });
   app.use('/api/simulator', adminAuth.middleware, simulatorRouter);
+
 
   return {
     app,

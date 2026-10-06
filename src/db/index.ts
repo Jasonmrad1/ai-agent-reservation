@@ -35,8 +35,8 @@ export interface DatabaseContext {
   workflows: AppointmentWorkflowRepository;
 }
 
-export function createDatabaseContext(dbPath: string = ':memory:', options: { syncEnabled?: boolean;encryptionKey?:string } = {}): DatabaseContext {
-  const appDb = new AppDatabase(dbPath);
+export function createDatabaseContext(dbPath: string = ':memory:', options: { syncEnabled?: boolean;encryptionKey?:string;initialHomeVisitBufferMinutes?:number } = {}): DatabaseContext {
+  const appDb = new AppDatabase(dbPath,options.initialHomeVisitBufferMinutes);
   installReplicationTriggers(appDb.db,options.syncEnabled ?? true);
   return {
     appDb,

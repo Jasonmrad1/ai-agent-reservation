@@ -7,7 +7,7 @@ import { SCHEMA_SQL, DEFAULT_WEEKLY_AVAILABILITY } from './schema.js';
 export class AppDatabase {
   public db: DatabaseSync;
 
-  constructor(dbPath: string = ':memory:') {
+  constructor(dbPath: string = ':memory:',private initialHomeVisitBufferMinutes=30) {
     if (dbPath !== ':memory:') {
       const dir = path.dirname(dbPath);
       if (!fs.existsSync(dir)) {
@@ -42,8 +42,8 @@ export class AppDatabase {
     // Ensure default settings
     try {
       this.db.prepare(`
-        INSERT OR IGNORE INTO settings (key, value) VALUES ('home_visit_buffer_minutes', '30')
-      `).run();
+        INSERT OR IGNORE INTO settings (key, value) VALUES ('home_visit_buffer_minutes', ?)
+      `).run(String(this.initialHomeVisitBufferMinutes));
     } catch {}
 
     // Seed default weekly availability if table is empty
