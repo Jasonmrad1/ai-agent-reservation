@@ -569,6 +569,7 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
       return;
     }
 
+    if((visit_type!==undefined && !['home_visit','in_office'].includes(visit_type)) || (override!==undefined && typeof override!=='boolean')){res.status(400).json({error:'Invalid visit type or override flag'});return;}
     const cleanVisitType = visit_type === 'home_visit' ? 'home_visit' : 'in_office';
     if (cleanVisitType === 'home_visit' && (!address || !String(address).trim())) {
       res.status(400).json({ error: 'Address is required for home visits.' });
@@ -589,7 +590,8 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
         res.status(400).json({ error: 'Invalid date or time format.' });
         return;
       }
-      const durationMins = req.body.duration_minutes ? Number(req.body.duration_minutes) : 60;
+      const durationMins = Number(req.body.duration_minutes ?? 60);
+      if(!Number.isInteger(durationMins) || durationMins<=0 || durationMins>480){res.status(400).json({error:'Duration must be between 1 and 480 minutes'});return;}
       const endTime = new Date(startTime.getTime() + durationMins * 60 * 1000);
 
       const apptService = service || 'General Consultation';
