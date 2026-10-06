@@ -133,6 +133,14 @@ export function createSimulatorRouter(options: SimulatorRouterOptions): Router {
         });
       }
 
+      if(lower==='/resume bot') {
+        db.conversations.updateStatus(conversation.id,'active');
+        return res.json({reply:'',customer,conversationId:conversation.id,appointments:db.appointments.findUpcomingByCustomerId(customer.id)});
+      }
+      if(['doctor_active','escalated'].includes(conversation.status) && !isUrgentMessage(incomingText)) {
+        return res.json({reply:'',customer,conversationId:conversation.id,appointments:db.appointments.findUpcomingByCustomerId(customer.id)});
+      }
+
       // 4. Security & Guardrails Check (0 tokens)
       const guardrail = isUrgentMessage(incomingText) ? {allowed:true,reply:undefined,reason:undefined} : validateInboundMessage(incomingText, fromPhone);
       if (!guardrail.allowed && guardrail.reply) {
