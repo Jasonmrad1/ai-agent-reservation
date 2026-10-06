@@ -84,7 +84,7 @@ export function createWebhookRouter(options: WebhookHandlerOptions) {
     // 3. Outbound Message Filter (Dr. Ziad talking from the clinic WhatsApp number directly)
     const clinicDigits = (process.env.TWILIO_WHATSAPP_NUMBER || '+14155238886').replace(/\D/g, '');
     const fromDigits = fromPhone.replace(/\D/g, '');
-    const isDoctorOutbound = fromDigits && clinicDigits && (fromDigits === clinicDigits || fromDigits.endsWith(clinicDigits));
+    const isDoctorOutbound = fromDigits && clinicDigits && (fromDigits === clinicDigits);
 
     if (isDoctorOutbound) {
       const recipientPhone = params.To;

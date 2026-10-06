@@ -1446,7 +1446,7 @@ export class AgentCore {
     // 2. Check if message is directly from Doctor / Clinic Admin
     const custDigits = (customer.phone || '').replace(/\D/g, '');
     const adminDigits = ((this.notifier as any)?.adminNumber || process.env.ADMIN_WHATSAPP_NUMBER || '').replace(/\D/g, '');
-    const isDoctor = Boolean(custDigits && adminDigits && (custDigits === adminDigits || custDigits.endsWith(adminDigits) || adminDigits.endsWith(custDigits)));
+    const isDoctor = Boolean(custDigits && adminDigits && (custDigits === adminDigits));
 
     // Direct Doctor Commands & Sensitivity
     if (isDoctor) {
@@ -2430,20 +2430,11 @@ ${upcomingScheduleDays.join('\n')}`;
           const startTimeIso = startD.toISOString();
 
           const patientName = args.patient_name || args.customer_name || customer.name;
-          const patientPhone = args.patient_phone || args.customer_phone || customer.phone;
+          const patientPhone = customer.phone;
 
           if (patientName && !args.is_new_appointment && !patientName.includes(' of ') && (!customer.name || customer.name === 'Patient' || customer.name === 'Unknown' || customer.name.startsWith('+'))) {
             db.customers.updateName(customer.id, patientName);
             customer.name = patientName;
-          }
-
-          if (args.patient_phone && args.patient_phone !== customer.phone) {
-            try {
-              db.customers.updatePhone(customer.id, args.patient_phone);
-              customer.phone = args.patient_phone;
-            } catch {
-              // ignore phone update collision
-            }
           }
 
           let combinedNotes = args.notes || null;

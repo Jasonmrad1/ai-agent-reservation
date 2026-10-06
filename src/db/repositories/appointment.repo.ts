@@ -91,52 +91,13 @@ export class AppointmentRepository {
   }
 
   public findLatestActiveByCustomerOrPhone(customerId: string, phone?: string): Appointment | null {
-    let row = this.db.prepare(`
-      SELECT * FROM appointments
-      WHERE customer_id = ? AND status IN ('booked', 'confirmed', 'rescheduled')
-      ORDER BY start_time ASC
-      LIMIT 1
-    `).get(customerId) as any;
-
-    if (!row && phone) {
-      const digits = phone.replace(/\D/g, '');
-      row = this.db.prepare(`
-        SELECT a.* FROM appointments a
-        JOIN customers c ON a.customer_id = c.id
-        WHERE (c.phone = ? OR c.phone LIKE ? OR replace(replace(replace(c.phone, '+', ''), 'whatsapp:', ''), ' ', '') = ?)
-          AND a.status IN ('booked', 'confirmed', 'rescheduled')
-        ORDER BY a.start_time ASC
-        LIMIT 1
-      `).get(phone, `%${digits}%`, digits) as any;
-    }
-
-    if (!row) return null;
-    return this.mapRow(row);
+    return this.findLatestActiveByCustomerId(customerId);
   }
 
-  public findUpcomingByCustomerId(customerId: string, phone?: string): Appointment[] {
-    let rows = this.db.prepare(`
-      SELECT * FROM appointments
+  public findUpcomingByCustomerId(customerId: string, _phone?: string): Appointment[] {
+    const rows = this.db.prepare(`SELECT * FROM appointments
       WHERE customer_id = ? AND status IN ('booked', 'confirmed', 'rescheduled')
-      ORDER BY start_time ASC
-    `).all(customerId) as any[];
-
-    if (phone) {
-      const digits = phone.replace(/\D/g, '');
-      const phoneRows = this.db.prepare(`
-        SELECT a.* FROM appointments a
-        JOIN customers c ON a.customer_id = c.id
-        WHERE (c.phone = ? OR c.phone LIKE ? OR replace(replace(replace(c.phone, '+', ''), 'whatsapp:', ''), ' ', '') = ?)
-          AND a.status IN ('booked', 'confirmed', 'rescheduled')
-        ORDER BY a.start_time ASC
-      `).all(phone, `%${digits}%`, digits) as any[];
-
-      const map = new Map<string, any>();
-      for (const r of rows) map.set(r.id, r);
-      for (const r of phoneRows) map.set(r.id, r);
-      rows = Array.from(map.values()).sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime());
-    }
-
+      ORDER BY start_time ASC`).all(customerId) as any[];
     return rows.map(this.mapRow);
   }
 

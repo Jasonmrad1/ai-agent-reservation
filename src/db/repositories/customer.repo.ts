@@ -4,17 +4,16 @@ import { Customer } from '../../types/index.js';
 import { SupabaseSync } from '../supabase.js';
 
 export function normalizePhone(raw: string): string {
-  if (!raw) return '';
-  const trimmed = raw.trim();
-  const digits = trimmed.replace(/\D/g, '');
-  if (!digits) return trimmed;
-  if (digits.length === 8 && (digits.startsWith('7') || digits.startsWith('8') || digits.startsWith('0') || digits.startsWith('3'))) {
-    const cleanLeb = digits.startsWith('0') ? digits.slice(1) : digits;
-    return `whatsapp:+961${cleanLeb}`;
+  if (typeof raw !== 'string' || !raw.trim()) return '';
+  const trimmed = raw.trim().replace(/^whatsapp:/i, '');
+  if (!/^[+\d\s().-]+$/.test(trimmed)) return '';
+  let digits = trimmed.replace(/\D/g, '');
+  if (digits.startsWith('00')) digits = digits.slice(2);
+  else if (!trimmed.startsWith('+')) {
+    if (digits.length === 7 && digits.startsWith('3')) digits = '961' + digits;
+    else if (digits.length === 8 && /^(03|7|8)/.test(digits)) digits = '961' + digits.replace(/^0/, '');
   }
-  if (digits.startsWith('00')) {
-    return `whatsapp:+${digits.slice(2)}`;
-  }
+  if (!/^[1-9]\d{6,14}$/.test(digits)) return '';
   return `whatsapp:+${digits}`;
 }
 
@@ -36,19 +35,12 @@ export class CustomerRepository {
 
   public findByPhone(phone: string): Customer | null {
     if (!phone) return null;
-    const rawClean = phone.trim();
     const normalized = normalizePhone(phone);
-    const digits = phone.replace(/\D/g, '');
-
-    const row = this.db.prepare(`
-      SELECT * FROM customers 
-      WHERE phone = ? 
-         OR phone = ? 
-         OR phone LIKE ? 
-         OR replace(replace(replace(phone, '+', ''), 'whatsapp:', ''), ' ', '') = ?
-      ORDER BY updated_at DESC
-      LIMIT 1
-    `).get(rawClean, normalized, `%${digits}%`, digits) as any;
+    if (!normalized) return null;
+    const digits = normalized.replace(/\D/g, '');
+    const row = this.db.prepare(`SELECT * FROM customers
+      WHERE phone = ? OR replace(replace(replace(phone, '+', ''), 'whatsapp:', ''), ' ', '') = ?
+      ORDER BY updated_at DESC LIMIT 1`).get(normalized, digits) as any;
 
     if (!row) return null;
     return {
@@ -62,7 +54,8 @@ export class CustomerRepository {
   }
 
   public findOrCreate(phone: string, name?: string | null): Customer {
-    const normalized = normalizePhone(phone) || phone;
+    const normalized = normalizePhone(phone);
+    if (!normalized) throw new Error('Invalid phone number');
     const existing = this.findByPhone(phone) || this.findByPhone(normalized);
     if (existing) {
       if (name && name !== existing.name) {
@@ -109,6 +102,8 @@ export class CustomerRepository {
   }
 
   public updatePhone(id: string, phone: string): void {
+    phone = normalizePhone(phone);
+    if (!phone) throw new Error('Invalid phone number');
     const now = new Date().toISOString();
     this.db.prepare(`
       UPDATE customers SET phone = ?, updated_at = ? WHERE id = ?

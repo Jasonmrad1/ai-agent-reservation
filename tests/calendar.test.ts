@@ -47,8 +47,8 @@ describe('Phase 3: Calendar Backend & Scheduling Engine', () => {
   });
 
   it('books an in-office appointment and avoids double booking', async () => {
-    const cust1 = db.customers.findOrCreate('whatsapp:+1001', 'Alice');
-    const cust2 = db.customers.findOrCreate('whatsapp:+1002', 'Bob');
+    const cust1 = db.customers.findOrCreate('whatsapp:+15550001001', 'Alice');
+    const cust2 = db.customers.findOrCreate('whatsapp:+15550001002', 'Bob');
 
     const appt = await scheduler.bookAppointment({
       customerId: cust1.id,
@@ -87,7 +87,7 @@ describe('Phase 3: Calendar Backend & Scheduling Engine', () => {
   });
 
   it('enforces address requirement and travel time buffer for home visits', async () => {
-    const cust = db.customers.findOrCreate('whatsapp:+1003', 'Charlie');
+    const cust = db.customers.findOrCreate('whatsapp:+15550001003', 'Charlie');
 
     // Missing address
     await expect(
@@ -111,7 +111,7 @@ describe('Phase 3: Calendar Backend & Scheduling Engine', () => {
       endTime: '2026-09-07T11:00:00.000Z',
     });
 
-    const otherCust = db.customers.findOrCreate('whatsapp:+1004', 'David');
+    const otherCust = db.customers.findOrCreate('whatsapp:+15550001004', 'David');
 
     // Booking at 11:15 fails due to travel buffer extending to 11:30
     await expect(
@@ -138,7 +138,7 @@ describe('Phase 3: Calendar Backend & Scheduling Engine', () => {
   });
 
   it('reschedules and cancels appointments correctly', async () => {
-    const cust = db.customers.findOrCreate('whatsapp:+1005', 'Eve');
+    const cust = db.customers.findOrCreate('whatsapp:+15550001005', 'Eve');
 
     const appt = await scheduler.bookAppointment({
       customerId: cust.id,
