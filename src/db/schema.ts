@@ -1,4 +1,6 @@
 export const SCHEMA_SQL = `
+CREATE TABLE IF NOT EXISTS inbound_jobs (message_sid TEXT PRIMARY KEY, sender TEXT NOT NULL, payload TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pending', created_at TEXT NOT NULL, last_error TEXT);
+CREATE TABLE IF NOT EXISTS outbound_jobs (id TEXT PRIMARY KEY, recipient TEXT NOT NULL, body TEXT NOT NULL, customer_id TEXT NOT NULL, conversation_id TEXT NOT NULL, status TEXT NOT NULL, message_sid TEXT, attempts INTEGER NOT NULL DEFAULT 0, next_attempt_at TEXT, last_error TEXT, created_at TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS calendar_operations (id TEXT PRIMARY KEY, kind TEXT NOT NULL, payload TEXT NOT NULL, reservation_id TEXT, created_at TEXT NOT NULL, last_error TEXT);
 CREATE TABLE IF NOT EXISTS scheduling_reservations (
   id TEXT PRIMARY KEY, customer_id TEXT NOT NULL, appointment_id TEXT,

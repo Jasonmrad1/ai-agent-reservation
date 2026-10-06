@@ -12,6 +12,7 @@ export interface WebhookHandlerOptions {
   authToken?: string;
   skipSignatureVerification?: boolean;
   publicBaseUrl?: string;
+  asyncProcessing?: boolean;
   processMessage?: (context: {
     customer: any;
     conversation: any;
@@ -33,9 +34,9 @@ export function createWebhookRouter(options: WebhookHandlerOptions) {
     return verifyTwilioWebhook({ authToken: authToken || '', signatureHeader: req.get('x-twilio-signature'), url, params: req.body || {} });
   }
 
-  async function handleInboundMessage(req: Request, res: Response): Promise<void> {
+  async function processInboundPayload(req: Request, res: Response): Promise<void> {
     const params = req.body || {};
-    if (!isVerified(req)) { res.status(403).send('Invalid signature'); return; }
+
     if (typeof params.From !== 'string' || (params.Body != null && typeof params.Body !== 'string') ||
         typeof params.MessageSid !== 'string' || !params.MessageSid) {
       res.status(400).send('Invalid webhook payload'); return;
@@ -71,15 +72,6 @@ export function createWebhookRouter(options: WebhookHandlerOptions) {
       console.warn(`[Twilio Webhook] ⚠️ Missing From or Body in request`);
       res.status(400).send('Missing From or Body');
       return;
-    }
-
-    // 3. Idempotency Check: if MessageSid already processed, return 200 without duplicate action
-    if (messageSid) {
-      const existingMessage = db.messages.findByMessageSid(messageSid);
-      if (existingMessage) {
-        res.type('text/xml').send('<Response/>');
-        return;
-      }
     }
 
     // 3. Outbound Message Filter (Dr. Ziad talking from the clinic WhatsApp number directly)
@@ -233,6 +225,40 @@ export function createWebhookRouter(options: WebhookHandlerOptions) {
     res.type('text/xml').send('<Response/>');
   }
 
+  const activeSenders=new Set<string>();
+  async function drain():Promise<void> {
+    const jobs=db.appDb.db.prepare("SELECT * FROM inbound_jobs WHERE status='pending' ORDER BY created_at,rowid LIMIT 50").all() as any[];
+    for(const job of jobs) {
+      if(activeSenders.has(job.sender)) continue;
+      activeSenders.add(job.sender);
+      const claim=db.appDb.db.prepare("UPDATE inbound_jobs SET status='processing' WHERE message_sid=? AND status='pending'").run(job.message_sid);
+      if (!claim.changes) {activeSenders.delete(job.sender);continue;}
+      const dummy:any={type(){return this;},status(){return this;},send(){return this;},json(){return this;}};
+      try {
+        await processInboundPayload({body:JSON.parse(job.payload)} as Request,dummy);
+        db.appDb.db.prepare("UPDATE inbound_jobs SET status='done' WHERE message_sid=?").run(job.message_sid);
+      } catch(error:any) {
+        db.appDb.db.prepare("UPDATE inbound_jobs SET status='review',last_error=? WHERE message_sid=?").run(String(error.message || error).slice(0,500),job.message_sid);
+        db.alerts.create({type:'system_error',title:'Inbound processing needs review',details:`Message ${job.message_sid} failed. Check appointment/calendar outcomes before replaying.`});
+      } finally {activeSenders.delete(job.sender);}
+    }
+  }
+  function recoverInterrupted():void {
+    const interrupted=db.appDb.db.prepare("SELECT message_sid FROM inbound_jobs WHERE status='processing'").all();
+    db.appDb.db.prepare("UPDATE inbound_jobs SET status='review' WHERE status='processing'").run();
+    if(interrupted.length) db.alerts.create({type:'system_error',title:'Interrupted inbound requests need review',details:`${interrupted.length} messages may have partially completed. Inspect appointments before replay.`});
+  }
+  async function handleInboundMessage(req:Request,res:Response):Promise<void> {
+    if(!isVerified(req)) {res.status(403).send('Invalid signature');return;}
+    const p=req.body || {};
+    if(typeof p.From!=='string' || typeof p.MessageSid!=='string' || !p.MessageSid || (p.Body!=null && typeof p.Body!=='string')) {res.status(400).send('Invalid webhook payload');return;}
+    if(!p.Body?.trim() && !(p.Latitude && p.Longitude) && !(Number(p.NumMedia)>0)) {res.status(400).send('Missing message body');return;}
+    try {db.customers.findOrCreate(p.From);} catch {res.status(400).send('Invalid sender phone');return;}
+    db.appDb.db.prepare('INSERT OR IGNORE INTO inbound_jobs (message_sid,sender,payload,created_at) VALUES (?,?,?,?)').run(p.MessageSid,p.From,JSON.stringify(p),new Date().toISOString());
+    if(!options.asyncProcessing) await drain();
+    res.type('text/xml').send('<Response/>');
+  }
+
   async function handleStatusCallback(req: Request, res: Response): Promise<void> {
     if (!isVerified(req)) { res.status(403).send('Invalid signature'); return; }
     const params = req.body || {};
@@ -260,5 +286,7 @@ export function createWebhookRouter(options: WebhookHandlerOptions) {
   return {
     handleInboundMessage,
     handleStatusCallback,
+    drain,
+    recoverInterrupted,
   };
 }

@@ -14,6 +14,9 @@ const server = app.listen(config.port, () => {
   console.log(`====================================================`);
 });
 
+instance.inbox.recoverInterrupted();
+instance.outbox.recoverInterrupted();
+const messagingTimer=setInterval(()=>{void instance.inbox.drain();void instance.outbox.drain();},1000);
 const reconciliationTimer = setInterval(() => { void instance.scheduler.reconcileCalendarOperations(); }, 60000);
 void instance.scheduler.reconcileCalendarOperations();
 
@@ -36,6 +39,7 @@ function shutdown() {
   console.log('\nShutting down server gracefully...');
   clearInterval(reminderTimer);
   clearInterval(reconciliationTimer);
+  clearInterval(messagingTimer);
   server.close(() => {
     instance.db.appDb.close();
     console.log('Server and database closed. Goodbye.');

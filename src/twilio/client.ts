@@ -63,25 +63,10 @@ export class TwilioWhatsAppGateway implements WhatsAppGateway {
     const formattedFrom = this.fromNumber.startsWith('whatsapp:') ? this.fromNumber : `whatsapp:${this.fromNumber}`;
 
     try {
-      const response = await withRetry(
-        async (_attempt) => {
-          const createOptions: any = {
-            from: formattedFrom,
-            to: formattedTo,
-            body,
-          };
-          if (this.statusCallback && this.statusCallback !== 'none') {
-            createOptions.statusCallback = this.statusCallback;
-          }
-          const res = await this.client.messages.create(createOptions);
-          return res;
-        },
-        {
-          maxRetries: 3,
-          initialDelayMs: 250,
-          backoffFactor: 2,
-        }
-      );
+      const createOptions: any = {from:formattedFrom,to:formattedTo,body};
+      if(this.statusCallback && this.statusCallback!=='none') createOptions.statusCallback=this.statusCallback;
+      // Sending is not idempotent. Retry only through the durable outbox after a definite rejection.
+      const response=await this.client.messages.create(createOptions);
 
       return {
         messageSid: response.sid,

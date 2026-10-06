@@ -1,3 +1,4 @@
+import { DurableWhatsAppGateway } from './twilio/durable.js';
 import fs from 'fs';
 import { createAdminAuth } from './security/admin-auth.js';
 import path from 'path';
@@ -26,6 +27,8 @@ export interface AppInstance {
   reminders: ReminderRunner;
   billing: BillingService;
   notifier: AdminNotificationService;
+  outbox: DurableWhatsAppGateway;
+  inbox: {drain():Promise<void>;recoverInterrupted():void};
   simulator: { db: DatabaseContext; gateway: MockWhatsAppGateway };
 }
 
@@ -47,7 +50,7 @@ export function createApp(options: CreateAppOptions = {}): AppInstance {
   SupabaseSync.hydrateFromSupabase(db).catch(() => {});
 
   // 2. Gateway
-  const gateway = options.gateway || (
+  const rawGateway = options.gateway || (
     cfg.mode !== 'simulator' && cfg.twilioAccountSid && cfg.twilioAuthToken
       ? new TwilioWhatsAppGateway(
           cfg.twilioAccountSid,
@@ -58,6 +61,8 @@ export function createApp(options: CreateAppOptions = {}): AppInstance {
         )
       : new MockWhatsAppGateway()
   );
+
+  const gateway = new DurableWhatsAppGateway(db,rawGateway);
 
   // 3. Calendar
   const calendar = options.calendar || (
@@ -122,6 +127,7 @@ export function createApp(options: CreateAppOptions = {}): AppInstance {
     gateway,
     authToken: cfg.twilioAuthToken,
     publicBaseUrl: cfg.publicBaseUrl,
+    asyncProcessing: cfg.nodeEnv === 'production',
     skipSignatureVerification: options.skipSignatureVerification ?? (cfg.nodeEnv !== 'production'),
     processMessage: async ({ customer, conversation, incomingText }) => {
       // Check if this incoming message is an interactive reminder confirmation (e.g. YES to confirm)
@@ -171,7 +177,9 @@ export function createApp(options: CreateAppOptions = {}): AppInstance {
   return {
     app,
     db,
-    gateway,
+    gateway:rawGateway,
+    outbox:gateway,
+    inbox:webhookRouter,
     calendar,
     scheduler,
     agent,

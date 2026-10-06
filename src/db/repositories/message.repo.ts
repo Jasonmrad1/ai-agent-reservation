@@ -13,6 +13,7 @@ export class MessageRepository {
     status: 'received' | 'queued' | 'sent' | 'delivered' | 'failed' | 'undelivered' = 'received',
     rawPayload?: any
   ): Message {
+    if (messageSid) {const existing=this.findByMessageSid(messageSid);if(existing) return existing;}
     const now = new Date().toISOString();
     const msg: Message = {
       id: crypto.randomUUID(),
