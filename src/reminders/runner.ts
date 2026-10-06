@@ -33,6 +33,8 @@ export class ReminderRunner {
     let sentCount = 0;
 
     for (const appt of pending) {
+      const key=`reminder:24h:${appt.id}:${appt.start_time}`;
+      if (!this.claim(key,appt.id)) continue;
       const visitInfo = appt.visit_type === 'home_visit'
         ? `🏠 Home Visit (at ${appt.address || 'your address'})`
         : `🏥 In-Office Visit at Dr. Ziad El Khoury's Clinic`;
@@ -51,13 +53,14 @@ export class ReminderRunner {
       ].join('\n');
 
       try {
-        const sendRes = await this.gateway.sendMessage(appt.customer_phone, body, appt.customer_id,{category:'reminder',variables:{'1':formatEnglishDate(appt.start_time),'2':appt.visit_type==='home_visit' ? appt.address || 'Home visit' : 'Clinic'}});
+        const sendRes = await this.gateway.sendMessage(appt.customer_phone, body, appt.customer_id,{category:'reminder',idempotencyKey:key,appointmentId:appt.id,expectedStart:appt.start_time,expiresAt:appt.start_time,variables:{'1':formatEnglishDate(appt.start_time),'2':appt.visit_type==='home_visit' ? appt.address || 'Home visit' : 'Clinic'}});
         this.db.appointments.markReminderSent(appt.id, '24h');
 
         const conv = this.db.conversations.getOrCreateActive(appt.customer_id);
         this.db.messages.create(conv.id, 'outbound', body, sendRes.messageSid, 'sent');
         sentCount++;
       } catch (err: any) {
+        this.releaseUnqueuedClaim(key);
         // Log alert if sending fails
         this.db.alerts.create({
           type: 'delivery_failure',
@@ -80,6 +83,8 @@ export class ReminderRunner {
     let sentCount = 0;
 
     for (const appt of pending) {
+      const key=`reminder:1h:${appt.id}:${appt.start_time}`;
+      if (!this.claim(key,appt.id)) continue;
       const timeStr = new Date(appt.start_time).toLocaleTimeString('en-US', {
         timeZone: 'Asia/Beirut',
         hour: '2-digit',
@@ -87,19 +92,20 @@ export class ReminderRunner {
       });
 
       const locationStr = appt.visit_type === 'home_visit'
-        ? `Dr. Ziad is on the way to ${appt.address}`
+        ? `Your home visit is scheduled at ${appt.address}`
         : `See you at our clinic`;
 
       const body = `👋 Reminder: Your appointment for ${appt.service} is coming up in about 1 hour (${timeStr}). ${locationStr}!`;
 
       try {
-        const sendRes = await this.gateway.sendMessage(appt.customer_phone, body, appt.customer_id,{category:'reminder',variables:{'1':formatEnglishDate(appt.start_time),'2':appt.visit_type==='home_visit' ? appt.address || 'Home visit' : 'Clinic'}});
+        const sendRes = await this.gateway.sendMessage(appt.customer_phone, body, appt.customer_id,{category:'reminder',idempotencyKey:key,appointmentId:appt.id,expectedStart:appt.start_time,expiresAt:appt.start_time,variables:{'1':formatEnglishDate(appt.start_time),'2':appt.visit_type==='home_visit' ? appt.address || 'Home visit' : 'Clinic'}});
         this.db.appointments.markReminderSent(appt.id, '1h');
 
         const conv = this.db.conversations.getOrCreateActive(appt.customer_id);
         this.db.messages.create(conv.id, 'outbound', body, sendRes.messageSid, 'sent');
         sentCount++;
       } catch (err: any) {
+        this.releaseUnqueuedClaim(key);
         this.db.alerts.create({
           type: 'delivery_failure',
           title: `1h Reminder Failed for ${appt.customer_phone}`,
@@ -110,6 +116,13 @@ export class ReminderRunner {
     }
 
     return sentCount;
+  }
+
+  private claim(key:string,appointmentId:string):boolean {
+    return !!this.db.appDb.db.prepare('INSERT OR IGNORE INTO reminder_claims (claim_key,appointment_id,created_at) VALUES (?,?,?)').run(key,appointmentId,new Date().toISOString()).changes;
+  }
+  private releaseUnqueuedClaim(key:string):void {
+    if (!this.db.appDb.db.prepare('SELECT id FROM outbound_jobs WHERE idempotency_key=?').get(key)) this.db.appDb.db.prepare('DELETE FROM reminder_claims WHERE claim_key=?').run(key);
   }
 
   /**

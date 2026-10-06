@@ -16,6 +16,9 @@ export interface SendMessageOptions {
   contentSid?: string;
   allowOptOut?: boolean;
   idempotencyKey?: string;
+  appointmentId?: string;
+  expectedStart?: string;
+  expiresAt?: string;
 }
 export interface WhatsAppGateway {
   sendMessage(to: string, body: string, customerId?: string, options?: SendMessageOptions): Promise<SendMessageResult>;

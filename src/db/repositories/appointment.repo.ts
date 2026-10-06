@@ -243,6 +243,7 @@ export class AppointmentRepository {
     this.db.prepare(`
       UPDATE appointments SET ${col} = 1, updated_at = ? WHERE id = ?
     `).run(now, id);
+    const updated=this.findById(id);if(updated && this.syncEnabled) SupabaseSync.syncAppointment(updated).catch(()=>{});
   }
 
   public getPendingReminders(type: '24h' | '1h', now: Date = new Date()): (Appointment & { customer_phone: string; customer_name: string | null })[] {
@@ -252,11 +253,11 @@ export class AppointmentRepository {
 
     if (type === '24h') {
       // 24 hours from now ± 60 minutes window
-      minTarget = nowMs + 23 * 60 * 60 * 1000;
+      minTarget = nowMs + 80 * 60 * 1000 + 1;
       maxTarget = nowMs + 25 * 60 * 60 * 1000;
     } else {
       // 1 hour from now ± 20 minutes window
-      minTarget = nowMs + 40 * 60 * 1000;
+      minTarget = nowMs + 1;
       maxTarget = nowMs + 80 * 60 * 1000;
     }
 

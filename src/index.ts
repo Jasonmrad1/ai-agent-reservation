@@ -22,7 +22,9 @@ void instance.scheduler.reconcileCalendarOperations();
 
 // Periodic reminder job (runs every 15 minutes in production)
 const REMINDER_INTERVAL_MS = 15 * 60 * 1000;
-const reminderTimer = setInterval(async () => {
+let remindersRunning=false;
+async function runReminders() {
+  if(remindersRunning) return;remindersRunning=true;
   try {
     const sent24 = await reminders.send24HourReminders();
     const sent1 = await reminders.send1HourReminders();
@@ -32,7 +34,10 @@ const reminderTimer = setInterval(async () => {
   } catch (err) {
     console.error('[Reminders] Error running reminder jobs:', err);
   }
-}, REMINDER_INTERVAL_MS);
+  finally {remindersRunning=false;}
+}
+const reminderTimer = setInterval(()=>{void runReminders();},REMINDER_INTERVAL_MS);
+void runReminders();
 
 // Graceful shutdown
 function shutdown() {

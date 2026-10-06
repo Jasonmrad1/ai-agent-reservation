@@ -25,6 +25,10 @@ export class DurableWhatsAppGateway implements WhatsAppGateway {
     const sql=this.db.appDb.db;const job=sql.prepare('SELECT * FROM outbound_jobs WHERE id=?').get(id) as any;
     try {
       const options:SendMessageOptions=JSON.parse(job.options || '{}');
+      if(options.appointmentId) {
+        const appt=this.db.appointments.findById(options.appointmentId);
+        if(!appt || !['booked','confirmed','rescheduled'].includes(appt.status) || appt.start_time!==options.expectedStart || (options.expiresAt && Date.now()>=new Date(options.expiresAt).getTime())) throw new Error('Reminder is stale or appointment is no longer active');
+      }
       const customer=this.db.customers.findById(job.customer_id);
       if(customer?.opted_out && !options.allowOptOut) throw new Error('Recipient has opted out');
       if(this.policy.enforceWindow) {
@@ -61,6 +65,7 @@ export class DurableWhatsAppGateway implements WhatsAppGateway {
     for(const job of jobs) {try {await this.attempt(String(job.id));}catch{/* Durable status and alert retained. */}}
   }
   recoverInterrupted():void {
+    this.db.appDb.db.prepare('DELETE FROM reminder_claims WHERE claim_key NOT IN (SELECT idempotency_key FROM outbound_jobs WHERE idempotency_key IS NOT NULL)').run();
     const interrupted=this.db.appDb.db.prepare("SELECT id FROM outbound_jobs WHERE status='sending'").all();
     this.db.appDb.db.prepare("UPDATE outbound_jobs SET status='review' WHERE status='sending'").run();
     if(interrupted.length) this.db.alerts.create({type:'delivery_failure',title:'Interrupted WhatsApp sends need review',details:`${interrupted.length} sends have unknown provider outcomes. Check Twilio before retrying.`});
