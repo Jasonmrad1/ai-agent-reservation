@@ -114,7 +114,7 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
           db.messages.create(conv.id, 'outbound', outreachMessage, sendRes.messageSid, sendRes.status);
           notificationAccepted=true;
         } catch (err) {
-          console.error(`Failed to send proactive reschedule WhatsApp to ${customer.phone}:`, err);
+          console.error('[routes] Operation requires review');
         }
       }
 

@@ -599,7 +599,7 @@ export class LiveGeminiClient implements GeminiClient {
         };
       } catch (err: any) {
         lastError = err;
-        console.warn(`[Agent] ⚠️ Model ${modelName} encountered error (${err?.status || err?.message}), failing over to next model in pool...`);
+        console.warn('[agent] Operation requires review');
       }
     }
 
@@ -696,9 +696,9 @@ Guidelines:
         if (text.length > 0) {
           return text;
         }
-        console.warn(`[Agent] ⚠️ Model ${modelName} returned empty text draft, trying next model or fallback...`);
+        console.warn('[agent] Operation requires review');
       } catch (err: any) {
-        console.warn(`[Agent] ⚠️ Drafting on ${modelName} failed (${err?.status || err?.message}), trying next model...`);
+        console.warn('[agent] Operation requires review');
       }
     }
 
@@ -1837,7 +1837,7 @@ ${upcomingScheduleDays.join('\n')}`;
     }
 
     // 4. Request Gemini classification / tool call
-    console.log(`[Agent] 🤖 Calling Gemini LLM for intent & tool calling...`);
+    console.log('[agent] Operation recorded');
     const geminiRes = locationBookingArgs
       ? { toolCalls: [{ name: 'book_appointment', args: locationBookingArgs }] }
       : await this.client.generateResponse({
@@ -1848,7 +1848,7 @@ ${upcomingScheduleDays.join('\n')}`;
       });
 
     if (geminiRes.text && (!geminiRes.toolCalls || geminiRes.toolCalls.length === 0)) {
-      console.log(`[Agent] 💬 Gemini responded with direct text: "${geminiRes.text}"`);
+      console.log('[agent] Operation recorded');
 
       if (/confirm|booked|rescheduled|cancelled|canceled|تأكيد|حجز|تعديل|إلغاء/i.test(geminiRes.text)) {
         return 'No appointment change has been confirmed. Please tell us your preferred date, time, and clinic or home visit.';
@@ -1881,9 +1881,9 @@ ${upcomingScheduleDays.join('\n')}`;
     // 5. Deterministic tool execution
     if (geminiRes.toolCalls.length !== 1) return 'Please request one appointment action at a time. No changes were made.';
     let toolCall = geminiRes.toolCalls[0];
-    console.log(`[Agent] 🛠️ Tool invoked: ${toolCall.name} | Args:`, JSON.stringify(toolCall.args));
+    console.log('[agent] Operation recorded');
     let toolResult = await this.executeTool(toolCall, customer, conversation, db);
-    console.log(`[Agent] 📋 Tool result:`, JSON.stringify(toolResult));
+    console.log('[agent] Operation recorded');
 
     // Smart auto-booking / auto-rescheduling chain: If check_availability was called, but the patient explicitly asked to book or move a specific slot
     if (toolCall.name === 'check_availability' && toolResult && Array.isArray(toolResult.available_slots)) {
@@ -1905,10 +1905,10 @@ ${upcomingScheduleDays.join('\n')}`;
       const specifiedVisitType: VisitType | null = isHome ? 'home_visit' : (isOffice ? 'in_office' : null);
       const hasRequiredInfo = specifiedVisitType === 'in_office' || (specifiedVisitType === 'home_visit' && (customer.address || incomingText.includes('📍')));
 
-      console.log(`[Agent] 🔍 Auto-chain check: hasExisting=${Boolean(existingAppointment)}, isResched=${isRescheduleIntent}, reqTime=${reqTime}, isAvail=${isAvailable}`);
+      console.log('[agent] Operation recorded');
 
       if (existingAppointment && isRescheduleIntent && isAvailable) {
-        console.log(`[Agent] ⚡ Reschedule slot ${reqTime} on ${toolCall.args.date} is confirmed available. Auto-rescheduling appointment...`);
+        console.log('[agent] Operation recorded');
         toolCall = {
           name: 'reschedule_appointment',
           args: {
@@ -1918,9 +1918,9 @@ ${upcomingScheduleDays.join('\n')}`;
           },
         };
         toolResult = await this.executeTool(toolCall, customer, conversation, db);
-        console.log(`[Agent] 📋 Auto-reschedule result:`, JSON.stringify(toolResult));
+        console.log('[agent] Operation recorded');
       } else if (isBookingIntent && isAvailable && specifiedVisitType && hasRequiredInfo) {
-        console.log(`[Agent] ⚡ Slot ${reqTime} on ${toolCall.args.date} is confirmed available and patient specified visit type (${specifiedVisitType}). Auto-booking appointment...`);
+        console.log('[agent] Operation recorded');
         const familyMatch = incomingText.match(/\b(sister|brother|mother|father|son|daughter|wife|husband|mom|dad|طفل|ابن|بنت|زوج|زوجة|اخت|أخت|اخ|أخ|ام|أم|اب|أب)\b/i);
         const patientName = familyMatch ? `${familyMatch[0]} of ${customer.name || 'Patient'}` : customer.name;
         const isNewAppointment = Boolean(existingAppointment) && /\b(another|additional|second|separate|sister|brother|mother|father|son|daughter|wife|husband|mom|dad|تاني|ثاني|أخرى|إضافي)\b/i.test(incomingText);
@@ -1939,7 +1939,7 @@ ${upcomingScheduleDays.join('\n')}`;
           },
         };
         toolResult = await this.executeTool(toolCall, customer, conversation, db);
-        console.log(`[Agent] 📋 Auto-booking result:`, JSON.stringify(toolResult));
+        console.log('[agent] Operation recorded');
       } else if (specifiedVisitType === 'home_visit' && !hasRequiredInfo && parsedSlot && db.workflows) {
         const targetDate = toolCall.args.date || parsedSlot.date;
         const targetTime = reqTime || parsedSlot.time;
@@ -1987,7 +1987,7 @@ ${upcomingScheduleDays.join('\n')}`;
 
     // 6. Draft grounded reply from backend tool result
     if (toolResult && toolResult.error) {
-      console.warn(`[Agent] ⚠️ Tool ${toolCall.name} returned an error:`, toolResult.error);
+      console.warn('[agent] Operation requires review');
       if (toolCall.name === 'book_appointment') {
         return `I apologize, but we could not confirm that appointment: ${toolResult.error}. Would you like to select another available opening?\n\nعذراً، لم نتمكن من تأكيد هذا الموعد: ${toolResult.error}. هل ترغب باختيار وقت آخر متاح؟`;
       }
@@ -2003,7 +2003,7 @@ ${upcomingScheduleDays.join('\n')}`;
       return this.client.getFallbackToolReply({toolName:toolCall.name,toolArgs:toolCall.args,toolResult,userQuery:incomingText});
     }
 
-    console.log(`[Agent] ✍️ Drafting grounded reply from tool result...`);
+    console.log('[agent] Operation recorded');
     try {
       let reply = await this.client.generateReplyFromToolResult({
         systemPrompt: contextSystemPrompt,
@@ -2015,7 +2015,7 @@ ${upcomingScheduleDays.join('\n')}`;
       });
 
       if (!reply || !reply.trim()) {
-        console.warn('[Agent] ⚠️ generateReplyFromToolResult returned empty string, invoking fallback...');
+        console.warn('[agent] Operation requires review');
         reply = this.client.getFallbackToolReply({
           toolName: toolCall.name,
           toolArgs: toolCall.args,
@@ -2058,7 +2058,7 @@ ${upcomingScheduleDays.join('\n')}`;
 
       return reply;
     } catch (draftErr) {
-      console.warn('[Agent] ⚠️ Failed to draft AI reply, using deterministic fallback:', draftErr);
+      console.warn('[agent] Operation requires review');
       const fallbackReply = this.client.getFallbackToolReply({
         toolName: toolCall.name,
         toolArgs: toolCall.args,

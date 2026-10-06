@@ -56,7 +56,7 @@ export function validateInboundMessage(text: string, fromPhone: string): Guardra
     if (now - entry.firstTimestamp < RATE_LIMIT_WINDOW_MS) {
       entry.count++;
       if (entry.count > MAX_MESSAGES_PER_WINDOW) {
-        console.warn(`[Guardrails] ⚠️ Rate limit exceeded for ${fromPhone} (${entry.count} msgs/min)`);
+        console.warn('[guardrails] Operation requires review');
         return {
           allowed: false,
           reason: 'rate_limit',
@@ -73,7 +73,7 @@ export function validateInboundMessage(text: string, fromPhone: string): Guardra
 
   // 2. Maximum Message Length (prevents prompt-stuffing / massive token consumption)
   if (trimmed.length > 600) {
-    console.warn(`[Guardrails] ⚠️ Message length exceeded (${trimmed.length} chars) from ${fromPhone}`);
+    console.warn('[guardrails] Operation requires review');
     return {
       allowed: false,
       reason: 'length_exceeded',
@@ -84,7 +84,7 @@ export function validateInboundMessage(text: string, fromPhone: string): Guardra
   // 3. Security, Prompt Injection & API Key Leakage Protection
   for (const pattern of SECURITY_VIOLATION_PATTERNS) {
     if (pattern.test(trimmed)) {
-      console.warn(`[Guardrails] 🚨 Security violation pattern intercepted from ${fromPhone}: "${trimmed.slice(0, 80)}"`);
+      console.warn('[guardrails] Operation requires review');
       return {
         allowed: false,
         reason: 'security_violation',
@@ -96,7 +96,7 @@ export function validateInboundMessage(text: string, fromPhone: string): Guardra
   // 4. Obvious Off-Topic Abuse Protection
   for (const pattern of OFF_TOPIC_PATTERNS) {
     if (pattern.test(trimmed)) {
-      console.warn(`[Guardrails] 🛑 Off-topic request intercepted from ${fromPhone}: "${trimmed.slice(0, 80)}"`);
+      console.warn('[guardrails] Operation requires review');
       return {
         allowed: false,
         reason: 'off_topic',

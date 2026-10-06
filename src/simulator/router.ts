@@ -49,7 +49,7 @@ export function createSimulatorRouter(options: SimulatorRouterOptions): Router {
         appointments,
       });
     } catch (err: any) {
-      console.error('[Simulator] Error fetching history:', err);
+      console.error('[router] Operation requires review');
       return res.status(500).json({ error: err.message });
     }
   });
@@ -69,7 +69,7 @@ export function createSimulatorRouter(options: SimulatorRouterOptions): Router {
       const profileName = (name || 'Test Patient').trim();
       const incomingText = text.trim();
 
-      console.log(`\n[Simulator] 📱 Inbound Simulated Message from ${fromPhone} (${profileName}): "${incomingText}"`);
+      console.log('[router] Operation recorded');
 
       // 1. Customer & Conversation Resolution
       const customer = db.customers.findOrCreate(fromPhone, profileName);
@@ -89,7 +89,7 @@ export function createSimulatorRouter(options: SimulatorRouterOptions): Router {
       // 3. Check Testing Reset Command (#reset / /reset / #clear)
       const lower = incomingText.toLowerCase();
       if (lower === '#reset' || lower === '/reset' || lower === '#clear' || lower === '/clear') {
-        console.log(`[Simulator] 🔄 Reset command received for ${fromPhone}. Wiping test appointments and chat session...`);
+        console.log('[router] Operation recorded');
         const activeAppts = db.appointments.findUpcomingByCustomerId(customer.id, customer.phone);
         for (const appt of activeAppts) {
           if (agent && agent['scheduler']) {
@@ -170,7 +170,7 @@ export function createSimulatorRouter(options: SimulatorRouterOptions): Router {
         appointments: updatedAppointments,
       });
     } catch (err: any) {
-      console.error('[Simulator] ❌ Error processing simulated message:', err);
+      console.error('[router] Operation requires review');
       return res.status(500).json({ error: err.message });
     }
   });

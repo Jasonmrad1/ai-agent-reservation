@@ -67,10 +67,10 @@ export function createWebhookRouter(options: WebhookHandlerOptions) {
       incomingText = `[MEDIA_ATTACHMENT: ${params.MediaContentType0 || 'file'}]`;
     }
 
-    console.log(`\n[Twilio Webhook] 📩 Incoming message from ${fromPhone} (${profileName || 'Patient'}): "${incomingText}"`);
+    console.log('[webhook] Operation recorded');
 
     if (!fromPhone || !incomingText) {
-      console.warn(`[Twilio Webhook] ⚠️ Missing From or Body in request`);
+      console.warn('[webhook] Operation requires review');
       res.status(400).send('Missing From or Body');
       return;
     }
@@ -87,7 +87,7 @@ export function createWebhookRouter(options: WebhookHandlerOptions) {
         const conv = db.conversations.getOrCreateActive(patient.id);
         db.messages.create(conv.id, 'outbound', incomingText, messageSid, 'sent', params);
         db.conversations.updateStatus(conv.id, 'doctor_active');
-        console.log(`[Twilio Webhook] 👨‍⚕️ Dr. Ziad sent direct message to ${recipientPhone}. Set conversation to 'doctor_active'.`);
+        console.log('[webhook] Operation recorded');
       }
       res.type('text/xml').send('<Response/>');
       return;
@@ -136,7 +136,7 @@ export function createWebhookRouter(options: WebhookHandlerOptions) {
     // 6.1 Testing Reset Command (#reset, /reset, #clear)
     const trimmedInput = incomingText.trim().toLowerCase();
     if (options.allowTestReset && ['#reset','/reset','#clear','/clear'].includes(trimmedInput)) {
-      console.log(`[Twilio Webhook] 🔄 Received test reset command from ${fromPhone}. Clearing patient chat and test bookings...`);
+      console.log('[webhook] Operation recorded');
       const activeAppts = db.appointments.findUpcomingByCustomerId(customer.id);
       for (const appt of activeAppts) {
         db.appointments.updateStatus(appt.id, 'cancelled');
@@ -182,14 +182,14 @@ export function createWebhookRouter(options: WebhookHandlerOptions) {
     let replyText = "Hello! Welcome to Dr. Ziad El Khoury's clinic. How can we help you today?\n\nأهلاً وسهلاً بكم في عيادة الدكتور زياد الخوري. كيف يمكننا مساعدتكم اليوم؟";
     if (processMessage) {
       try {
-        console.log(`[Agent] 🧠 Passing message to Gemini agent...`);
+        console.log('[webhook] Operation recorded');
         replyText = await processMessage({
           customer,
           conversation,
           incomingText,
           db,
         });
-        console.log(`[Agent] 💬 Gemini response drafted: "${replyText}"`);
+        console.log('[webhook] Operation recorded');
         
         // Preserve 'escalated' or 'doctor_active' if newly set; otherwise reset to 'active'
         const currentConv = db.conversations.findActiveByCustomerId(customer.id);
@@ -197,7 +197,7 @@ export function createWebhookRouter(options: WebhookHandlerOptions) {
           db.conversations.updateStatus(conversation.id, 'active');
         }
       } catch (err: any) {
-        console.error('[Agent] ❌ Error processing message with Gemini:', err);
+        console.error('[webhook] Operation requires review');
         replyText = "Hello! Welcome to Dr. Ziad El Khoury's clinic. We are currently experiencing a brief delay, but we are here to help you right away. What day and time works best for your appointment?\n\nأهلاً وسهلاً بكم في عيادة الدكتور زياد الخوري. نعتذر عن هذا التأخير البسيط، ونحن في خدمتكم فوراً. ما هو اليوم والوقت الأنسب لموعدكم؟";
         db.alerts.create({
           type: 'system_error',
@@ -210,16 +210,16 @@ export function createWebhookRouter(options: WebhookHandlerOptions) {
 
     replyText = sanitizeWhatsAppText(replyText);
     if (!replyText || !replyText.trim()) {
-      console.warn(`[Twilio Webhook] ⚠️ Final replyText was empty, using safe fallback for ${fromPhone}`);
+      console.warn('[webhook] Operation requires review');
       replyText = "Hello! Welcome to Dr. Ziad El Khoury's clinic. We received your message and are here to help. What day and time works best for your appointment?\n\nأهلاً وسهلاً بكم في عيادة الدكتور زياد الخوري. كيف يمكننا مساعدتكم اليوم وما هو الموعد المناسب لكم؟";
     }
     try {
-      console.log(`[Twilio Webhook] 📤 Sending WhatsApp reply to ${fromPhone}...`);
+      console.log('[webhook] Operation recorded');
       const sendResult = await gateway.sendMessage(fromPhone, replyText, customer.id);
-      console.log(`[Twilio Webhook] ✅ Dispatched WhatsApp reply (SID: ${sendResult.messageSid})`);
+      console.log('[webhook] Operation recorded');
       db.messages.create(conversation.id, 'outbound', replyText, sendResult.messageSid, 'sent');
     } catch (sendErr: any) {
-      console.error(`[Twilio Webhook] ❌ Failed to send WhatsApp reply to ${fromPhone}:`, sendErr);
+      console.error('[webhook] Operation requires review');
       db.messages.create(conversation.id, 'outbound', replyText, null, 'failed');
     }
 
