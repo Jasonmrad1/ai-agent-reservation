@@ -117,6 +117,7 @@ export class ReminderRunner {
   public handleConfirmationResponse(customerId: string, text: string): string | null {
     const clean = text.trim();
     const upper = clean.toUpperCase();
+    if (this.db.appointments.findUpcomingByCustomerId(customerId).length > 1) return null;
 
     // Only intercept if customer has an active upcoming appointment
     const active = this.db.appointments.findLatestActiveByCustomerId(customerId);

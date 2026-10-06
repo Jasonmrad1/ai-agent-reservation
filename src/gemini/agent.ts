@@ -1419,6 +1419,30 @@ export class AgentCore {
 
     const lower = incomingText.toLowerCase();
 
+    const choicesKey = `appointment_choices_${conversation.id}`;
+    const selectedKey = `selected_appointment_${conversation.id}`;
+    const upcoming = db.appointments.findUpcomingByCustomerId(customer.id);
+    const action = /\b(cancel|elghe|ilgha|laghe)\b/i.test(incomingText) ? 'cancel' : /\b(reschedule|move|postpone|ghayyer)\b/i.test(incomingText) ? 'reschedule' : /^(yes|confirm|oui|tamam)$/i.test(incomingText.trim()) ? 'confirm' : null;
+    let choices: any = null;
+    try { choices = JSON.parse(db.settings.get(choicesKey, 'null')); } catch {}
+    if (choices && choices.expires <= Date.now()) { db.settings.delete(choicesKey); choices = null; }
+    if (choices && /^\d+$/.test(incomingText.trim())) {
+      const id = choices.ids[Number(incomingText.trim()) - 1];
+      const appointment = upcoming.find(a => a.id === id);
+      if (!appointment) return 'Please choose one of the listed upcoming appointments.';
+      db.settings.set(selectedKey, appointment.id); db.settings.delete(choicesKey);
+      if (choices.action === 'cancel') {
+        const result = await this.executeTool({ name: 'cancel_appointment', args: { appointment_id: appointment.id, reason: 'Patient selected cancellation' } }, customer, conversation, db);
+        return result.error ? `The cancellation could not be completed: ${result.error}` : `Your appointment on ${formatEnglishDate(appointment.start_time)} has been cancelled.`;
+      }
+      if (choices.action === 'confirm') { db.appointments.updateStatus(appointment.id, 'confirmed'); return 'Your selected appointment has been confirmed.'; }
+      return 'What new day and time would you like for your selected appointment?';
+    }
+    if (action && upcoming.length > 1 && !upcoming.some(a => a.id === db.settings.get(selectedKey))) {
+      db.settings.set(choicesKey, JSON.stringify({ action, ids: upcoming.map(a => a.id), expires: Date.now() + 30*60*1000 }));
+      return `Which appointment would you like to ${action}? Reply with its number:\n${upcoming.map((a,i) => `${i+1}. ${formatEnglishDate(a.start_time,a.end_time)} (${a.visit_type === 'home_visit' ? 'Home visit' : 'Clinic'})`).join('\n')}`;
+    }
+
     // 1. Dynamic Calendar & Time Context (Asia/Beirut Timezone)
     const now = new Date();
     const beirutNow = getBeirutTimeInfo(now);
@@ -2444,7 +2468,7 @@ ${upcomingScheduleDays.join('\n')}`;
 
           // If customer ALREADY has an active confirmed appointment on a different date/time,
           // treat booking as moving / rescheduling their existing appointment UNLESS they requested a new / additional appointment!
-          const activeAppt = db.appointments.findLatestActiveByCustomerOrPhone(customer.id, customer.phone);
+          const activeAppt = this.selectedAppointment(customer, conversation, db, args.appointment_id, args.is_new_appointment === true);
           const lastInbound = db.messages.getRecentMessages(conversation.id, 2).reverse().find((m) => m.direction === 'inbound')?.body || '';
           const isExplicitNew = args.is_new_appointment === true ||
             Boolean(args.patient_name && args.patient_name.includes(' of ')) ||
@@ -2552,7 +2576,7 @@ ${upcomingScheduleDays.join('\n')}`;
 
       case 'reschedule_appointment': {
         try {
-          const activeAppt = db.appointments.findLatestActiveByCustomerOrPhone(customer.id, customer.phone);
+          const activeAppt = this.selectedAppointment(customer, conversation, db, args.appointment_id);
           if (!activeAppt) {
             return { error: 'No upcoming active appointment found to reschedule.' };
           }
@@ -2586,12 +2610,13 @@ ${upcomingScheduleDays.join('\n')}`;
 
       case 'cancel_appointment': {
         try {
-          const activeAppt = db.appointments.findLatestActiveByCustomerOrPhone(customer.id, customer.phone);
+          const activeAppt = this.selectedAppointment(customer, conversation, db, args.appointment_id);
           if (!activeAppt) {
             return { error: 'No upcoming active appointment found to cancel.' };
           }
 
           const cancelled = await this.scheduler.cancelAppointment(activeAppt.id, args.reason);
+          db.settings.delete(`selected_appointment_${conversation.id}`);
           await this.notifier.notifyCancellation(cancelled, customer, args.reason);
 
           if (db.workflows) {
@@ -2651,6 +2676,19 @@ ${upcomingScheduleDays.join('\n')}`;
       default:
         return { error: `Unknown tool: ${name}` };
     }
+  }
+
+  private selectedAppointment(customer: Customer, conversation: Conversation, db: DatabaseContext, requestedId?: string, creatingNew = false): Appointment | null {
+    const upcoming = db.appointments.findUpcomingByCustomerId(customer.id);
+    if (creatingNew) return null;
+    const selected = requestedId || db.settings.get(`selected_appointment_${conversation.id}`, '');
+    if (selected) {
+      const appointment = upcoming.find(a => a.id === selected);
+      if (!appointment) throw new Error('The selected appointment does not belong to this patient or is no longer active.');
+      return appointment;
+    }
+    if (upcoming.length > 1) throw new Error('Please specify which appointment you want to change.');
+    return upcoming[0] || null;
   }
 
   private async executeEscalation(

@@ -81,10 +81,10 @@ export class AppointmentRepository {
   public findLatestActiveByCustomerId(customerId: string): Appointment | null {
     const row = this.db.prepare(`
       SELECT * FROM appointments
-      WHERE customer_id = ? AND status IN ('booked', 'confirmed', 'rescheduled')
+      WHERE customer_id = ? AND status IN ('booked', 'confirmed', 'rescheduled') AND start_time > ?
       ORDER BY start_time ASC
       LIMIT 1
-    `).get(customerId) as any;
+    `).get(customerId, new Date().toISOString()) as any;
 
     if (!row) return null;
     return this.mapRow(row);
@@ -96,8 +96,8 @@ export class AppointmentRepository {
 
   public findUpcomingByCustomerId(customerId: string, _phone?: string): Appointment[] {
     const rows = this.db.prepare(`SELECT * FROM appointments
-      WHERE customer_id = ? AND status IN ('booked', 'confirmed', 'rescheduled')
-      ORDER BY start_time ASC`).all(customerId) as any[];
+      WHERE customer_id = ? AND status IN ('booked', 'confirmed', 'rescheduled') AND start_time > ?
+      ORDER BY start_time ASC`).all(customerId, new Date().toISOString()) as any[];
     return rows.map(this.mapRow);
   }
 
@@ -118,9 +118,10 @@ export class AppointmentRepository {
       SELECT a.*, c.name as customer_name, c.phone as customer_phone
       FROM appointments a
       JOIN customers c ON a.customer_id = c.id
+      WHERE a.status IN ('booked', 'confirmed', 'rescheduled') AND a.start_time > ?
       ORDER BY a.start_time ASC
       LIMIT ?
-    `).all(limit) as any[];
+    `).all(new Date().toISOString(), limit) as any[];
 
     return rows.map((r) => ({
       ...this.mapRow(r),
