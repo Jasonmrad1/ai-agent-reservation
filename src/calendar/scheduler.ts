@@ -533,15 +533,13 @@ export class SchedulingEngine {
 
     // Update Calendar
     if (existing.google_event_id) {
-      try {
+      {
         await this.calendar.updateEvent(existing.google_event_id, {
           summary: `${existing.service} (Rescheduled) - ${visitType === 'home_visit' ? 'Home Visit' : 'In-Office'}`,
           start: newStart,
           end: newEnd,
           location: visitType === 'home_visit' ? address || undefined : 'Office Clinic',
         });
-      } catch {
-        // Continue even if remote calendar update fails
       }
     }
 
@@ -735,10 +733,8 @@ export class SchedulingEngine {
     }
 
     if (existing.google_event_id) {
-      try {
+      {
         await this.calendar.deleteEvent(existing.google_event_id);
-      } catch {
-        // Remote event might already be deleted
       }
     }
 

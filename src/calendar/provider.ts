@@ -1,3 +1,4 @@
+import { beirutDateTimeToUtc } from '../utils/timezone.js';
 import crypto from 'node:crypto';
 import { CalendarEvent } from '../types/index.js';
 import { withRetry } from '../utils/retry.js';
@@ -22,7 +23,7 @@ export class InMemoryCalendarProvider implements CalendarProvider {
     if (!this.events.has(eventId)) {
       throw new Error(`Calendar event ${eventId} not found`);
     }
-    this.events.set(eventId, { ...event, id: eventId });
+    this.events.set(eventId, { ...this.events.get(eventId), ...event, id: eventId });
   }
 
   public async deleteEvent(eventId: string): Promise<void> {
@@ -88,100 +89,62 @@ export class GoogleCalendarProvider implements CalendarProvider {
     return Boolean(this.config.clientId && this.config.clientSecret && token);
   }
 
+
+  private requireConnection(): void {
+    if (!this.isConnected()) throw new Error('Google Calendar is not connected; reconnect before scheduling');
+  }
+
   public async createEvent(event: CalendarEvent): Promise<string> {
-    if (!this.isConnected()) {
-      return `local_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
-    }
-    try {
-      const client = await this.getClient();
-      return await withRetry(async () => {
-        const res = await client.events.insert({
-          calendarId: this.calendarId,
-          requestBody: {
-            summary: event.summary,
-            description: event.description,
-            location: event.location,
-            start: { dateTime: event.start.toISOString() },
-            end: { dateTime: event.end.toISOString() },
-          },
-        });
-        return res.data.id!;
-      });
-    } catch (err: any) {
-      console.warn(`[GoogleCalendarProvider] Warning: could not sync createEvent to Google Calendar: ${err?.message || err}`);
-      return `local_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
-    }
+    this.requireConnection(); const client = await this.getClient();
+    // A stable Google-compatible ID makes retries safe even if the response is lost.
+    const id = event.id || crypto.randomUUID().replaceAll('-', '');
+    return withRetry(async () => {
+      try {
+        const res = await client.events.insert({calendarId:this.calendarId, requestBody:{
+          id, summary:event.summary, description:event.description, location:event.location,
+          start:{dateTime:event.start.toISOString()}, end:{dateTime:event.end.toISOString()}
+        }});
+        if (!res.data.id) throw new Error('Calendar returned no event ID');
+        return res.data.id;
+      } catch (error: any) {
+        if (error.code !== 409 && error.response?.status !== 409) throw error;
+        const existing = await client.events.get({calendarId:this.calendarId,eventId:id});
+        if (existing.data.start?.dateTime !== event.start.toISOString() || existing.data.end?.dateTime !== event.end.toISOString()) throw new Error('Calendar ID conflict requires reconciliation');
+        return id;
+      }
+    });
   }
 
   public async updateEvent(eventId: string, event: CalendarEvent): Promise<void> {
-    if (!this.isConnected() || eventId.startsWith('local_')) {
-      return;
-    }
-    try {
-      const client = await this.getClient();
-      await withRetry(async () => {
-        await client.events.update({
-          calendarId: this.calendarId,
-          eventId,
-          requestBody: {
-            summary: event.summary,
-            description: event.description,
-            location: event.location,
-            start: { dateTime: event.start.toISOString() },
-            end: { dateTime: event.end.toISOString() },
-          },
-        });
-      });
-    } catch (err: any) {
-      console.warn(`[GoogleCalendarProvider] Warning: could not sync updateEvent to Google Calendar: ${err?.message || err}`);
-    }
+    this.requireConnection(); if (eventId.startsWith('local_')) throw new Error('Legacy local event requires reconciliation');
+    const client=await this.getClient();
+    // Patch preserves attendees and metadata omitted by the application.
+    const body: any = {start:{dateTime:event.start.toISOString()},end:{dateTime:event.end.toISOString()}};
+    for (const key of ['summary','description','location'] as const) if (event[key] !== undefined) body[key]=event[key];
+    await withRetry(()=>client.events.patch({calendarId:this.calendarId,eventId,requestBody:body}));
   }
 
   public async deleteEvent(eventId: string): Promise<void> {
-    if (!this.isConnected() || eventId.startsWith('local_')) {
-      return;
-    }
-    try {
-      const client = await this.getClient();
-      await withRetry(async () => {
-        await client.events.delete({
-          calendarId: this.calendarId,
-          eventId,
-        });
-      });
-    } catch (err: any) {
-      console.warn(`[GoogleCalendarProvider] Warning: could not sync deleteEvent to Google Calendar: ${err?.message || err}`);
-    }
+    this.requireConnection(); if (eventId.startsWith('local_')) throw new Error('Legacy local event requires reconciliation');
+    const client=await this.getClient();
+    await withRetry(async()=>{
+      try {await client.events.delete({calendarId:this.calendarId,eventId});}
+      catch (error:any) {if (![404,410].includes(error.code || error.response?.status)) throw error;}
+    });
   }
 
   public async listEvents(timeMin: Date, timeMax: Date): Promise<CalendarEvent[]> {
-    if (!this.isConnected()) {
-      return [];
-    }
-    try {
-      const client = await this.getClient();
-      return await withRetry(async () => {
-        const res = await client.events.list({
-          calendarId: this.calendarId,
-          timeMin: timeMin.toISOString(),
-          timeMax: timeMax.toISOString(),
-          singleEvents: true,
-          orderBy: 'startTime',
-        });
-
-        const items = res.data.items || [];
-        return items.map((item: any) => ({
-          id: item.id,
-          summary: item.summary || '',
-          description: item.description,
-          location: item.location,
-          start: new Date(item.start.dateTime || item.start.date),
-          end: new Date(item.end.dateTime || item.end.date),
-        }));
-      });
-    } catch (err: any) {
-      console.warn(`[GoogleCalendarProvider] Warning: could not listEvents from Google Calendar: ${err?.message || err}`);
-      return [];
-    }
+    this.requireConnection();const client=await this.getClient();const results:CalendarEvent[]=[];let pageToken:string|undefined;
+    do {
+      const res:any=await withRetry(()=>client.events.list({calendarId:this.calendarId,timeMin:timeMin.toISOString(),timeMax:timeMax.toISOString(),singleEvents:true,orderBy:'startTime',maxResults:2500,pageToken}));
+      for (const item of res.data.items || []) {
+        if (item.status==='cancelled') continue;
+        results.push({id:item.id,summary:item.summary || '',description:item.description,location:item.location,
+          start:item.start.dateTime ? new Date(item.start.dateTime) : beirutDateTimeToUtc(item.start.date,'00:00'),
+          end:item.end.dateTime ? new Date(item.end.dateTime) : beirutDateTimeToUtc(item.end.date,'00:00')});
+      }
+      pageToken=res.data.nextPageToken;
+    } while(pageToken);
+    return results;
   }
 }
