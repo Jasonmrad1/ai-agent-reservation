@@ -6,16 +6,18 @@ import path from 'node:path';
 
 const instance=createApp();
 const server=instance.app.listen(config.port,()=>console.log(`Clinic service listening on ${config.port}; dashboard: /admin/login`));
-instance.inbox.recoverInterrupted();instance.outbox.recoverInterrupted();
 const tasks=new BackgroundTasks(name=>{
  console.error(`Background job failed: ${name}`);
  instance.db.alerts.create({type:'system_error',title:'Background job failed',details:`Job ${name} failed. Review the protected clinic queues.`});
 });
+if(config.mode==='clinic'){
+instance.inbox.recoverInterrupted();instance.outbox.recoverInterrupted();
 tasks.every('inbox',1000,()=>instance.inbox.drain());
 tasks.every('outbox',1000,()=>instance.outbox.drain());
 tasks.every('replica',1000,()=>instance.replica.drain());
 tasks.every('calendar',60000,()=>instance.scheduler.reconcileCalendarOperations());
 tasks.every('reminders',15*60000,async()=>{await instance.reminders.send24HourReminders();await instance.reminders.send1HourReminders();});
+}
 if(config.databaseUrl!==':memory:')tasks.every('backup',24*60*60000,async()=>{
  backupSqliteFile(config.databaseUrl,process.env.BACKUP_DIRECTORY || path.join(path.dirname(config.databaseUrl),'backups'));
  instance.db.settings.set('last_verified_backup_at',new Date().toISOString());

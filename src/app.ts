@@ -52,12 +52,12 @@ export function createApp(options: CreateAppOptions = {}): AppInstance {
 
   // 1. Database
   if(!options.db && cfg.nodeEnv==='production' && cfg.databaseUrl!==':memory:' && fs.existsSync(cfg.databaseUrl)) backupSqliteFile(cfg.databaseUrl,path.join(path.dirname(cfg.databaseUrl),'backups'));
-  const db = options.db || createDatabaseContext(cfg.databaseUrl,{encryptionKey:cfg.settingsEncryptionKey});
-  const replica = new ReplicaWorker(db,getSupabaseClient(cfg),cfg.supabaseUrl);
+  const db = options.db || createDatabaseContext(cfg.databaseUrl,{encryptionKey:cfg.settingsEncryptionKey,syncEnabled:cfg.mode==='clinic'});
+  const replica = new ReplicaWorker(db,cfg.mode==='clinic' ? getSupabaseClient(cfg) : null,cfg.supabaseUrl);
 
   // 2. Gateway
   const rawGateway = options.gateway || (
-    cfg.mode !== 'simulator' && cfg.twilioAccountSid && cfg.twilioAuthToken
+    cfg.mode === 'clinic' && cfg.twilioAccountSid && cfg.twilioAuthToken
       ? new TwilioWhatsAppGateway(
           cfg.twilioAccountSid,
           cfg.twilioAuthToken,
@@ -72,7 +72,7 @@ export function createApp(options: CreateAppOptions = {}): AppInstance {
 
   // 3. Calendar
   const calendar = options.calendar || (
-    cfg.mode !== 'simulator' && cfg.googleCalendarClientId && cfg.googleCalendarClientSecret
+    cfg.mode === 'clinic' && cfg.googleCalendarClientId && cfg.googleCalendarClientSecret
       ? new GoogleCalendarProvider({
           clientId: cfg.googleCalendarClientId,
           clientSecret: cfg.googleCalendarClientSecret,
@@ -99,7 +99,7 @@ export function createApp(options: CreateAppOptions = {}): AppInstance {
 
   // 6. Gemini Agent
   const geminiClient = options.geminiClient || (
-    cfg.mode !== 'simulator' && cfg.geminiApiKey
+    cfg.mode === 'clinic' && cfg.geminiApiKey
       ? new LiveGeminiClient(cfg.geminiApiKey)
       : new MockGeminiClient()
   );

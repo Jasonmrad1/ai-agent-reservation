@@ -6,6 +6,7 @@ for (const key of [
   'GOOGLE_CALENDAR_CLIENT_ID', 'GOOGLE_CALENDAR_CLIENT_SECRET',
 ]) process.env[key] = '';
 process.env.NODE_ENV = 'test';
+process.env.APP_MODE = 'simulator';
 
 // Legacy scenario fixtures run against a stable clock, with real network timers.
 vi.useFakeTimers({ toFake: ['Date'] });

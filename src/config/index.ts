@@ -40,7 +40,7 @@ export interface AppConfig {
 export const config: AppConfig = {
   settingsEncryptionKey:process.env.SETTINGS_ENCRYPTION_KEY,
   publicBaseUrl: process.env.PUBLIC_BASE_URL,
-  mode: process.env.APP_MODE === 'clinic' ? 'clinic' : process.env.APP_MODE === 'simulator' ? 'simulator' : undefined,
+  mode: process.env.APP_MODE === 'clinic' ? 'clinic' : 'simulator',
   port: parseInt(process.env.PORT || '3000', 10),
   databaseUrl: process.env.DATABASE_URL || 'data/automation.sqlite',
   adminSessionSecret: process.env.ADMIN_SESSION_SECRET || 'dev_secret_change_in_production_123',
