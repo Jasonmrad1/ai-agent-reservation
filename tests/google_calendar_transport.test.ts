@@ -7,5 +7,6 @@ it('recognizes an already-created event represented with a timezone offset',asyn
 it('reads every calendar page, skips cancelled events and patches only supplied metadata',async()=>{
  const events={list:vi.fn().mockResolvedValueOnce({data:{items:[{id:'one',start:{dateTime:'2026-09-14T07:00:00Z'},end:{dateTime:'2026-09-14T08:00:00Z'}}],nextPageToken:'page2'}}).mockResolvedValueOnce({data:{items:[{id:'cancelled',status:'cancelled'},{id:'two',start:{dateTime:'2026-09-14T09:00:00Z'},end:{dateTime:'2026-09-14T10:00:00Z'}}]}}),patch:vi.fn().mockResolvedValue({})};const p=provider(events);
  expect(await p.listEvents(new Date('2026-09-14'),new Date('2026-09-15'))).toHaveLength(2);expect(events.list.mock.calls[1][0].pageToken).toBe('page2');
+ expect(events.list.mock.calls[0][1]).toMatchObject({timeout:10000,retry:false});
  await p.updateEvent('one',{start:new Date('2026-09-14T10:00:00Z'),end:new Date('2026-09-14T11:00:00Z')} as any);expect(events.patch.mock.calls[0][0].requestBody).not.toHaveProperty('description');
 });

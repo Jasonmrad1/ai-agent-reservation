@@ -382,7 +382,7 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
 
     try {
       const { google } = await import('googleapis');
-      const oauth2Client = new google.auth.OAuth2(clientId, clientSecret, redirectUri);
+      const oauth2Client = new google.auth.OAuth2({clientId,clientSecret,redirectUri,transporterOptions:{timeout:10000,retry:false}});
       const authUrl = oauth2Client.generateAuthUrl({
         access_type: 'offline',
         prompt: 'consent',
@@ -414,7 +414,7 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
       const redirectUri = options.calendarRedirectUri || process.env.GOOGLE_CALENDAR_REDIRECT_URI || `${req.protocol}://${req.get('host')}/admin/oauth2callback`;
 
       const { google } = await import('googleapis');
-      const oauth2Client = new google.auth.OAuth2(clientId, clientSecret, redirectUri);
+      const oauth2Client = new google.auth.OAuth2({clientId,clientSecret,redirectUri,transporterOptions:{timeout:10000,retry:false}});
       const { tokens } = await oauth2Client.getToken(code);
 
       if (tokens.refresh_token) {
