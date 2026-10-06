@@ -27,7 +27,7 @@ export async function restoreReplica(db:DatabaseContext,client:any):Promise<Reco
     for(const table of REPLICA_TABLES) {
       const columns=(sql.prepare(`PRAGMA table_info(${table})`).all() as any[]).map(c=>c.name);
       for(const row of snapshot[table]) {
-        if(table==='settings' && /token|secret|password/i.test(row.key)) continue;
+        if(table==='settings' && /token|secret|password|credential/i.test(row.key)) continue;
         const keys=columns.filter(k=>row[k]!==undefined);
         const values=keys.map(k=>typeof row[k]==='boolean' ? Number(row[k]) : row[k]!==null && typeof row[k]==='object' ? JSON.stringify(row[k]) : row[k]);
         sql.prepare(`INSERT INTO ${table} (${keys.join(',')}) VALUES (${keys.map(()=>'?').join(',')})`).run(...values);

@@ -5,6 +5,7 @@ export const REPLICA_TABLES=['customers','conversations','messages','appointment
 const primaryKey=(table:string)=> table==='billing_notifications' ? 'notification_key' : table==='settings' ? 'key' : table==='appointment_operations' ? 'operation_key' : table==='reminder_claims' ? 'claim_key' : ['inbound_jobs','message_status_events'].includes(table) ? 'message_sid' : 'id';
 export function installReplicationTriggers(sql:DatabaseSync,enabled:boolean):void {
   sql.exec('CREATE TABLE IF NOT EXISTS replication_jobs (id INTEGER PRIMARY KEY AUTOINCREMENT,table_name TEXT NOT NULL,record_key TEXT NOT NULL,operation TEXT NOT NULL,payload TEXT,last_error TEXT,attempts INTEGER NOT NULL DEFAULT 0)');
+  sql.exec("DELETE FROM replication_jobs WHERE table_name='settings' AND (record_key LIKE '%token%' OR record_key LIKE '%secret%' OR record_key LIKE '%password%' OR record_key LIKE '%credential%')");
   for(const table of REPLICA_TABLES) {
     for(const action of ['INSERT','UPDATE','DELETE']) sql.exec(`DROP TRIGGER IF EXISTS replica_${table}_${action}`);
     if(!enabled) continue;
@@ -12,7 +13,7 @@ export function installReplicationTriggers(sql:DatabaseSync,enabled:boolean):voi
     const payload=`json_object(${cols.map(c=>`'${c.name}',NEW.${c.name}`).join(',')})`;
     for(const action of ['INSERT','UPDATE','DELETE']) {
       const row=action==='DELETE' ? 'OLD' : 'NEW';
-      const condition=table==='settings' ? `WHEN ${row}.key NOT LIKE '%token%' AND ${row}.key NOT LIKE '%secret%' AND ${row}.key NOT LIKE '%password%'` : '';
+      const condition=table==='settings' ? `WHEN ${row}.key NOT LIKE '%token%' AND ${row}.key NOT LIKE '%secret%' AND ${row}.key NOT LIKE '%password%' AND ${row}.key NOT LIKE '%credential%'` : '';
       sql.exec(`CREATE TRIGGER replica_${table}_${action} AFTER ${action} ON ${table} ${condition} BEGIN INSERT INTO replication_jobs(table_name,record_key,operation,payload) VALUES ('${table}',${row}.${primaryKey(table)},'${action==='DELETE' ? 'delete' : 'upsert'}',${action==='DELETE' ? 'NULL' : payload}); END`);
     }
   }
