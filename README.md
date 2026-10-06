@@ -6,6 +6,8 @@ A WhatsApp appointment assistant with an administrator dashboard and an offline 
 
 **Latest patient-flow review:** [Read what failed, what changed, and how replies and saved records were checked](docs/PATIENT_FLOW_FIXES.md). This covers ordinary booking, additional visits, cancellation, rescheduling, consent and human takeover in the offline simulator.
 
+**Heavy booking tests:** [42 additional end-to-end checks and the three bugs they exposed](docs/BOOKING_E2E_REVIEW.md), including concurrent patients, duplicate webhooks and complete simulator lifecycles.
+
 ## Did the review find bugs that could make the agent malfunction?
 
 Yes. The most consequential weaknesses were:

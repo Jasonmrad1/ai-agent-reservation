@@ -105,3 +105,14 @@ The latest patient-flow review is explained in [PATIENT_FLOW_FIXES.md](PATIENT_F
 | `9db01b9` | fix(simulator): prioritize cancellation over appointment keywords | [patient_cancellation_phrase.test.ts](../tests/patient_cancellation_phrase.test.ts) |
 | `c3fc22d` | fix(simulator): reschedule to the requested patient slot | [patient_reschedule_phrase.test.ts](../tests/patient_reschedule_phrase.test.ts) |
 | `c46465f` | fix(simulator): ask for missing booking details without inventing them | [simulator_missing_booking_details.test.ts](../tests/simulator_missing_booking_details.test.ts) |
+
+## Heavy booking end-to-end review
+
+See [BOOKING_E2E_REVIEW.md](BOOKING_E2E_REVIEW.md) for 42 additional checks and three reproduced bugs. The full suite has 279 passing tests and zero failures.
+
+| Commit | Change | Regression tests |
+|---|---|---|
+| `0d45bdd` | fix(booking): persist first home request before collecting location | [home_first_message_location.test.ts](../tests/home_first_message_location.test.ts) |
+| `91d15e8` | fix(booking): reject acknowledgements as home addresses | [home_address_acknowledgements.test.ts](../tests/home_address_acknowledgements.test.ts) |
+| `b711daf` | fix(confirmation): recognize Arabic replies and appointment choices | [patient_confirmation_languages.test.ts](../tests/patient_confirmation_languages.test.ts) |
+| `e6504fa` | test(e2e): exercise booking conversations concurrency and simulator lifecycle | [booking_conversation_matrix.test.ts](../tests/booking_conversation_matrix.test.ts), [simulator_booking_lifecycle.test.ts](../tests/simulator_booking_lifecycle.test.ts) |

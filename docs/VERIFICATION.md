@@ -4,7 +4,7 @@ Verified on Windows with Node 24.14.0:
 
 | Check | Result |
 |---|---|
-| Offline unit and regression suite | 237 passed; 0 failed |
+| Offline unit and regression suite | 279 passed; 0 failed |
 | Backend and React TypeScript checks | Passed |
 | Production application build | Passed |
 | Dependency audit, including development packages | 0 reported vulnerabilities |
@@ -13,7 +13,7 @@ Verified on Windows with Node 24.14.0:
 | Cloud restore | Pagination and transactional rollback verified with a mock replica |
 | SQLite backup | Snapshot integrity and restored patient data verified |
 
-The latest full suite and build were rerun after eight practical patient-flow fixes and seven preceding reliability fixes. See [the patient-flow report](PATIENT_FLOW_FIXES.md) for HTTP scenarios, replies, saved records and separate commits. No new dependency audit or compiled-server smoke run was performed during this follow-up; those entries above record the earlier verification.
+The latest full suite was rerun after 42 additional end-to-end checks and three more patient-flow fixes. See [the heavy booking review](BOOKING_E2E_REVIEW.md) for the scenario matrix and reproduced bugs. The preceding review included eight practical patient-flow fixes and seven reliability fixes. See [the patient-flow report](PATIENT_FLOW_FIXES.md) for HTTP scenarios, replies, saved records and separate commits. No new dependency audit or compiled-server smoke run was performed during this follow-up; those entries above record the earlier verification.
 
 Bug fixes and their regression tests are committed separately. Tests cover webhook signatures, administrator sessions, canonical identities, appointment ambiguity, scheduling races, timezone/DST handling, calendar reconciliation, emergency triage, human takeover, message delivery, opt-outs/templates, reminders, billing, replication, recovery and HTTP failure handling. The normal suite excludes live integration tests and clears provider credentials before application imports.
 
