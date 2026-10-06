@@ -1,5 +1,52 @@
 # Video demo for Dr. Ziad
 
+## Recommended: simulator journey with visible saved results
+
+[Watch the simulator demo](../artifacts/demo-simulator/Dr-Ziad-Simulator-Demo.mp4).
+
+Approximately **2 minutes 12 seconds**, in **1080p**. [Interactive chapter player](../artifacts/demo-simulator/Watch-Demo.html) lets viewers jump between workflows when opened in a browser alongside the MP4.
+
+This version centers on patient conversations. After every step, it opens the actual simulator calendar to show what was saved. The calendar and appointment details use the existing website components, with a new Patient Simulator tab for returning to the same chat.
+
+| Step | What the video visibly checks |
+| --- | --- |
+| Configure hours through Work Hours | Monday and Tuesday show 09:30–17:30; the simulator uses those saved hours |
+| Book Samir at 11 AM | Calendar card and reservation details show Monday at 11 AM |
+| Move to Tuesday at 2 PM | Same saved appointment ID; one card at the new time |
+| Cancel through chat | No active calendar card remains |
+| Book again at 10 AM | A fresh appointment appears; the earlier record remains cancelled |
+| Book Maya's home visit | Address is requested first, then saved in home-visit details |
+| Request an occupied slot | No extra booking is created; existing cards remain |
+| Choose Tuesday at 3 PM | Rana's alternative visit appears alongside the other two |
+
+### What changed in the application
+
+Previously, clicking Calendar or Work Hours from the simulator accessed clinic records. That prevented a continuous simulator demonstration. Those controls now access authenticated sandbox endpoints backed by the same database and scheduling engine as simulator conversations. They use mocked messaging and billing services and cannot enter live OAuth routes. Clinic appointments and settings remain isolated.
+
+The chat stays mounted while switching tabs, preserving the selected patient and conversation. The sandbox context is labelled in the header, and live Google connection controls are hidden there. The clinic dashboard retains its own endpoints and controls.
+
+Four new tests failed before implementation, then passed after the change. They cover booking/moving/cancelling through the sandbox calendar, hours affecting booking while clinic hours stay unchanged, authentication and session CSRF, and client endpoint selection. The full suite passed **283 tests**, and the build passed.
+
+### Video production
+
+The video uses a natural female neural voice (`en-US-JennyNeural`), an original synthesized instrumental score, animated chapter labels, click rings at recorded mouse positions, a moving timeline and saved-result callouts. The score ducks under narration. These are editing elements around the recorded website; the calendar cards and appointment details are real UI output. This is not Apple's Siri voice.
+
+Neural speech is generated using [Edge TTS](https://github.com/andresayac/edge-tts), which needs a network connection. Only the scripted narration is submitted; the application and patient conversations use offline mocks. No Twilio messages are sent. Fictional patients and temporary in-memory databases are used throughout.
+
+Regenerate after building the application:
+
+```powershell
+npm install --prefix .demo-tools playwright ffmpeg-static @andresaya/edge-tts --no-audit --no-fund
+node .demo-tools/node_modules/playwright/cli.js install ffmpeg
+npm run build
+node scripts/record-simulator-story.mjs
+node scripts/edit-simulator-story.mjs
+```
+
+Raw footage, eight calendar proof screenshots, responses, click positions, narration and the original score are saved in `artifacts/demo-simulator`. The recorder checks UI card counts and saved dates/times after each operation, and asserts that the clinic database remains empty.
+
+The final MP4 was decoded completely without errors. Its audio was checked as 48 kHz stereo AAC with audible levels and no clipping. The chapter player's third button was checked to seek to the rescheduling chapter and start playback.
+
 ## Website recording with cinematic edits
 
 The current version is approximately **2 minutes 3 seconds**, at **1600 × 900**. It preserves the website's actual layout and controls. Every visible operation is performed through the browser UI. There are no injected captions, invented screens, or changes to the website's appearance. Editing adds fades and cross-dissolves between recorded scenes. English narration is optional.

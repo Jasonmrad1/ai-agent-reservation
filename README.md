@@ -8,7 +8,7 @@ A WhatsApp appointment assistant with an administrator dashboard and an offline 
 
 **Heavy booking tests:** [42 additional end-to-end checks and the three bugs they exposed](docs/BOOKING_E2E_REVIEW.md), including concurrent patients, duplicate webhooks and complete simulator lifecycles.
 
-**Video demo:** [Actual website recording with cinematic transitions, optional narration and regeneration instructions](docs/DEMO_VIDEO.md).
+**Video demo:** [Simulator journey with calendar proof after every step, neural narration, music and animated editing](docs/DEMO_VIDEO.md).
 
 **Simulator calendar:** On `/admin/simulator`, Calendar and Work Hours now use the simulator's isolated database. Configure hours, send a patient message, then open Calendar to inspect the saved booking. Use Patient Simulator to return to the same chat. Clinic records and live gateways remain separate.
 
