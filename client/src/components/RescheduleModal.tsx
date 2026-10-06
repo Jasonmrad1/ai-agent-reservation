@@ -1,3 +1,4 @@
+import { parseTimeInfo } from './CalendarGrid';
 import React, { useState, useEffect } from 'react';
 import { Appointment } from '../types';
 import {
@@ -71,12 +72,9 @@ export const RescheduleModal: React.FC<RescheduleModalProps> = ({
   // Sync state with selected appointment
   useEffect(() => {
     if (appointment) {
-      const dt = new Date(appointment.start_time);
-      const datePart = appointment.start_time.split('T')[0] || '';
-      const hours = String(dt.getHours()).padStart(2, '0');
-      const minutes = String(dt.getMinutes()).padStart(2, '0');
-      setDirectDate(datePart);
-      setDirectTime(`${hours}:${minutes}`);
+      const info = parseTimeInfo(appointment.start_time);
+      setDirectDate(info.dateKey);
+      setDirectTime(info.timeStr24);
       setDirectVisitType(appointment.visit_type === 'home_visit' ? 'home_visit' : 'in_office');
       setDirectAddress(appointment.address || '');
       setDirectOverride(false);

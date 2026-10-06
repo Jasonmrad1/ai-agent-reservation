@@ -1,3 +1,4 @@
+import { clinicIso } from './clinic-time.js';
 import { describe, it, expect, beforeEach } from 'vitest';
 import request from 'supertest';
 import { createApp, AppInstance } from '../src/app.js';
@@ -62,8 +63,8 @@ describe('📅 DYNAMIC WEEKLY SCHEDULE & APPOINTMENT DEDUCTION SUITE', () => {
       customer_id: patient1.id,
       service: 'General Consultation',
       price: 120,
-      start_time: `${wednesdayStr}T10:00:00.000Z`,
-      end_time: `${wednesdayStr}T11:00:00.000Z`,
+      start_time: clinicIso(`${wednesdayStr}T10:00:00.000Z`),
+      end_time: clinicIso(`${wednesdayStr}T11:00:00.000Z`),
       visit_type: 'in_office',
     });
 
@@ -73,8 +74,8 @@ describe('📅 DYNAMIC WEEKLY SCHEDULE & APPOINTMENT DEDUCTION SUITE', () => {
       customer_id: patient2.id,
       service: 'General Consultation',
       price: 120,
-      start_time: `${thursdayStr}T14:00:00.000Z`,
-      end_time: `${thursdayStr}T15:00:00.000Z`,
+      start_time: clinicIso(`${thursdayStr}T14:00:00.000Z`),
+      end_time: clinicIso(`${thursdayStr}T15:00:00.000Z`),
       visit_type: 'in_office',
     });
 
@@ -126,8 +127,8 @@ describe('📅 DYNAMIC WEEKLY SCHEDULE & APPOINTMENT DEDUCTION SUITE', () => {
       customer_id: patientHome.id,
       service: 'Home Visit Care',
       price: 180,
-      start_time: `${fridayStr}T11:00:00.000Z`,
-      end_time: `${fridayStr}T12:00:00.000Z`,
+      start_time: clinicIso(`${fridayStr}T11:00:00.000Z`),
+      end_time: clinicIso(`${fridayStr}T12:00:00.000Z`),
       visit_type: 'home_visit',
       address: 'Achrafieh, Beirut',
     });

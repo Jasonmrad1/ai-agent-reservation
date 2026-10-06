@@ -3,7 +3,7 @@ import crypto from 'node:crypto';
 import { CalendarProvider } from './provider.js';
 import { Appointment, VisitType } from '../types/index.js';
 import { computeFreeWindows } from '../utils/slots.js';
-import { getBeirutTimeInfo } from '../utils/timezone.js';
+import { getBeirutTimeInfo, beirutDateTimeToUtc } from '../utils/timezone.js';
 
 export interface SchedulerOptions {
   db: DatabaseContext;
@@ -134,8 +134,8 @@ export class SchedulingEngine {
       const [sH, sM] = int.start_time.split(':').map(Number);
       const [eH, eM] = int.end_time.split(':').map(Number);
       return {
-        startMs: Date.UTC(year, month - 1, day, sH, sM),
-        endMs: Date.UTC(year, month - 1, day, eH, eM),
+        startMs: beirutDateTimeToUtc(dateStr, int.start_time).getTime(),
+        endMs: beirutDateTimeToUtc(dateStr, int.end_time).getTime(),
         startStr: int.start_time,
         endStr: int.end_time,
       };
@@ -173,7 +173,7 @@ export class SchedulingEngine {
 
     const dbAppointments = [
       ...this.db.appointments.getAppointmentsInRange(searchStart.toISOString(), searchEnd.toISOString()),
-      ...(this.db.appDb.db.prepare('SELECT * FROM scheduling_reservations WHERE start_time < ? AND end_time > ?').all(searchEnd.toISOString(),searchStart.toISOString()) as Appointment[]),
+      ...(this.db.appDb.db.prepare('SELECT * FROM scheduling_reservations WHERE start_time < ? AND end_time > ?').all(searchEnd.toISOString(),searchStart.toISOString()) as unknown as Appointment[]),
     ];
 
     const calEvents = await this.calendar.listEvents(searchStart, searchEnd);
@@ -240,9 +240,9 @@ export class SchedulingEngine {
         // - Home visit: requires at least bufferMinutes (e.g. 30m) travel commute from current time.
         // - In-office visit: requires at least 15m advance notice.
         if (dateStr === beirutNow.dateStr) {
-          const candMinutes = candidateStart.getUTCHours() * 60 + candidateStart.getUTCMinutes();
+          const candMinutes = (candidateStart.getTime() - (referenceNow || new Date()).getTime()) / 60000;
           const minLeadTimeMinutes = visitType === 'home_visit' ? bufferMinutes : 15;
-          if (candMinutes < beirutNow.totalMinutes + minLeadTimeMinutes) {
+          if (candMinutes < minLeadTimeMinutes) {
             continue;
           }
         }
@@ -308,8 +308,8 @@ export class SchedulingEngine {
         }
 
         if (!conflict) {
-          const hh = String(candidateStart.getUTCHours()).padStart(2, '0');
-          const mm = String(candidateStart.getUTCMinutes()).padStart(2, '0');
+          const hh = String(getBeirutTimeInfo(candidateStart).hour).padStart(2, '0');
+          const mm = String(getBeirutTimeInfo(candidateStart).minute).padStart(2, '0');
           const timeSlot = `${hh}:${mm}`;
           if (!availableSlots.includes(timeSlot)) {
             availableSlots.push(timeSlot);
@@ -341,12 +341,12 @@ export class SchedulingEngine {
     this.validateWindow(startTime, endTime, params.startTime, params.visitType, params.allowOverride);
     const reservation = this.acquireReservation(params.customerId, startTime, endTime, params.visitType);
     try {
-    const bufferMinutes = this.getHomeVisitBufferMinutes(startTime.toISOString().slice(0,10));
+    const bufferMinutes = this.getHomeVisitBufferMinutes(getBeirutTimeInfo(startTime).dateStr);
     const bufferMs = (params.visitType === 'home_visit' ? bufferMinutes : 0) * 60 * 1000;
 
     {
       // Check if slot falls inside one of the active shifts for the day
-      const dateStr = startTime.toISOString().split('T')[0];
+      const dateStr = getBeirutTimeInfo(startTime).dateStr;
       const shifts = this.getActiveShiftsForDate(dateStr);
       if (!params.allowOverride) {
         if (shifts.length === 0) throw new Error("Clinic is closed; no active working hours on this date");
@@ -479,12 +479,12 @@ export class SchedulingEngine {
     if (!['booked','confirmed','rescheduled'].includes(existing.status)) throw new Error('Only active appointments can be rescheduled');
     const reservation = this.acquireReservation(existing.customer_id, newStart, newEnd, visitType, existing.id);
     try {
-    const bufferMinutes = this.getHomeVisitBufferMinutes(newStart.toISOString().slice(0,10));
+    const bufferMinutes = this.getHomeVisitBufferMinutes(getBeirutTimeInfo(newStart).dateStr);
     const bufferMs = (visitType === 'home_visit' ? bufferMinutes : 0) * 60 * 1000;
 
     {
       // Check shifts
-      const dateStr = newStart.toISOString().split('T')[0];
+      const dateStr = getBeirutTimeInfo(newStart).dateStr;
       const shifts = this.getActiveShiftsForDate(dateStr);
       if (!params.allowOverride) {
         if (shifts.length === 0) throw new Error("Clinic is closed; no active working hours on this date");
@@ -614,10 +614,10 @@ export class SchedulingEngine {
   public getConflictingAppointmentsForDate(dateStr: string): Appointment[] {
     const shifts = this.getActiveShiftsForDate(dateStr);
     const [year, month, day] = dateStr.split('-').map(Number);
-    const dayStartIso = new Date(Date.UTC(year, month - 1, day, 0, 0, 0)).toISOString();
-    const dayEndIso = new Date(Date.UTC(year, month - 1, day, 23, 59, 59)).toISOString();
+    const dayStartIso = new Date(Date.UTC(year, month - 1, day) - 86400000).toISOString();
+    const dayEndIso = new Date(Date.UTC(year, month - 1, day) + 86400000).toISOString();
 
-    const appts = this.db.appointments.getAppointmentsInRange(dayStartIso, dayEndIso);
+    const appts = this.db.appointments.getAppointmentsInRange(dayStartIso, dayEndIso).filter(a => getBeirutTimeInfo(new Date(a.start_time)).dateStr === dateStr);
     const conflicts: Appointment[] = [];
 
     for (const appt of appts) {
@@ -657,9 +657,9 @@ export class SchedulingEngine {
       if (appt.status === 'cancelled' || appt.status === 'completed') continue;
 
       const apptDate = new Date(appt.start_time);
-      if (apptDate.getUTCDay() !== dayOfWeek) continue;
+      if (getBeirutTimeInfo(apptDate).dayOfWeek !== dayOfWeek) continue;
 
-      const dateStr = apptDate.toISOString().split('T')[0];
+      const dateStr = getBeirutTimeInfo(apptDate).dateStr;
       const override = this.db.availability.getOverrideForDate(dateStr);
       if (override) continue; // specific override takes precedence
 
@@ -673,8 +673,8 @@ export class SchedulingEngine {
         const [sH, sM] = s.start_time.split(':').map(Number);
         const [eH, eM] = s.end_time.split(':').map(Number);
         return {
-          startMs: Date.UTC(y, m - 1, d, sH, sM),
-          endMs: Date.UTC(y, m - 1, d, eH, eM),
+          startMs: beirutDateTimeToUtc(dateStr, s.start_time).getTime(),
+          endMs: beirutDateTimeToUtc(dateStr, s.end_time).getTime(),
         };
       });
 
@@ -692,7 +692,7 @@ export class SchedulingEngine {
 
   private acquireReservation(customerId: string, start: Date, end: Date, visitType: VisitType, appointmentId?: string): string {
     const sql = this.db.appDb.db;
-    const buffer = this.getHomeVisitBufferMinutes(start.toISOString().slice(0,10))*60000;
+    const buffer = this.getHomeVisitBufferMinutes(getBeirutTimeInfo(start).dateStr)*60000;
     sql.exec('BEGIN IMMEDIATE');
     try {
       if (appointmentId && sql.prepare('SELECT id FROM scheduling_reservations WHERE appointment_id = ?').get(appointmentId)) throw new Error('Appointment change already in progress');
@@ -713,15 +713,15 @@ export class SchedulingEngine {
 
   private validateWindow(start: Date, end: Date, rawStart: string, visitType: VisitType, override?: boolean): void {
     if (!Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime())) throw new Error('Invalid appointment date or time');
-    this.getActiveShiftsForDate(rawStart.slice(0,10));
+    this.getActiveShiftsForDate(getBeirutTimeInfo(start).dateStr);
     if (visitType !== 'in_office' && visitType !== 'home_visit') throw new Error('Invalid visit type');
     const duration = (end.getTime()-start.getTime())/60000;
     if (duration <= 0 || duration > 480) throw new Error('End time must follow start time; invalid duration');
     if (start.getTime() <= Date.now()) throw new Error('Appointment must be in the future, not in the past');
     if (!override) {
-      const now = getBeirutTimeInfo(); const date = start.toISOString().slice(0,10);
+      const now = getBeirutTimeInfo(); const date = getBeirutTimeInfo(start).dateStr;
       const lead = visitType === 'home_visit' ? this.getHomeVisitBufferMinutes(date) : 15;
-      if (date === now.dateStr && start.getUTCHours()*60+start.getUTCMinutes() < now.totalMinutes+lead) throw new Error('Insufficient advance notice for appointment');
+      if (start.getTime() - Date.now() < lead*60000) throw new Error('Insufficient advance notice for appointment');
     }
   }
 

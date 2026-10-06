@@ -34,18 +34,9 @@ export function parseTimeInfo(isoStr: string) {
       dateKey: '2026-01-01',
     };
   }
-  const parts = String(isoStr).split(/[T\s]/);
-  const datePart = parts[0] || '';
-  const timePart = parts[1] || '00:00:00';
-
-  const dComps = datePart.split('-');
-  const y = parseInt(dComps[0], 10) || 2026;
-  const m = (parseInt(dComps[1], 10) || 1) - 1;
-  const d = parseInt(dComps[2], 10) || 1;
-
-  const tComps = timePart.split(':');
-  const h = parseInt(tComps[0], 10) || 0;
-  const min = parseInt(tComps[1], 10) || 0;
+  const parts = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Beirut', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(new Date(isoStr));
+  const value = (type: string) => Number(parts.find(p => p.type === type)?.value);
+  const y = value('year'), m = value('month') - 1, d = value('day'), h = value('hour'), min = value('minute');
 
   const h12 = h % 12 || 12;
   const ampm = h >= 12 ? 'PM' : 'AM';

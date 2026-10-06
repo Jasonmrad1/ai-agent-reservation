@@ -1,3 +1,4 @@
+import { clinicIso } from './clinic-time.js';
 import { describe, it, expect, beforeEach } from 'vitest';
 import { createDatabaseContext, DatabaseContext } from '../src/db/index.js';
 import { InMemoryCalendarProvider } from '../src/calendar/provider.js';
@@ -95,7 +96,7 @@ describe('🔥 HEAVY SCENARIOS & STRESS SUITE: Complete Clinic System Validation
 
     const upcoming = db.appointments.findUpcomingByCustomerId(customer.id);
     expect(upcoming.length).toBe(1);
-    expect(upcoming[0].start_time).toBe('2026-09-14T09:00:00.000Z');
+    expect(upcoming[0].start_time).toBe(clinicIso('2026-09-14T09:00:00.000Z'));
     expect(upcoming[0].status).toBe('booked');
     expect(upcoming[0].service).toBe('General Consultation');
 
@@ -127,13 +128,13 @@ describe('🔥 HEAVY SCENARIOS & STRESS SUITE: Complete Clinic System Validation
     });
 
     const appt = db.appointments.findUpcomingByCustomerId(cust1.id)[0];
-    expect(appt.start_time).toBe('2026-09-14T10:00:00.000Z');
+    expect(appt.start_time).toBe(clinicIso('2026-09-14T10:00:00.000Z'));
 
     const cust2 = db.customers.findOrCreate('whatsapp:+96170444555', 'George Saba');
     const appt2 = db.appointments.create({
       customer_id: cust2.id,
-      start_time: '2026-09-14T14:00:00.000Z',
-      end_time: '2026-09-14T15:00:00.000Z',
+      start_time: clinicIso('2026-09-14T14:00:00.000Z'),
+      end_time: clinicIso('2026-09-14T15:00:00.000Z'),
       visit_type: 'in_office',
       service: 'General Consultation',
       status: 'booked',
@@ -182,7 +183,7 @@ describe('🔥 HEAVY SCENARIOS & STRESS SUITE: Complete Clinic System Validation
     expect(successReply).toContain('rescheduled');
 
     const updatedAppt = db.appointments.findById(appt.id);
-    expect(updatedAppt?.start_time).toBe('2026-09-15T11:00:00.000Z');
+    expect(updatedAppt?.start_time).toBe(clinicIso('2026-09-15T11:00:00.000Z'));
     expect(updatedAppt?.status).toBe('rescheduled');
 
     const slots = await scheduler.getAvailableSlots('2026-09-14', 'in_office');
@@ -195,8 +196,8 @@ describe('🔥 HEAVY SCENARIOS & STRESS SUITE: Complete Clinic System Validation
 
     const appt = db.appointments.create({
       customer_id: cust.id,
-      start_time: '2026-09-16T10:00:00.000Z',
-      end_time: '2026-09-16T11:00:00.000Z',
+      start_time: clinicIso('2026-09-16T10:00:00.000Z'),
+      end_time: clinicIso('2026-09-16T11:00:00.000Z'),
       visit_type: 'in_office',
       service: 'Acupuncture / Therapy',
       status: 'booked',
@@ -271,8 +272,8 @@ describe('🔥 HEAVY SCENARIOS & STRESS SUITE: Complete Clinic System Validation
     const userA = db.customers.findOrCreate('whatsapp:+96170111111', 'User A');
     const userB = db.customers.findOrCreate('whatsapp:+96170222222', 'User B');
 
-    const slotTime = '2026-09-14T14:00:00.000Z';
-    const endTime = '2026-09-14T15:00:00.000Z';
+    const slotTime = clinicIso('2026-09-14T14:00:00.000Z');
+    const endTime = clinicIso('2026-09-14T15:00:00.000Z');
 
     const apptA = await scheduler.bookAppointment({
       customerId: userA.id,
@@ -320,9 +321,9 @@ describe('🔥 HEAVY SCENARIOS & STRESS SUITE: Complete Clinic System Validation
   it('Scenario 7: Executes complete 24h & 1h reminders, patient confirmation, and post-visit invoice', async () => {
     const cust = db.customers.findOrCreate('whatsapp:+96170999000', 'Tony Stark');
 
-    const checkTime = new Date('2026-09-14T10:00:00.000Z');
-    const apptStartTime = new Date('2026-09-15T10:00:00.000Z'); // Exactly 24h later
-    const apptEndTime = new Date('2026-09-15T11:00:00.000Z');
+    const checkTime = new Date(clinicIso('2026-09-14T10:00:00.000Z'));
+    const apptStartTime = new Date(clinicIso('2026-09-15T10:00:00.000Z')); // Exactly 24h later
+    const apptEndTime = new Date(clinicIso('2026-09-15T11:00:00.000Z'));
 
     const appt = db.appointments.create({
       customer_id: cust.id,

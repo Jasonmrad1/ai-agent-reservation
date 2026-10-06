@@ -1,3 +1,4 @@
+import { clinicIso } from './clinic-time.js';
 import { describe, it, expect, beforeEach } from 'vitest';
 import request from 'supertest';
 import { createApp, AppInstance } from '../src/app.js';
@@ -131,7 +132,7 @@ describe('📍 WHATSAPP LOCATION SHARING & 🎙️ VOICE NOTE HANDLING SUITE', (
 
     const appointment = db.appointments.listUpcoming(10)[0];
     expect(appointment.visit_type).toBe('home_visit');
-    expect(appointment.start_time).toBe('2026-09-15T09:00:00.000Z');
+    expect(appointment.start_time).toBe(clinicIso('2026-09-15T09:00:00.000Z'));
     expect(appointment.address).toContain('Michel Residence');
 
     gateway.clear();

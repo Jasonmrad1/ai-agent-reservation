@@ -1,3 +1,4 @@
+import { clinicIso } from './clinic-time.js';
 import { describe, it, expect, beforeEach } from 'vitest';
 import request from 'supertest';
 import { createApp } from '../src/app.js';
@@ -67,8 +68,8 @@ describe('Split Shifts & Road Commute Travel Buffer', () => {
           customerPhone: cust.phone,
           visitType: 'in_office',
           service: 'Consultation',
-          startTime: '2026-09-07T14:00:00.000Z',
-          endTime: '2026-09-07T15:00:00.000Z',
+          startTime: clinicIso('2026-09-07T14:00:00.000Z'),
+          endTime: clinicIso('2026-09-07T15:00:00.000Z'),
         })
       ).rejects.toThrow(/outside doctor's active working hours/i);
 
@@ -78,8 +79,8 @@ describe('Split Shifts & Road Commute Travel Buffer', () => {
         customerPhone: cust.phone,
         visitType: 'in_office',
         service: 'Consultation',
-        startTime: '2026-09-07T16:30:00.000Z',
-        endTime: '2026-09-07T17:30:00.000Z',
+        startTime: clinicIso('2026-09-07T16:30:00.000Z'),
+        endTime: clinicIso('2026-09-07T17:30:00.000Z'),
       });
       expect(appt.status).toBe('booked');
     });
@@ -101,8 +102,8 @@ describe('Split Shifts & Road Commute Travel Buffer', () => {
         visitType: 'home_visit',
         address: '100 Sunset Blvd',
         service: 'Home Visit',
-        startTime: '2026-09-07T10:00:00.000Z',
-        endTime: '2026-09-07T11:00:00.000Z',
+        startTime: clinicIso('2026-09-07T10:00:00.000Z'),
+        endTime: clinicIso('2026-09-07T11:00:00.000Z'),
       });
 
       // With 45 min buffer, doctor is traveling until 11:45!
@@ -113,8 +114,8 @@ describe('Split Shifts & Road Commute Travel Buffer', () => {
           customerPhone: cust2.phone,
           visitType: 'in_office',
           service: 'Checkup',
-          startTime: '2026-09-07T11:30:00.000Z',
-          endTime: '2026-09-07T12:30:00.000Z',
+          startTime: clinicIso('2026-09-07T11:30:00.000Z'),
+          endTime: clinicIso('2026-09-07T12:30:00.000Z'),
         })
       ).rejects.toThrow(/travel buffer/i);
 
@@ -124,8 +125,8 @@ describe('Split Shifts & Road Commute Travel Buffer', () => {
         customerPhone: cust2.phone,
         visitType: 'in_office',
         service: 'Checkup',
-        startTime: '2026-09-07T11:45:00.000Z',
-        endTime: '2026-09-07T12:45:00.000Z',
+        startTime: clinicIso('2026-09-07T11:45:00.000Z'),
+        endTime: clinicIso('2026-09-07T12:45:00.000Z'),
       });
       expect(appt2.status).toBe('booked');
     });
@@ -174,8 +175,8 @@ describe('Split Shifts & Road Commute Travel Buffer', () => {
         customerPhone: custA.phone,
         visitType: 'in_office',
         service: 'Consultation',
-        startTime: '2026-09-07T09:00:00.000Z',
-        endTime: '2026-09-07T10:00:00.000Z',
+        startTime: clinicIso('2026-09-07T09:00:00.000Z'),
+        endTime: clinicIso('2026-09-07T10:00:00.000Z'),
       });
 
       // 3. Immediately after in-office appointment (10:00):
@@ -197,8 +198,8 @@ describe('Split Shifts & Road Commute Travel Buffer', () => {
           visitType: 'home_visit',
           address: 'Downtown Beirut',
           service: 'Home Visit',
-          startTime: '2026-09-07T10:00:00.000Z',
-          endTime: '2026-09-07T11:00:00.000Z',
+          startTime: clinicIso('2026-09-07T10:00:00.000Z'),
+          endTime: clinicIso('2026-09-07T11:00:00.000Z'),
         })
       ).rejects.toThrow(/travel buffer|conflict/i);
 
@@ -209,8 +210,8 @@ describe('Split Shifts & Road Commute Travel Buffer', () => {
         visitType: 'home_visit',
         address: 'Downtown Beirut',
         service: 'Home Visit',
-        startTime: '2026-09-07T10:30:00.000Z',
-        endTime: '2026-09-07T11:30:00.000Z',
+        startTime: clinicIso('2026-09-07T10:30:00.000Z'),
+        endTime: clinicIso('2026-09-07T11:30:00.000Z'),
       });
 
       // 5. Now, because 10:30-11:30 was a HOME VISIT, doctor needs 30 min commute buffer to return:
@@ -228,8 +229,8 @@ describe('Split Shifts & Road Commute Travel Buffer', () => {
           customerPhone: custC.phone,
           visitType: 'in_office',
           service: 'Checkup',
-          startTime: '2026-09-07T11:30:00.000Z',
-          endTime: '2026-09-07T12:30:00.000Z',
+          startTime: clinicIso('2026-09-07T11:30:00.000Z'),
+          endTime: clinicIso('2026-09-07T12:30:00.000Z'),
         })
       ).rejects.toThrow(/travel buffer/i);
 
@@ -239,8 +240,8 @@ describe('Split Shifts & Road Commute Travel Buffer', () => {
         customerPhone: custC.phone,
         visitType: 'in_office',
         service: 'Checkup',
-        startTime: '2026-09-07T12:00:00.000Z',
-        endTime: '2026-09-07T13:00:00.000Z',
+        startTime: clinicIso('2026-09-07T12:00:00.000Z'),
+        endTime: clinicIso('2026-09-07T13:00:00.000Z'),
       });
       expect(apptC.status).toBe('booked');
     });

@@ -1,3 +1,4 @@
+import { clinicIso } from './clinic-time.js';
 import { describe, it, expect, beforeEach } from 'vitest';
 import request from 'supertest';
 import { createApp, AppInstance } from '../src/app.js';
@@ -54,7 +55,7 @@ describe('🌐 MULTILINGUAL (ENGLISH & ARABIZI) SMOOTH & FLAWLESS REPLIES SUITE'
   });
 
   it('formats dates cleanly in English without raw ISO strings or timezone tokens', () => {
-    const iso = '2026-09-14T10:00:00.000Z';
+    const iso = clinicIso('2026-09-14T10:00:00.000Z');
     const formattedEng = formatEnglishDate(iso);
     expect(formattedEng).toContain('Monday');
     expect(formattedEng).toContain('Sep 14');
@@ -170,8 +171,8 @@ describe('🌐 MULTILINGUAL (ENGLISH & ARABIZI) SMOOTH & FLAWLESS REPLIES SUITE'
       customer_id: cust.id,
       service: 'General Consultation',
       price: 120,
-      start_time: '2026-09-14T10:00:00.000Z',
-      end_time: '2026-09-14T11:00:00.000Z',
+      start_time: clinicIso('2026-09-14T10:00:00.000Z'),
+      end_time: clinicIso('2026-09-14T11:00:00.000Z'),
       visit_type: 'in_office',
     });
 

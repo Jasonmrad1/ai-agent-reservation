@@ -1,3 +1,4 @@
+import { beirutDateTimeToUtc, getBeirutTimeInfo, getBeirutTodayStr } from '../utils/timezone.js';
 import fs from 'fs';
 import { createAdminAuth, AdminAuth } from '../security/admin-auth.js';
 import path from 'path';
@@ -55,7 +56,7 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
       let suggestedSlots: string[] = [];
       if (scheduler) {
         try {
-          const apptDateStr = new Date(appt.start_time).toISOString().split('T')[0];
+          const apptDateStr = getBeirutTimeInfo(new Date(appt.start_time)).dateStr;
           const rangeSlots = await scheduler.getAvailableSlotsAcrossRange(apptDateStr, 14, appt.visit_type, 3);
           suggestedSlots = rangeSlots.map((r) => `${r.date} at ${r.available_slots.slice(0, 2).join(' or ')}`);
         } catch {
@@ -86,7 +87,7 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
         const slotsText = suggestedSlots.length > 0
           ? ` Suggested alternative times: ${suggestedSlots.join('; ')}.`
           : ' Please reply with your preferred day and time!';
-        outreachMessage = `Hello ${customer.name || 'Patient'}, due to an update in our clinic schedule (${reason}), we need to reschedule your ${appt.service} appointment originally scheduled for ${new Date(appt.start_time).toLocaleString()}.${slotsText}`;
+        outreachMessage = `Hello ${customer.name || 'Patient'}, due to an update in our clinic schedule (${reason}), we need to reschedule your ${appt.service} appointment originally scheduled for ${new Date(appt.start_time).toLocaleString('en-US', { timeZone: 'Asia/Beirut' })}.${slotsText}`;
       }
 
       // Send WhatsApp message if gateway is available
@@ -247,7 +248,7 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
 
     const allConflicts: Appointment[] = [];
     const savedOverrides = [];
-    const todayStr = new Date().toISOString().split('T')[0];
+    const todayStr = getBeirutTodayStr();
 
     for (const ov of overrides) {
       if (!ov.date || ov.date < todayStr) continue;
@@ -568,7 +569,7 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
       // Find or create customer
       const customer = db.customers.findOrCreate(cleanPhone, name || undefined);
 
-      const startTime = new Date(`${date}T${time}:00`);
+      const startTime = beirutDateTimeToUtc(date, time);
       if (isNaN(startTime.getTime())) {
         res.status(400).json({ error: 'Invalid date or time format.' });
         return;
@@ -660,7 +661,7 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
       return;
     }
 
-    const newStart = new Date(`${date}T${time}:00`);
+    const newStart = beirutDateTimeToUtc(date, time);
     if (isNaN(newStart.getTime())) {
       res.status(400).json({ error: 'Invalid date or time format.' });
       return;
@@ -756,7 +757,7 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
           const apptDate = new Date(appt.start_time);
           for (let i = 1; i <= 4; i++) {
             const nextDay = new Date(apptDate.getTime() + i * 24 * 60 * 60 * 1000);
-            const nextDayStr = nextDay.toISOString().split('T')[0];
+            const nextDayStr = getBeirutTodayStr(nextDay);
             const openSlots = await scheduler.getAvailableSlots(nextDayStr, appt.visit_type);
             if (openSlots.length > 0) {
               suggestedSlots.push(`${nextDayStr} at ${openSlots.slice(0, 2).join(' or ')}`);
@@ -791,7 +792,7 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
         ? ` We would like to move your visit to ${proposedDate} at ${proposedTime}. Does this time work for you?`
         : (suggestedSlots.length > 0 ? ` Suggested open times: ${suggestedSlots.join('; ')}. Please reply with your preferred time!` : ' Please reply with your preferred day and time!');
       const reasonText = doctorPrompt ? ` (${doctorPrompt})` : '';
-      outreachMessage = `Hello ${customer.name || 'Patient'}, we need to reschedule your ${appt.service} appointment originally scheduled for ${new Date(appt.start_time).toLocaleString()}${reasonText}.${specificText}`;
+      outreachMessage = `Hello ${customer.name || 'Patient'}, we need to reschedule your ${appt.service} appointment originally scheduled for ${new Date(appt.start_time).toLocaleString('en-US', { timeZone: 'Asia/Beirut' })}${reasonText}.${specificText}`;
     }
 
     // Dispatch via WhatsApp Gateway

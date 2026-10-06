@@ -1,3 +1,4 @@
+import { clinicIso } from './clinic-time.js';
 import { describe, it, expect, beforeEach } from 'vitest';
 import request from 'supertest';
 import { createApp, AppInstance } from '../src/app.js';
@@ -103,8 +104,8 @@ describe('Phase 8: End-to-End System Lifecycle Flow', () => {
 
     // Verify Calendar Event was created
     const calEvents = await calendar.listEvents(
-      new Date('2026-09-14T08:00:00.000Z'),
-      new Date('2026-09-14T14:00:00.000Z')
+      new Date(clinicIso('2026-09-14T08:00:00.000Z')),
+      new Date(clinicIso('2026-09-14T14:00:00.000Z'))
     );
     expect(calEvents.length).toBe(1);
     expect(calEvents[0].location).toBe('42 Cyberdyne Blvd, Los Angeles');
@@ -117,7 +118,7 @@ describe('Phase 8: End-to-End System Lifecycle Flow', () => {
 
     // 3. 24-Hour Reminder Job triggers
     gateway.clear();
-    const mock24hReference = new Date(new Date('2026-09-14T10:00:00.000Z').getTime() - 24 * 60 * 60 * 1000);
+    const mock24hReference = new Date(new Date(clinicIso('2026-09-14T10:00:00.000Z')).getTime() - 24 * 60 * 60 * 1000);
     const sent24Count = await reminders.send24HourReminders(mock24hReference);
     expect(sent24Count).toBe(1);
 
@@ -146,7 +147,7 @@ describe('Phase 8: End-to-End System Lifecycle Flow', () => {
 
     // 5. 1-Hour Reminder Job triggers
     gateway.clear();
-    const mock1hReference = new Date(new Date('2026-09-14T10:00:00.000Z').getTime() - 60 * 60 * 1000);
+    const mock1hReference = new Date(new Date(clinicIso('2026-09-14T10:00:00.000Z')).getTime() - 60 * 60 * 1000);
     const sent1Count = await reminders.send1HourReminders(mock1hReference);
     expect(sent1Count).toBe(1);
     expect(gateway.sentMessages[0].body).toContain('in about 1 hour');

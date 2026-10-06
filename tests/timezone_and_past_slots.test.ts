@@ -1,3 +1,4 @@
+import { clinicIso } from './clinic-time.js';
 import { describe, it, expect, beforeEach } from 'vitest';
 import { createDatabaseContext, DatabaseContext } from '../src/db/index.js';
 import { InMemoryCalendarProvider } from '../src/calendar/provider.js';
@@ -182,8 +183,8 @@ describe('🇱🇧 BEIRUT TIMEZONE & SAME-DAY PAST SLOTS FILTERING', () => {
       service: 'Home Visit Care',
       visit_type: 'home_visit',
       address: 'Zeatreh',
-      start_time: '2026-10-07T09:00:00.000Z',
-      end_time: '2026-10-07T10:00:00.000Z',
+      start_time: clinicIso('2026-10-07T09:00:00.000Z'),
+      end_time: clinicIso('2026-10-07T10:00:00.000Z'),
       price: 180,
       status: 'booked',
     });
@@ -206,7 +207,7 @@ describe('🇱🇧 BEIRUT TIMEZONE & SAME-DAY PAST SLOTS FILTERING', () => {
 
     // Verify appointment was actually mutated in database to Oct 8 at 09:00
     const updated = db.appointments.findById(appt.id);
-    expect(updated?.start_time).toBe('2026-10-08T09:00:00.000Z');
+    expect(updated?.start_time).toBe(clinicIso('2026-10-08T09:00:00.000Z'));
     expect(updated?.status).toBe('rescheduled');
   });
 });

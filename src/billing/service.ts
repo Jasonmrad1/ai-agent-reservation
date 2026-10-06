@@ -58,6 +58,7 @@ export class BillingService {
 
     const appt = this.db.appointments.findById(invoice.appointment_id);
     const dateStr = appt ? new Date(appt.start_time).toLocaleDateString('en-US', {
+      timeZone: 'Asia/Beirut',
       year: 'numeric',
       month: 'short',
       day: 'numeric',

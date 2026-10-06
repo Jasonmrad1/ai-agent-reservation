@@ -1,3 +1,4 @@
+import { clinicIso } from './clinic-time.js';
 import { describe, it, expect, beforeEach } from 'vitest';
 import { createDatabaseContext, DatabaseContext } from '../src/db/index.js';
 import { InMemoryCalendarProvider } from '../src/calendar/provider.js';
@@ -57,8 +58,8 @@ describe('Phase 3: Calendar Backend & Scheduling Engine', () => {
       visitType: 'in_office',
       service: 'General Consultation',
       price: 100,
-      startTime: '2026-09-07T10:00:00.000Z',
-      endTime: '2026-09-07T11:00:00.000Z',
+      startTime: clinicIso('2026-09-07T10:00:00.000Z'),
+      endTime: clinicIso('2026-09-07T11:00:00.000Z'),
     });
 
     expect(appt.id).toBeDefined();
@@ -67,8 +68,8 @@ describe('Phase 3: Calendar Backend & Scheduling Engine', () => {
 
     // Verify event in calendar
     const calEvents = await calendar.listEvents(
-      new Date('2026-09-07T09:00:00.000Z'),
-      new Date('2026-09-07T12:00:00.000Z')
+      new Date(clinicIso('2026-09-07T09:00:00.000Z')),
+      new Date(clinicIso('2026-09-07T12:00:00.000Z'))
     );
     expect(calEvents.length).toBe(1);
     expect(calEvents[0].summary).toContain('General Consultation');
@@ -80,8 +81,8 @@ describe('Phase 3: Calendar Backend & Scheduling Engine', () => {
         customerPhone: cust2.phone,
         visitType: 'in_office',
         service: 'Checkup',
-        startTime: '2026-09-07T10:30:00.000Z',
-        endTime: '2026-09-07T11:30:00.000Z',
+        startTime: clinicIso('2026-09-07T10:30:00.000Z'),
+        endTime: clinicIso('2026-09-07T11:30:00.000Z'),
       })
     ).rejects.toThrow('conflict');
   });
@@ -96,7 +97,7 @@ describe('Phase 3: Calendar Backend & Scheduling Engine', () => {
         customerPhone: cust.phone,
         visitType: 'home_visit',
         service: 'Home Care',
-        startTime: '2026-09-07T10:00:00.000Z',
+        startTime: clinicIso('2026-09-07T10:00:00.000Z'),
       })
     ).rejects.toThrow('physical address is required');
 
@@ -107,8 +108,8 @@ describe('Phase 3: Calendar Backend & Scheduling Engine', () => {
       visitType: 'home_visit',
       address: '456 Elm St, Cityville',
       service: 'Home Care',
-      startTime: '2026-09-07T10:00:00.000Z',
-      endTime: '2026-09-07T11:00:00.000Z',
+      startTime: clinicIso('2026-09-07T10:00:00.000Z'),
+      endTime: clinicIso('2026-09-07T11:00:00.000Z'),
     });
 
     const otherCust = db.customers.findOrCreate('whatsapp:+15550001004', 'David');
@@ -120,8 +121,8 @@ describe('Phase 3: Calendar Backend & Scheduling Engine', () => {
         customerPhone: otherCust.phone,
         visitType: 'in_office',
         service: 'Office Follow-up',
-        startTime: '2026-09-07T11:15:00.000Z',
-        endTime: '2026-09-07T12:00:00.000Z',
+        startTime: clinicIso('2026-09-07T11:15:00.000Z'),
+        endTime: clinicIso('2026-09-07T12:00:00.000Z'),
       })
     ).rejects.toThrow('travel buffer');
 
@@ -131,8 +132,8 @@ describe('Phase 3: Calendar Backend & Scheduling Engine', () => {
       customerPhone: otherCust.phone,
       visitType: 'in_office',
       service: 'Office Follow-up',
-      startTime: '2026-09-07T11:30:00.000Z',
-      endTime: '2026-09-07T12:30:00.000Z',
+      startTime: clinicIso('2026-09-07T11:30:00.000Z'),
+      endTime: clinicIso('2026-09-07T12:30:00.000Z'),
     });
     expect(apptAfter.status).toBe('booked');
   });
@@ -145,19 +146,19 @@ describe('Phase 3: Calendar Backend & Scheduling Engine', () => {
       customerPhone: cust.phone,
       visitType: 'in_office',
       service: 'Physical Exam',
-      startTime: '2026-09-07T14:00:00.000Z',
-      endTime: '2026-09-07T15:00:00.000Z',
+      startTime: clinicIso('2026-09-07T14:00:00.000Z'),
+      endTime: clinicIso('2026-09-07T15:00:00.000Z'),
     });
 
     // Reschedule to 16:00
     const resched = await scheduler.rescheduleAppointment({
       appointmentId: appt.id,
-      newStartTime: '2026-09-07T16:00:00.000Z',
-      newEndTime: '2026-09-07T17:00:00.000Z',
+      newStartTime: clinicIso('2026-09-07T16:00:00.000Z'),
+      newEndTime: clinicIso('2026-09-07T17:00:00.000Z'),
     });
 
     expect(resched.status).toBe('rescheduled');
-    expect(resched.start_time).toBe('2026-09-07T16:00:00.000Z');
+    expect(resched.start_time).toBe(clinicIso('2026-09-07T16:00:00.000Z'));
 
     // Verify 14:00 is now free to book again
     const replacementAppt = await scheduler.bookAppointment({
@@ -165,8 +166,8 @@ describe('Phase 3: Calendar Backend & Scheduling Engine', () => {
       customerPhone: cust.phone,
       visitType: 'in_office',
       service: 'Follow Up',
-      startTime: '2026-09-07T14:00:00.000Z',
-      endTime: '2026-09-07T15:00:00.000Z',
+      startTime: clinicIso('2026-09-07T14:00:00.000Z'),
+      endTime: clinicIso('2026-09-07T15:00:00.000Z'),
     });
     expect(replacementAppt.status).toBe('booked');
 
@@ -176,8 +177,8 @@ describe('Phase 3: Calendar Backend & Scheduling Engine', () => {
 
     // Calendar event is deleted
     const calEvents = await calendar.listEvents(
-      new Date('2026-09-07T15:30:00.000Z'),
-      new Date('2026-09-07T17:30:00.000Z')
+      new Date(clinicIso('2026-09-07T15:30:00.000Z')),
+      new Date(clinicIso('2026-09-07T17:30:00.000Z'))
     );
     expect(calEvents.length).toBe(0);
   });

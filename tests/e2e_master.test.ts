@@ -1,3 +1,4 @@
+import { clinicIso } from './clinic-time.js';
 import { describe, it, expect, beforeEach } from 'vitest';
 import request from 'supertest';
 import { createApp, AppInstance } from '../src/app.js';
@@ -125,7 +126,7 @@ describe('🏆 MASTER END-TO-END CLINIC LIFECYCLE SUITE (DR. ZIAD EL KHOURY)', (
     expect(appointments.length).toBe(1);
     const appt = appointments[0];
     expect(appt.visit_type).toBe('in_office');
-    expect(appt.start_time).toBe('2026-09-14T10:00:00.000Z');
+    expect(appt.start_time).toBe(clinicIso('2026-09-14T10:00:00.000Z'));
 
     // =========================================================================
     // STEP 4: Patient requests to reschedule to Tuesday 11:00 AM
@@ -159,7 +160,7 @@ describe('🏆 MASTER END-TO-END CLINIC LIFECYCLE SUITE (DR. ZIAD EL KHOURY)', (
     expect(drRescheduleAlert?.body).toContain('APPOINTMENT RESCHEDULED');
 
     const updatedAppt = db.appointments.findById(appt.id)!;
-    expect(updatedAppt.start_time).toBe('2026-09-15T11:00:00.000Z');
+    expect(updatedAppt.start_time).toBe(clinicIso('2026-09-15T11:00:00.000Z'));
 
     // =========================================================================
     // STEP 5: Dr. Ziad uses his personal phone to query his Schedule Overview
@@ -207,7 +208,7 @@ describe('🏆 MASTER END-TO-END CLINIC LIFECYCLE SUITE (DR. ZIAD EL KHOURY)', (
     // STEP 7: 24-Hour Automated WhatsApp Reminder & Confirmation Flow
     // =========================================================================
     gateway.clear();
-    const ref24h = new Date(new Date('2026-09-15T11:00:00.000Z').getTime() - 24 * 60 * 60 * 1000);
+    const ref24h = new Date(new Date(clinicIso('2026-09-15T11:00:00.000Z')).getTime() - 24 * 60 * 60 * 1000);
     const reminders24Count = await reminders.send24HourReminders(ref24h);
     expect(reminders24Count).toBe(1);
 
@@ -234,7 +235,7 @@ describe('🏆 MASTER END-TO-END CLINIC LIFECYCLE SUITE (DR. ZIAD EL KHOURY)', (
     // STEP 8: 1-Hour Automated WhatsApp Reminder
     // =========================================================================
     gateway.clear();
-    const ref1h = new Date(new Date('2026-09-15T11:00:00.000Z').getTime() - 60 * 60 * 1000);
+    const ref1h = new Date(new Date(clinicIso('2026-09-15T11:00:00.000Z')).getTime() - 60 * 60 * 1000);
     const reminders1Count = await reminders.send1HourReminders(ref1h);
     expect(reminders1Count).toBe(1);
 

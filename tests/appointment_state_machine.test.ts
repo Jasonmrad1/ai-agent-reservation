@@ -1,3 +1,4 @@
+import { clinicIso } from './clinic-time.js';
 import { describe, it, expect, beforeEach } from 'vitest';
 import request from 'supertest';
 import { createApp, AppInstance } from '../src/app.js';
@@ -161,7 +162,7 @@ describe('🏛️ DURABLE APPOINTMENT STATE MACHINE & PERSISTED WORKFLOWS', () =
     const appts = db.appointments.listUpcoming(10);
     expect(appts).toHaveLength(1);
     expect(appts[0].visit_type).toBe('home_visit');
-    expect(appts[0].start_time).toBe('2026-09-23T12:00:00.000Z');
+    expect(appts[0].start_time).toBe(clinicIso('2026-09-23T12:00:00.000Z'));
     expect(appts[0].address).toContain('Jason Home');
 
     // Active workflow transitioned to booked
@@ -279,8 +280,8 @@ describe('🏛️ DURABLE APPOINTMENT STATE MACHINE & PERSISTED WORKFLOWS', () =
       visit_type: 'in_office',
       service: 'General Consultation',
       price: 120,
-      start_time: '2026-09-25T15:00:00.000Z',
-      end_time: '2026-09-25T15:45:00.000Z',
+      start_time: clinicIso('2026-09-25T15:00:00.000Z'),
+      end_time: clinicIso('2026-09-25T15:45:00.000Z'),
     });
 
     await request(app)

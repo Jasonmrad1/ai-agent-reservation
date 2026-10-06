@@ -81,6 +81,7 @@ export class ReminderRunner {
 
     for (const appt of pending) {
       const timeStr = new Date(appt.start_time).toLocaleTimeString('en-US', {
+        timeZone: 'Asia/Beirut',
         hour: '2-digit',
         minute: '2-digit',
       });

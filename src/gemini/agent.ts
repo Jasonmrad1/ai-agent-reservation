@@ -7,7 +7,7 @@ import { AGENT_TOOLS, CLINIC_SERVICES, CLINIC_POLICIES } from './tools.js';
 import { SYSTEM_PROMPT, DOCTOR_ASSISTANT_SYSTEM_PROMPT } from './prompts.js';
 import { withRetry } from '../utils/retry.js';
 import { computeFreeWindows } from '../utils/slots.js';
-import { getBeirutTimeInfo, getBeirutTodayStr, BEIRUT_TIMEZONE } from '../utils/timezone.js';
+import { getBeirutTimeInfo, getBeirutTodayStr, BEIRUT_TIMEZONE, beirutDateTimeToUtc } from '../utils/timezone.js';
 
 export interface ToolCall {
   name: string;
@@ -105,11 +105,11 @@ export function formatEnglishDate(isoStr: string, endIsoStr?: string): string {
   try {
     const d = new Date(isoStr);
     if (isNaN(d.getTime())) return isoStr;
-    const weekday = d.toLocaleDateString('en-US', { weekday: 'long', timeZone: 'UTC' });
-    const month = d.toLocaleDateString('en-US', { month: 'short', timeZone: 'UTC' });
-    const day = d.getUTCDate();
-    const hours = d.getUTCHours();
-    const mins = d.getUTCMinutes().toString().padStart(2, '0');
+    const weekday = d.toLocaleDateString('en-US', { weekday: 'long', timeZone: BEIRUT_TIMEZONE });
+    const month = d.toLocaleDateString('en-US', { month: 'short', timeZone: BEIRUT_TIMEZONE });
+    const day = getBeirutTimeInfo(d).day;
+    const hours = getBeirutTimeInfo(d).hour;
+    const mins = getBeirutTimeInfo(d).minute.toString().padStart(2, '0');
     const ampm = hours >= 12 ? 'PM' : 'AM';
     const h12 = hours % 12 === 0 ? 12 : hours % 12;
     const startDisplay = `${h12}:${mins} ${ampm}`;
@@ -117,8 +117,8 @@ export function formatEnglishDate(isoStr: string, endIsoStr?: string): string {
     // Calculate end time (if not provided, default to +60 minutes for consultation)
     const endD = endIsoStr ? new Date(endIsoStr) : new Date(d.getTime() + 60 * 60 * 1000);
     if (!isNaN(endD.getTime())) {
-      const endHours = endD.getUTCHours();
-      const endMins = endD.getUTCMinutes().toString().padStart(2, '0');
+      const endHours = getBeirutTimeInfo(endD).hour;
+      const endMins = getBeirutTimeInfo(endD).minute.toString().padStart(2, '0');
       const endAmpm = endHours >= 12 ? 'PM' : 'AM';
       const endH12 = endHours % 12 === 0 ? 12 : endHours % 12;
       const endDisplay = `${endH12}:${endMins} ${endAmpm}`;
@@ -137,25 +137,25 @@ export function formatLebDate(isoStr: string, endIsoStr?: string): string {
     if (isNaN(d.getTime())) return isoStr;
     const days = ['Ahad', 'Tnen', 'Taleta', 'Arba3a', 'Khamis', 'Jem3a', 'Sabit'];
     const months = ['Kanoun Tene', 'Shbat', 'Adar', 'Naysan', 'Ayyar', 'Hzayran', 'Tamouz', 'Aab', 'Ayloul', 'Teshreen Awwal', 'Teshreen Tene', 'Kanoun Awwal'];
-    const dayName = days[d.getUTCDay()];
-    const monthName = months[d.getUTCMonth()];
-    const hours = d.getUTCHours();
-    const mins = d.getUTCMinutes().toString().padStart(2, '0');
+    const dayName = days[getBeirutTimeInfo(d).dayOfWeek];
+    const monthName = months[(getBeirutTimeInfo(d).month - 1)];
+    const hours = getBeirutTimeInfo(d).hour;
+    const mins = getBeirutTimeInfo(d).minute.toString().padStart(2, '0');
     const ampm = hours >= 12 ? 'PM' : 'AM';
     const h12 = hours % 12 === 0 ? 12 : hours % 12;
     const startDisplay = `${h12}:${mins} ${ampm}`;
 
     const endD = endIsoStr ? new Date(endIsoStr) : new Date(d.getTime() + 60 * 60 * 1000);
     if (!isNaN(endD.getTime())) {
-      const endHours = endD.getUTCHours();
-      const endMins = endD.getUTCMinutes().toString().padStart(2, '0');
+      const endHours = getBeirutTimeInfo(endD).hour;
+      const endMins = getBeirutTimeInfo(endD).minute.toString().padStart(2, '0');
       const endAmpm = endHours >= 12 ? 'PM' : 'AM';
       const endH12 = endHours % 12 === 0 ? 12 : endHours % 12;
       const endDisplay = `${endH12}:${endMins} ${endAmpm}`;
-      return `nhar l ${dayName} (${d.getUTCDate()} ${monthName}) mn ${startDisplay} lal ${endDisplay}`;
+      return `nhar l ${dayName} (${getBeirutTimeInfo(d).day} ${monthName}) mn ${startDisplay} lal ${endDisplay}`;
     }
 
-    return `nhar l ${dayName} (${d.getUTCDate()} ${monthName}) se3a ${startDisplay}`;
+    return `nhar l ${dayName} (${getBeirutTimeInfo(d).day} ${monthName}) se3a ${startDisplay}`;
   } catch {
     return isoStr;
   }
@@ -167,19 +167,19 @@ export function formatArabicDate(isoStr: string, endIsoStr?: string): string {
     if (isNaN(d.getTime())) return isoStr;
     const weekdaysAr = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
     const monthsAr = ['كانون الثاني', 'شباط', 'آذار', 'نيسان', 'أيار', 'حزيران', 'تموز', 'آب', 'أيلول', 'تشرين الأول', 'تشرين الثاني', 'كانون الأول'];
-    const weekday = weekdaysAr[d.getUTCDay()];
-    const month = monthsAr[d.getUTCMonth()];
-    const day = d.getUTCDate();
-    const hours = d.getUTCHours();
-    const mins = d.getUTCMinutes().toString().padStart(2, '0');
+    const weekday = weekdaysAr[getBeirutTimeInfo(d).dayOfWeek];
+    const month = monthsAr[(getBeirutTimeInfo(d).month - 1)];
+    const day = getBeirutTimeInfo(d).day;
+    const hours = getBeirutTimeInfo(d).hour;
+    const mins = getBeirutTimeInfo(d).minute.toString().padStart(2, '0');
     const ampm = hours >= 12 ? 'ظهراً' : 'صباحاً';
     const h12 = hours % 12 === 0 ? 12 : hours % 12;
     const startDisplay = `${h12}:${mins} ${ampm}`;
 
     const endD = endIsoStr ? new Date(endIsoStr) : new Date(d.getTime() + 60 * 60 * 1000);
     if (!isNaN(endD.getTime())) {
-      const endHours = endD.getUTCHours();
-      const endMins = endD.getUTCMinutes().toString().padStart(2, '0');
+      const endHours = getBeirutTimeInfo(endD).hour;
+      const endMins = getBeirutTimeInfo(endD).minute.toString().padStart(2, '0');
       const endAmpm = endHours >= 12 ? 'ظهراً' : 'صباحاً';
       const endH12 = endHours % 12 === 0 ? 12 : endHours % 12;
       const endDisplay = `${endH12}:${endMins} ${endAmpm}`;
@@ -1515,8 +1515,8 @@ export class AgentCore {
         }
         const lines = activeAppts.map(a => {
           const d = new Date(a.start_time);
-          const dateStr = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-          const timeStr = d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+          const dateStr = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: BEIRUT_TIMEZONE });
+          const timeStr = d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', timeZone: BEIRUT_TIMEZONE });
           const loc = a.visit_type === 'home_visit' ? `🏠 Home Visit (${a.address || 'Address provided'})` : '🏢 In-Office';
           return `• *${dateStr} @ ${timeStr}* – ${a.customer_name || 'Patient'} (${a.service}, ${loc})`;
         });
@@ -1602,7 +1602,7 @@ export class AgentCore {
         db.workflows.transition(activeWorkflow.id, 'booked');
       }
 
-      const isoStr = `${activeWorkflow.date}T${activeWorkflow.time}:00.000Z`;
+      const isoStr = beirutDateTimeToUtc(activeWorkflow.date, activeWorkflow.time).toISOString();
       const engDate = formatEnglishDate(isoStr);
       const arDate = formatArabicDate(isoStr);
       const nameGreeting = customer.name ? `All set, ${customer.name}!` : 'All set!';
@@ -1650,7 +1650,7 @@ export class AgentCore {
         }
       }
 
-      const isoStr = `${pendingHomeVisit.date}T${pendingHomeVisit.time}:00.000Z`;
+      const isoStr = beirutDateTimeToUtc(pendingHomeVisit.date, pendingHomeVisit.time).toISOString();
       const engDate = formatEnglishDate(isoStr);
       const arDate = formatArabicDate(isoStr);
       const nameStrEng = customer.name ? ` ${customer.name}` : '';
@@ -1694,7 +1694,7 @@ export class AgentCore {
         db.workflows.transition(activeWorkflow.id, 'booked');
       }
 
-      const isoStr = `${pendingInOffice.date}T${pendingInOffice.time}:00.000Z`;
+      const isoStr = beirutDateTimeToUtc(pendingInOffice.date, pendingInOffice.time).toISOString();
       const engDate = formatEnglishDate(isoStr);
       const arDate = formatArabicDate(isoStr);
       const nameGreeting = customer.name ? `All set, ${customer.name}!` : 'All set!';
@@ -1819,7 +1819,7 @@ export class AgentCore {
       const specifiesHome = /\b(home visit|home|beit|zyara|manzil|منزل|منزلية|زيارة منزلية)\b/i.test(incomingText);
 
       if (isAffirmative && !specifiesOffice && !specifiesHome) {
-        const isoStr = `${activeWorkflow.date}T${activeWorkflow.time}:00.000Z`;
+        const isoStr = beirutDateTimeToUtc(activeWorkflow.date, activeWorkflow.time).toISOString();
         const engDate = formatEnglishDate(isoStr);
         const arDate = formatArabicDate(isoStr);
         return `We have reserved ${engDate} for you! To finalize your booking, please let us know: would you prefer an in-office consultation at the clinic or a home visit?\n\nلقد حجزنا موعد ${arDate} من أجلكم! لتأكيد الحجز، يرجى إعلامنا هل تفضلون أن يكون الموعد في العيادة أم زيارة منزلية؟`;
@@ -1863,7 +1863,7 @@ export class AgentCore {
           db.workflows.transition(activeWorkflow.id, 'booked');
         }
 
-        const isoStr = `${activeWorkflow.date}T${activeWorkflow.time}:00.000Z`;
+        const isoStr = beirutDateTimeToUtc(activeWorkflow.date, activeWorkflow.time).toISOString();
         const engDate = formatEnglishDate(isoStr);
         const arDate = formatArabicDate(isoStr);
         const nameGreeting = customer.name ? `All set, ${customer.name}!` : 'All set!';
@@ -2019,7 +2019,7 @@ ${upcomingScheduleDays.join('\n')}`;
               address: isHome ? (customer.address || 'Patient Address') : null,
               service: visitType === 'home_visit' ? 'Home Visit Care' : 'General Consultation',
               price: visitType === 'home_visit' ? 180 : 120,
-              startTime: new Date(`${slot.date}T${slot.time}:00.000Z`).toISOString(),
+              startTime: beirutDateTimeToUtc(slot.date, slot.time).toISOString(),
               notes: 'Auto-booked from direct confirmation response',
             });
             console.log(`[Agent] ✅ Successfully saved appointment to DB and Google Calendar: ${bookedAppt.id}`);
@@ -2088,7 +2088,7 @@ ${upcomingScheduleDays.join('\n')}`;
       let reqTime = parsedSlot?.time;
       if (!reqTime && isSameTimePhrase && existingAppointment) {
         const existingD = new Date(existingAppointment.start_time);
-        reqTime = `${String(existingD.getUTCHours()).padStart(2, '0')}:${String(existingD.getUTCMinutes()).padStart(2, '0')}`;
+        reqTime = getBeirutTimeInfo(existingD).timeStr24;
       }
 
       const isAvailable = reqTime && toolResult.available_slots.includes(reqTime);
@@ -2232,14 +2232,14 @@ ${upcomingScheduleDays.join('\n')}`;
         let reschedTime = slot?.time;
         if (!reschedTime) {
           const existingD = new Date(existingAppointment.start_time);
-          reschedTime = `${String(existingD.getUTCHours()).padStart(2, '0')}:${String(existingD.getUTCMinutes()).padStart(2, '0')}`;
+          reschedTime = getBeirutTimeInfo(existingD).timeStr24;
         }
 
         if (reschedDate && reschedTime) {
           try {
             await this.scheduler.rescheduleAppointment({
               appointmentId: existingAppointment.id,
-              newStartTime: new Date(`${reschedDate}T${reschedTime}:00.000Z`).toISOString(),
+              newStartTime: beirutDateTimeToUtc(reschedDate, reschedTime).toISOString(),
               visitType: existingAppointment.visit_type,
               address: existingAppointment.address,
             });
@@ -2447,7 +2447,7 @@ ${upcomingScheduleDays.join('\n')}`;
               (rawService.includes('acupunc') && sLower.includes('acupunc')) ||
               (rawService.includes('consult') && sLower.includes('consult'));
           }) || (visitType === 'home_visit' ? CLINIC_SERVICES.find((s) => s.name.includes('Home')) || CLINIC_SERVICES[0] : CLINIC_SERVICES[0]);
-          const startD = new Date(`${args.date}T${args.time}:00.000Z`);
+          const startD = beirutDateTimeToUtc(args.date, args.time);
           if (isNaN(startD.getTime())) {
             return { error: 'Invalid date or time provided. Please check the requested time.' };
           }
@@ -2581,7 +2581,7 @@ ${upcomingScheduleDays.join('\n')}`;
             return { error: 'No upcoming active appointment found to reschedule.' };
           }
 
-          const newStartD = new Date(`${args.new_date}T${args.new_time}:00.000Z`);
+          const newStartD = beirutDateTimeToUtc(args.new_date, args.new_time);
           if (isNaN(newStartD.getTime())) {
             return { error: 'Invalid date or time provided. Please check the requested time.' };
           }

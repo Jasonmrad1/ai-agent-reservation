@@ -29,7 +29,7 @@ export function getBeirutTimeInfo(date: Date = new Date()): BeirutTimeInfo {
     hour: '2-digit',
     minute: '2-digit',
     second: '2-digit',
-    hour12: false,
+    hourCycle: 'h23',
   });
 
   const parts = formatter.formatToParts(date);
@@ -74,4 +74,24 @@ export function getBeirutTimeInfo(date: Date = new Date()): BeirutTimeInfo {
 
 export function getBeirutTodayStr(date: Date = new Date()): string {
   return getBeirutTimeInfo(date).dateStr;
+}
+
+/** Convert a clinic wall time using IANA rules; reject nonexistent or ambiguous DST times. */
+export function beirutDateTimeToUtc(date: string, time: string): Date {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^\d{2}:\d{2}$/.test(time)) throw new Error('Invalid clinic date or time');
+  const [y,m,d] = date.split('-').map(Number); const [h,min] = time.split(':').map(Number);
+  const raw = Date.UTC(y,m-1,d,h,min);
+  if (new Date(Date.UTC(y,m-1,d)).toISOString().slice(0,10)!==date || h>24 || min>59 || (h===24 && min!==0)) throw new Error('Invalid clinic date or time');
+  const targetDate = h===24 ? new Date(raw).toISOString().slice(0,10) : date;
+  const targetTime = h===24 ? '00:00' : time;
+  const offsets = new Set<number>();
+  for (const hours of [-36,0,36]) {
+    const sample = raw + hours*3600000; const i = getBeirutTimeInfo(new Date(sample));
+    offsets.add(Date.UTC(i.year,i.month-1,i.day,i.hour,i.minute,i.second)-sample);
+  }
+  const matches = [...offsets].map(offset=>new Date(raw-offset)).filter(candidate=>{
+    const i=getBeirutTimeInfo(candidate); return i.dateStr===targetDate && i.timeStr24===targetTime;
+  });
+  if (matches.length!==1) throw new Error('Clinic time is ambiguous or nonexistent during daylight saving change; choose another time');
+  return matches[0];
 }

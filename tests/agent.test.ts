@@ -1,3 +1,4 @@
+import { clinicIso } from './clinic-time.js';
 import { describe, it, expect, beforeEach } from 'vitest';
 import { createDatabaseContext, DatabaseContext } from '../src/db/index.js';
 import { InMemoryCalendarProvider } from '../src/calendar/provider.js';
@@ -152,8 +153,8 @@ describe('Phase 4: Gemini AI Integration & Tool-Calling Agent Core', () => {
       visit_type: 'in_office',
       service: 'General Consultation',
       price: 120,
-      start_time: '2026-09-14T09:00:00.000Z',
-      end_time: '2026-09-14T10:00:00.000Z',
+      start_time: clinicIso('2026-09-14T09:00:00.000Z'),
+      end_time: clinicIso('2026-09-14T10:00:00.000Z'),
     });
 
     geminiClient.mockToolCall = {
@@ -171,7 +172,7 @@ describe('Phase 4: Gemini AI Integration & Tool-Calling Agent Core', () => {
     expect(reply).toContain('rescheduled');
     const appt = db.appointments.findLatestActiveByCustomerId(cust.id);
     expect(appt?.status).toBe('rescheduled');
-    expect(appt?.start_time).toContain('15:00');
+    expect(appt?.start_time).toBe(clinicIso('2026-09-14T15:00:00.000Z'));
 
     expect(gateway.sentMessages.some((m) => m.body.includes('APPOINTMENT RESCHEDULED'))).toBe(true);
   });
@@ -185,8 +186,8 @@ describe('Phase 4: Gemini AI Integration & Tool-Calling Agent Core', () => {
       visit_type: 'in_office',
       service: 'General Consultation',
       price: 120,
-      start_time: '2026-09-14T11:00:00.000Z',
-      end_time: '2026-09-14T12:00:00.000Z',
+      start_time: clinicIso('2026-09-14T11:00:00.000Z'),
+      end_time: clinicIso('2026-09-14T12:00:00.000Z'),
     });
 
     geminiClient.mockToolCall = {
