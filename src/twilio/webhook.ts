@@ -160,15 +160,6 @@ export function createWebhookRouter(options: WebhookHandlerOptions) {
       return;
     }
 
-    // 6.2 Security, Prompt-Injection & Anti-Abuse Guardrails (0 Gemini tokens spent)
-    const guardrail = isUrgentMessage(incomingText) ? {allowed:true,reply:undefined,reason:undefined} : validateInboundMessage(incomingText, fromPhone);
-    if (!guardrail.allowed && guardrail.reply) {
-      await gateway.sendMessage(fromPhone, guardrail.reply, customer.id);
-      db.messages.create(conversation.id, 'outbound', guardrail.reply, null, 'sent');
-      res.type('text/xml').send('<Response/>');
-      return;
-    }
-
     // 7. Doctor Direct Chat Co-presence (Yielding to Dr. Ziad during 1-on-1 human conversation or active escalation)
     const lower = incomingText.toLowerCase();
     const upper = incomingText.toUpperCase();
@@ -179,6 +170,15 @@ export function createWebhookRouter(options: WebhookHandlerOptions) {
     if (resumeBot) {
       db.conversations.updateStatus(conversation.id,'active');conversation.status='active';
       res.type('text/xml').send('<Response/>');return;
+    }
+
+    // 6.2 Security, Prompt-Injection & Anti-Abuse Guardrails (0 Gemini tokens spent)
+    const guardrail = isUrgentMessage(incomingText) ? {allowed:true,reply:undefined,reason:undefined} : validateInboundMessage(incomingText, fromPhone);
+    if (!guardrail.allowed && guardrail.reply) {
+      await gateway.sendMessage(fromPhone, guardrail.reply, customer.id);
+      db.messages.create(conversation.id, 'outbound', guardrail.reply, null, 'sent');
+      res.type('text/xml').send('<Response/>');
+      return;
     }
 
     // 8. Process Message with Gemini Core (with multi-model failover)
