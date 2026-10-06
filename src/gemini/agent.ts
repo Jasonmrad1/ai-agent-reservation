@@ -1,3 +1,4 @@
+import { isUrgentMessage } from '../security/urgent.js';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { Customer, Conversation, Appointment, VisitType, PendingBookingWorkflow } from '../types/index.js';
 import { DatabaseContext } from '../db/index.js';
@@ -927,7 +928,7 @@ Guidelines:
       if (params.toolName === 'escalate_to_human') {
         const isUrgent = params.toolArgs?.urgency === 'high' || (params.userQuery && /chest pain|shortness of breath|waja3.*sader|dii2et nafas|emergency/i.test(params.userQuery));
         if (isUrgent) {
-          return `🚨 If you are experiencing severe chest pain, shortness of breath, or an acute emergency, please call 112 (or local emergency services) or go to the nearest emergency room immediately! I have also alerted Dr. Ziad with urgent priority.`;
+          return `🚨 If you are experiencing severe chest pain, shortness of breath, or an acute emergency, please call 140 (or local emergency services) or go to the nearest emergency room immediately! I have also alerted Dr. Ziad with urgent priority.`;
         }
         return `I have informed Dr. Ziad and our clinic team of your request. A team member will message you directly right here on WhatsApp as soon as possible!`;
       }
@@ -979,7 +980,7 @@ Guidelines:
       if (params.toolName === 'escalate_to_human') {
         const isUrgent = params.toolArgs?.urgency === 'high' || (params.userQuery && /chest pain|douleur|urgence|shortness of breath/i.test(params.userQuery));
         if (isUrgent) {
-          return `🚨 En cas d'urgence médicale aiguë ou de détresse respiratoire, veuillez appeler immédiatement le 112 ou vous rendre aux urgences les plus proches. J'ai également alerté le Dr. Ziad en priorité urgente.`;
+          return `🚨 En cas d'urgence médicale aiguë ou de détresse respiratoire, veuillez appeler immédiatement le 140 ou vous rendre aux urgences les plus proches. J'ai également alerté le Dr. Ziad en priorité urgente.`;
         }
         return `J'ai bien transmis votre demande au Dr. Ziad et à notre équipe. Un membre du cabinet vous contactera directement ici sur WhatsApp dans les plus brefs délais!`;
       }
@@ -1028,7 +1029,7 @@ Guidelines:
       if (params.toolName === 'escalate_to_human') {
         const isUrgent = params.toolArgs?.urgency === 'high';
         if (isUrgent) {
-          return `🚨 في حال وجود حالة طارئة أو ألم حاد في الصدر، يرجى الاتصال برقم 112 (الصليب الأحمر) أو التوجه فوراً لأقاب قسم طوارئ! تم إعلام الدكتور زياد بشكل عاجل.`;
+          return `🚨 في حال وجود حالة طارئة أو ألم حاد في الصدر، يرجى الاتصال برقم 140 (الصليب الأحمر) أو التوجه فوراً لأقاب قسم طوارئ! تم إعلام الدكتور زياد بشكل عاجل.`;
         }
         return `تكرم عينك! تم إعلام الدكتور زياد وفريق العيادة بطلبكم، وسيتم التواصل معكم مباشرة عبر الواتساب في أقرب وقت.`;
       }
@@ -1079,7 +1080,7 @@ Guidelines:
     if (params.toolName === 'escalate_to_human') {
       const isUrgent = params.toolArgs?.urgency === 'high' || (params.userQuery && /chest pain|shortness of breath|waja3.*sader|dii2et nafas|emergency/i.test(params.userQuery));
       if (isUrgent) {
-        return `🚨 Eza 3am t7ess bi waja3 2awi bi sadrak, dii2et nafas, aw 7aleh tari2a, rja2 d2 112 (l Saleeb l A7mar) aw twajjah 3ala a2rab emergency room (ER) bi asra3 wa2et! 5abbarit l hakim bi sur3a.`;
+        return `🚨 Eza 3am t7ess bi waja3 2awi bi sadrak, dii2et nafas, aw 7aleh tari2a, rja2 d2 140 (l Saleeb l A7mar) aw twajjah 3ala a2rab emergency room (ER) bi asra3 wa2et! 5abbarit l hakim bi sur3a.`;
       }
       return `Tekram! 5abbarit Dr. Ziad w l team bi talabak, w ra7 yetwasalo ma3ak direct hon 3a WhatsApp bi asra3 wa2et!`;
     }
@@ -1334,7 +1335,7 @@ export class MockGeminiClient implements GeminiClient {
     if (params.toolName === 'escalate_to_human') {
       const isUrgent = params.toolArgs?.urgency === 'high' || (params.userQuery && /chest pain|shortness of breath|waja3.*sader|dii2et nafas|emergency/i.test(params.userQuery));
       if (isUrgent) {
-        return `🚨 If you are experiencing severe chest pain, shortness of breath, or an acute emergency, please call 112 (or local emergency services) or go to the nearest emergency room immediately! I have also alerted Dr. Ziad with urgent priority.`;
+        return `🚨 If you are experiencing severe chest pain, shortness of breath, or an acute emergency, please call 140 (or local emergency services) or go to the nearest emergency room immediately! I have also alerted Dr. Ziad with urgent priority.`;
       }
       if (lang === 'arabizi') {
         return `Tekram! 5abbarit Dr. Ziad w l team bi talabak, w ra7 yetwasalo ma3ak direct hon 3a WhatsApp bi asra3 wa2et!`;
@@ -1405,6 +1406,17 @@ export class AgentCore {
     incomingText: string;
     db: DatabaseContext;
   }): Promise<string> {
+    if (isUrgentMessage(context.incomingText)) {
+      context.db.conversations.updateStatus(context.conversation.id,'escalated');
+      context.db.workflows.cancelActiveByCustomerId(context.customer.id);
+      context.db.alerts.create({type:'human_handoff',title:'Urgent symptoms: immediate human review',details:context.incomingText,customer_id:context.customer.id});
+      try {await this.notifier.notifyEscalation(context.customer,'Urgent symptoms: '+context.incomingText,'high');} catch { /* The durable alert remains available. */ }
+      const lang=detectLanguage(context.incomingText);
+      if (lang==='arabic') return 'قد تكون هذه حالة طارئة. اتصل فوراً بالصليب الأحمر اللبناني على 140 أو اذهب إلى أقرب قسم طوارئ. لا تنتظر الرد على واتساب. تم إيقاف الحجز للمراجعة البشرية.';
+      if (lang==='arabizi') return 'Hayde momken tkoun 7aleh tari2a. D2 140 (Lebanese Red Cross) aw rou7 3a a2rab emergency room halla2. Ma tentor radd WhatsApp. Wa22afna l booking lal human review.';
+      if (lang==='french') return "Cela peut ?tre une urgence. Appelez le 140 (Croix-Rouge libanaise) ou allez aux urgences imm?diatement. N'attendez pas une r?ponse WhatsApp. La r?servation est suspendue pour examen humain.";
+      return 'This may be an emergency. Call 140 (Lebanese Red Cross) or go to the nearest emergency department immediately. Do not wait for a WhatsApp response. Booking is paused for human review.';
+    }
     const rawReply = await this.internalProcessMessage(context);
     return sanitizeWhatsAppText(rawReply);
   }

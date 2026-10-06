@@ -59,7 +59,7 @@ describe('🚑 MEDICAL SAFETY & EMERGENCY TRIAGE PROTOCOL', () => {
     // Verify patient reply contains critical 112 / Emergency Room advisory
     const patientReply = gateway.sentMessages.find((m) => m.to === PATIENT_PHONE);
     expect(patientReply).toBeDefined();
-    expect(patientReply?.body).toContain('112');
+    expect(patientReply?.body).toContain('140');
     expect(patientReply?.body).toContain('emergency');
 
     // Verify Doctor / Admin received high-priority alert
@@ -90,7 +90,7 @@ describe('🚑 MEDICAL SAFETY & EMERGENCY TRIAGE PROTOCOL', () => {
 
     const patientReply = gateway.sentMessages.find((m) => m.to === 'whatsapp:+96170444333');
     expect(patientReply).toBeDefined();
-    expect(patientReply?.body).toContain('112');
+    expect(patientReply?.body).toContain('140');
   });
 
   it('does NOT trigger emergency on standard non-acute inquiries like back pain or follow-ups', async () => {
@@ -113,7 +113,7 @@ describe('🚑 MEDICAL SAFETY & EMERGENCY TRIAGE PROTOCOL', () => {
     expect(res.status).toBe(200);
 
     const patientReply = gateway.sentMessages.find((m) => m.to === PATIENT_PHONE);
-    expect(patientReply?.body).not.toContain('112');
+    expect(patientReply?.body).not.toContain('140');
     expect(patientReply?.body).toContain('2026-09-14');
   });
 });
