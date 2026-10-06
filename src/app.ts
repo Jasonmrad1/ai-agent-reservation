@@ -129,6 +129,7 @@ export function createApp(options: CreateAppOptions = {}): AppInstance {
     db,
     gateway,
     authToken: cfg.twilioAuthToken,
+    publicBaseUrl: cfg.publicBaseUrl,
     skipSignatureVerification: options.skipSignatureVerification ?? (cfg.nodeEnv !== 'production'),
     processMessage: async ({ customer, conversation, incomingText }) => {
       // Check if this incoming message is an interactive reminder confirmation (e.g. YES to confirm)

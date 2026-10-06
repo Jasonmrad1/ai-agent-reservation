@@ -10,6 +10,7 @@ export interface WebhookHandlerOptions {
   gateway: WhatsAppGateway;
   authToken?: string;
   skipSignatureVerification?: boolean;
+  publicBaseUrl?: string;
   processMessage?: (context: {
     customer: any;
     conversation: any;
@@ -24,8 +25,20 @@ const OPT_IN_KEYWORDS = new Set(['START', 'UNSTOP']);
 export function createWebhookRouter(options: WebhookHandlerOptions) {
   const { db, gateway, authToken, skipSignatureVerification, processMessage } = options;
 
+  function isVerified(req: Request): boolean {
+    if (skipSignatureVerification) return true;
+    const base = options.publicBaseUrl?.replace(/\/$/, '');
+    const url = base ? `${base}${req.originalUrl}` : `${req.protocol}://${req.get('host')}${req.originalUrl}`;
+    return verifyTwilioWebhook({ authToken: authToken || '', signatureHeader: req.get('x-twilio-signature'), url, params: req.body || {} });
+  }
+
   async function handleInboundMessage(req: Request, res: Response): Promise<void> {
     const params = req.body || {};
+    if (!isVerified(req)) { res.status(403).send('Invalid signature'); return; }
+    if (typeof params.From !== 'string' || (params.Body != null && typeof params.Body !== 'string') ||
+        typeof params.MessageSid !== 'string' || !params.MessageSid) {
+      res.status(400).send('Invalid webhook payload'); return;
+    }
     const messageSid = params.MessageSid;
     const fromPhone = params.From;
     const profileName = params.ProfileName;
@@ -52,28 +65,6 @@ export function createWebhookRouter(options: WebhookHandlerOptions) {
     }
 
     console.log(`\n[Twilio Webhook] 📩 Incoming message from ${fromPhone} (${profileName || 'Patient'}): "${incomingText}"`);
-
-    // 2. Signature Verification
-    if (!skipSignatureVerification && authToken) {
-      const signature = req.headers['x-twilio-signature'] as string;
-      const protocol = req.headers['x-forwarded-proto'] || req.protocol;
-      const host = req.headers['x-forwarded-host'] || req.get('host');
-      const url = `${protocol}://${host}${req.originalUrl}`;
-
-      const isValid = verifyTwilioWebhook({
-        authToken,
-        signatureHeader: signature,
-        url,
-        params,
-        skipValidationInTest: false,
-      });
-
-      if (!isValid) {
-        console.warn(`[Twilio Webhook] ⚠️ Rejected request due to invalid signature from ${fromPhone}`);
-        res.status(403).send('Invalid signature');
-        return;
-      }
-    }
 
     if (!fromPhone || !incomingText) {
       console.warn(`[Twilio Webhook] ⚠️ Missing From or Body in request`);
@@ -258,9 +249,13 @@ export function createWebhookRouter(options: WebhookHandlerOptions) {
   }
 
   async function handleStatusCallback(req: Request, res: Response): Promise<void> {
+    if (!isVerified(req)) { res.status(403).send('Invalid signature'); return; }
     const params = req.body || {};
     const messageSid = params.MessageSid;
     const messageStatus = params.MessageStatus; // 'sent', 'delivered', 'failed', 'undelivered'
+    if (typeof messageSid !== 'string' || !['queued', 'sending', 'sent', 'delivered', 'read', 'failed', 'undelivered'].includes(messageStatus)) {
+      res.status(400).send('Invalid status callback'); return;
+    }
 
     if (messageSid && messageStatus) {
       db.messages.updateStatusBySid(messageSid, messageStatus);

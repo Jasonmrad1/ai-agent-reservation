@@ -3,6 +3,7 @@ dotenv.config();
 
 export interface AppConfig {
   mode?: 'clinic' | 'simulator';
+  publicBaseUrl?: string;
   port: number;
   databaseUrl: string;
   adminSessionSecret: string;
@@ -36,6 +37,7 @@ export interface AppConfig {
 }
 
 export const config: AppConfig = {
+  publicBaseUrl: process.env.PUBLIC_BASE_URL,
   mode: process.env.APP_MODE === 'clinic' ? 'clinic' : process.env.APP_MODE === 'simulator' ? 'simulator' : undefined,
   port: parseInt(process.env.PORT || '3000', 10),
   databaseUrl: process.env.DATABASE_URL || 'data/automation.sqlite',
