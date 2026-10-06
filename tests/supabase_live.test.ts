@@ -47,8 +47,7 @@ describe('⚡ SUPABASE LIVE CLOUD INTEGRATION SUITE', () => {
   it('3. Syncs availability rules and handles day_of_week upsert conflict safely', async () => {
     if (!supabase) return;
 
-    // Clean up any stale Monday rules from previous runs to ensure .single() works
-    await supabase.from('availability_rules').delete().eq('day_of_week', 1);
+    // Dedicated test project only. Never delete shared weekday availability.
 
     const testRule = {
       id: crypto.randomUUID(),

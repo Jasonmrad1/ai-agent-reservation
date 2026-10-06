@@ -12,7 +12,8 @@
     "chat": "tsx scripts/chat_simulator.ts",
     "tunnel": "node tunnel.js",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "test:integration": "vitest run --config vitest.integration.config.ts"
   },
   "keywords": [
     "whatsapp",
