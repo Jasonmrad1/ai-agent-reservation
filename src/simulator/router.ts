@@ -138,7 +138,7 @@ export function createSimulatorRouter(options: SimulatorRouterOptions): Router {
 
       // 5. Interactive Reminder Confirmation Check
       if (reminders) {
-        const confirmationReply = reminders.handleConfirmationResponse(customer.id, incomingText);
+        const confirmationReply = await reminders.handleConfirmationResponse(customer.id, incomingText);
         if (confirmationReply) {
           db.messages.create(conversation.id, 'outbound', confirmationReply, 'SIM_OUT_' + crypto.randomUUID(), 'sent');
           return res.json({

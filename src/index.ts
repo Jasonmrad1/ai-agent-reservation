@@ -14,6 +14,9 @@ const server = app.listen(config.port, () => {
   console.log(`====================================================`);
 });
 
+const reconciliationTimer = setInterval(() => { void instance.scheduler.reconcileCalendarOperations(); }, 60000);
+void instance.scheduler.reconcileCalendarOperations();
+
 // Periodic reminder job (runs every 15 minutes in production)
 const REMINDER_INTERVAL_MS = 15 * 60 * 1000;
 const reminderTimer = setInterval(async () => {
@@ -32,6 +35,7 @@ const reminderTimer = setInterval(async () => {
 function shutdown() {
   console.log('\nShutting down server gracefully...');
   clearInterval(reminderTimer);
+  clearInterval(reconciliationTimer);
   server.close(() => {
     instance.db.appDb.close();
     console.log('Server and database closed. Goodbye.');

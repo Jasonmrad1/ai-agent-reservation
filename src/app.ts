@@ -125,7 +125,7 @@ export function createApp(options: CreateAppOptions = {}): AppInstance {
     skipSignatureVerification: options.skipSignatureVerification ?? (cfg.nodeEnv !== 'production'),
     processMessage: async ({ customer, conversation, incomingText }) => {
       // Check if this incoming message is an interactive reminder confirmation (e.g. YES to confirm)
-      const confirmationReply = reminders.handleConfirmationResponse(customer.id, incomingText);
+      const confirmationReply = await reminders.handleConfirmationResponse(customer.id, incomingText);
       if (confirmationReply) {
         return confirmationReply;
       }

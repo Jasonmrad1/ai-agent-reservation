@@ -14,5 +14,5 @@ it('keeps appointment unchanged when remote move or cancellation fails',async()=
  calendar.updateEvent=async()=>{throw new Error('Calendar outage');};calendar.deleteEvent=async()=>{throw new Error('Calendar outage');};
  await expect(s.rescheduleAppointment({appointmentId:a.id,newStartTime:clinicIso('2026-09-14T12:00:00Z')})).rejects.toThrow('Calendar outage');
  expect(db.appointments.findById(a.id)?.start_time).toBe(a.start_time);
- await expect(s.cancelAppointment(a.id)).rejects.toThrow('Calendar outage');expect(db.appointments.findById(a.id)?.status).toBe('booked');
+ await expect(s.cancelAppointment(a.id)).rejects.toThrow('Appointment change already in progress');expect(db.appointments.findById(a.id)?.status).toBe('booked');
 });

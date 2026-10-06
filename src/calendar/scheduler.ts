@@ -415,43 +415,12 @@ export class SchedulingEngine {
       }
     }
 
-    // 1. Create Google Calendar Event
-    const summary = `${params.service} - ${params.customerName || params.customerPhone} (${params.visitType === 'home_visit' ? 'Home Visit' : 'In-Office'})`;
-    const description = [
-      `Customer: ${params.customerName || 'Unknown'} (${params.customerPhone})`,
-      `Visit Type: ${params.visitType}`,
-      params.visitType === 'home_visit' ? `Address: ${params.address}` : `Location: Office`,
-      `Service: ${params.service}`,
-      `Price: $${params.price ?? 100}`,
-      params.notes ? `Notes: ${params.notes}` : '',
-    ].filter(Boolean).join('\n');
-
-    const calEventId = await this.calendar.createEvent({
-      summary,
-      description,
-      location: params.visitType === 'home_visit' ? params.address || undefined : 'Office Clinic',
-      start: startTime,
-      end: endTime,
-    });
-
-    // 2. Create DB appointment
-    const appt = this.db.appointments.create({
-      customer_id: params.customerId,
-      visit_type: params.visitType,
-      address: params.address || null,
-      service: params.service,
-      price: params.price ?? 100,
-      start_time: startTime.toISOString(),
-      end_time: endTime.toISOString(),
-      status: 'booked',
-      google_event_id: calEventId,
-      notes: params.notes || null,
-    });
-
-    if (operationKey) this.db.appDb.db.prepare('INSERT INTO appointment_operations (operation_key, appointment_id) VALUES (?, ?)').run(operationKey, appt.id);
-    return appt;
+    const eventId=crypto.randomUUID().replaceAll('-', '');
+    const payload={params,operationKey,event:{id:eventId,summary:`${params.service} - ${params.customerName || params.customerPhone}`,description:params.notes || undefined,location:params.visitType==='home_visit' ? params.address : 'Office Clinic',start:startTime.toISOString(),end:endTime.toISOString()}};
+    const op=this.journal('book',payload,reservation);
+    return await this.applyCalendarOperation(op);
     } finally {
-      this.db.appDb.db.prepare('DELETE FROM scheduling_reservations WHERE id = ?').run(reservation);
+      if (!this.hasPendingReservation(reservation)) this.db.appDb.db.prepare('DELETE FROM scheduling_reservations WHERE id = ?').run(reservation);
     }
   }
 
@@ -531,30 +500,10 @@ export class SchedulingEngine {
       }
     }
 
-    // Update Calendar
-    if (existing.google_event_id) {
-      {
-        await this.calendar.updateEvent(existing.google_event_id, {
-          summary: `${existing.service} (Rescheduled) - ${visitType === 'home_visit' ? 'Home Visit' : 'In-Office'}`,
-          start: newStart,
-          end: newEnd,
-          location: visitType === 'home_visit' ? address || undefined : 'Office Clinic',
-        });
-      }
-    }
-
-    // Update DB
-    this.db.appointments.reschedule(
-      existing.id,
-      newStart.toISOString(),
-      newEnd.toISOString(),
-      visitType,
-      address
-    );
-
-    return this.db.appointments.findById(existing.id)!;
+    const op=this.journal('move',{appointmentId:existing.id,eventId:existing.google_event_id,newStart:newStart.toISOString(),newEnd:newEnd.toISOString(),visitType,address},reservation);
+    return await this.applyCalendarOperation(op);
     } finally {
-      this.db.appDb.db.prepare('DELETE FROM scheduling_reservations WHERE id = ?').run(reservation);
+      if (!this.hasPendingReservation(reservation)) this.db.appDb.db.prepare('DELETE FROM scheduling_reservations WHERE id = ?').run(reservation);
     }
   }
 
@@ -732,13 +681,63 @@ export class SchedulingEngine {
       throw new Error(`Appointment ${appointmentId} not found.`);
     }
 
-    if (existing.google_event_id) {
-      {
-        await this.calendar.deleteEvent(existing.google_event_id);
-      }
-    }
+    if (existing.status==='cancelled') return existing;
+    if (!['booked','confirmed','rescheduled'].includes(existing.status)) throw new Error('Only active appointments can be cancelled');
+    if (this.db.appDb.db.prepare('SELECT id FROM scheduling_reservations WHERE appointment_id = ?').get(existing.id)) throw new Error('Appointment change already in progress');
+    return this.applyCalendarOperation(this.journal('cancel',{appointmentId:existing.id,eventId:existing.google_event_id,reason}));
+  }
 
-    this.db.appointments.cancel(existing.id, reason);
-    return this.db.appointments.findById(existing.id)!;
+  private hasPendingReservation(id:string):boolean {
+    return !!this.db.appDb.db.prepare('SELECT id FROM calendar_operations WHERE reservation_id = ?').get(id);
+  }
+  private journal(kind:string,payload:any,reservation?:string):string {
+    const id=crypto.randomUUID();this.db.appDb.db.prepare('INSERT INTO calendar_operations (id,kind,payload,reservation_id,created_at) VALUES (?,?,?,?,?)').run(id,kind,JSON.stringify(payload),reservation || null,new Date().toISOString());return id;
+  }
+  private activeOperations = new Set<string>();
+  private async applyCalendarOperation(id:string):Promise<Appointment> {
+    if (this.activeOperations.has(id)) throw new Error('Calendar operation already in progress');
+    this.activeOperations.add(id);
+    const sql=this.db.appDb.db;const op=sql.prepare('SELECT * FROM calendar_operations WHERE id = ?').get(id) as any;
+    const p=JSON.parse(op.payload);let result:Appointment;
+    try {
+      if (op.kind==='book') {
+        const eventId=await this.calendar.createEvent({...p.event,start:new Date(p.event.start),end:new Date(p.event.end)});
+        sql.exec('BEGIN IMMEDIATE');
+        try {
+          result=this.db.appointments.create({customer_id:p.params.customerId,visit_type:p.params.visitType,address:p.params.address || null,service:p.params.service,price:p.params.price ?? 100,start_time:p.event.start,end_time:p.event.end,status:'booked',google_event_id:eventId,notes:p.params.notes || null});
+          if (p.operationKey) sql.prepare('INSERT INTO appointment_operations (operation_key,appointment_id) VALUES (?,?)').run(p.operationKey,result.id);
+          this.finishOperation(op);sql.exec('COMMIT');
+        } catch (e) {sql.exec('ROLLBACK');throw e;}
+      } else {
+        if (p.eventId) {
+          if (op.kind==='cancel') await this.calendar.deleteEvent(p.eventId);
+          else await this.calendar.updateEvent(p.eventId,{summary:undefined as any,start:new Date(p.newStart),end:new Date(p.newEnd),location:p.visitType==='home_visit' ? p.address : 'Office Clinic'});
+        }
+        sql.exec('BEGIN IMMEDIATE');
+        try {
+          if (op.kind==='cancel') this.db.appointments.cancel(p.appointmentId,p.reason);
+          else this.db.appointments.reschedule(p.appointmentId,p.newStart,p.newEnd,p.visitType,p.address);
+          result=this.db.appointments.findById(p.appointmentId)!;this.finishOperation(op);sql.exec('COMMIT');
+        } catch (e) {sql.exec('ROLLBACK');throw e;}
+      }
+      return result!;
+    } catch(error:any) {
+      sql.prepare('UPDATE calendar_operations SET last_error = ? WHERE id = ?').run(String(error.message || error).slice(0,500),id);
+      if (!op.last_error) this.db.alerts.create({type:'system_error',title:'Calendar operation needs reconciliation',details:`Operation ${id} remains pending. Its slot is reserved; check calendar before changing it.`});
+      throw error;
+    } finally {this.activeOperations.delete(id);}
+  }
+  private finishOperation(op:any):void {
+    this.db.appDb.db.prepare('DELETE FROM calendar_operations WHERE id = ?').run(op.id);
+    if (op.reservation_id) this.db.appDb.db.prepare('DELETE FROM scheduling_reservations WHERE id = ?').run(op.reservation_id);
+  }
+  private reconciling=false;
+  public async reconcileCalendarOperations():Promise<void> {
+    if (this.reconciling) return;this.reconciling=true;
+    try {
+      for (const op of this.db.appDb.db.prepare('SELECT id FROM calendar_operations ORDER BY created_at,rowid').all()) {
+        try {await this.applyCalendarOperation(String(op.id));} catch { /* Retain operation and slot until provider recovers. */ }
+      }
+    } finally {this.reconciling=false;}
   }
 }

@@ -115,7 +115,7 @@ export class ReminderRunner {
   /**
    * Checks if incoming text is a direct confirmation or cancellation response (YES / CONFIRM / CANCEL / RESCHEDULE)
    */
-  public handleConfirmationResponse(customerId: string, text: string): string | null {
+  public handleConfirmationResponse(customerId: string, text: string): string | null | Promise<string> {
     const clean = text.trim();
     const upper = clean.toUpperCase();
     if (this.db.appointments.findUpcomingByCustomerId(customerId).length > 1) return null;
@@ -149,12 +149,9 @@ export class ReminderRunner {
     ) {
       const active = this.db.appointments.findLatestActiveByCustomerId(customerId);
       if (active) {
-        this.db.appointments.cancel(active.id, 'Cancelled directly by patient via WhatsApp reminder');
-
-        // Cancel calendar event if scheduler available
-        if (this.scheduler && active.google_event_id) {
-          this.scheduler.cancelAppointment(active.id, 'Cancelled via WhatsApp').catch(() => {});
-        }
+        return (async () => {
+        if (!this.scheduler) throw new Error('Scheduler is required for cancellation');
+        await this.scheduler.cancelAppointment(active.id, 'Cancelled directly by patient via WhatsApp reminder');
 
         // Notify Doctor on WhatsApp
         if (this.notifier) {
@@ -166,6 +163,7 @@ export class ReminderRunner {
 
         const dateFormatted = formatEnglishDate(active.start_time);
         return `Your appointment for ${active.service} on ${dateFormatted} has been cancelled as requested. We hope to see you again soon!`;
+        })();
       }
       return 'You currently have no active appointment to cancel.';
     }
