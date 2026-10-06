@@ -1,4 +1,5 @@
 import { DurableWhatsAppGateway } from './twilio/durable.js';
+import {backupSqliteFile} from './db/backup.js';
 import fs from 'fs';
 import { createAdminAuth } from './security/admin-auth.js';
 import path from 'path';
@@ -48,8 +49,9 @@ export function createApp(options: CreateAppOptions = {}): AppInstance {
   validateConfig(cfg);
 
   // 1. Database
+  if(!options.db && cfg.nodeEnv==='production' && cfg.databaseUrl!==':memory:' && fs.existsSync(cfg.databaseUrl)) backupSqliteFile(cfg.databaseUrl,path.join(path.dirname(cfg.databaseUrl),'backups'));
   const db = options.db || createDatabaseContext(cfg.databaseUrl);
-  const replica = new ReplicaWorker(db,getSupabaseClient(cfg));
+  const replica = new ReplicaWorker(db,getSupabaseClient(cfg),cfg.supabaseUrl);
 
   // 2. Gateway
   const rawGateway = options.gateway || (
