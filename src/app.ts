@@ -1,6 +1,7 @@
 import { DurableWhatsAppGateway } from './twilio/durable.js';
 import {backupSqliteFile} from './db/backup.js';
 import {readiness} from './readiness.js';
+import {asyncRoute} from './security/async-route.js';
 import fs from 'fs';
 import { createAdminAuth } from './security/admin-auth.js';
 import path from 'path';
@@ -154,10 +155,10 @@ export function createApp(options: CreateAppOptions = {}): AppInstance {
     },
   });
 
-  app.post('/api/webhook/whatsapp', webhookRouter.handleInboundMessage);
-  app.post('/webhook/whatsapp', webhookRouter.handleInboundMessage);
-  app.post('/api/webhook/whatsapp/status', webhookRouter.handleStatusCallback);
-  app.post('/webhook/whatsapp/status', webhookRouter.handleStatusCallback);
+  app.post('/api/webhook/whatsapp', asyncRoute(webhookRouter.handleInboundMessage));
+  app.post('/webhook/whatsapp', asyncRoute(webhookRouter.handleInboundMessage));
+  app.post('/api/webhook/whatsapp/status', asyncRoute(webhookRouter.handleStatusCallback));
+  app.post('/webhook/whatsapp/status', asyncRoute(webhookRouter.handleStatusCallback));
 
   // Admin Dashboard & API
   const adminAuth = createAdminAuth(db, cfg.adminSessionSecret, { secure: cfg.nodeEnv === 'production', legacyQuery: cfg.nodeEnv === 'test', publicBaseUrl: cfg.publicBaseUrl });
@@ -192,7 +193,11 @@ export function createApp(options: CreateAppOptions = {}): AppInstance {
     reminders: new ReminderRunner({ db: sandboxDb, gateway: sandboxGateway, scheduler: sandboxScheduler, notifier: sandboxNotifier }),
   });
   app.use('/api/simulator', adminAuth.middleware, simulatorRouter);
-
+  app.use((_error:unknown,req:express.Request,res:express.Response,_next:express.NextFunction)=>{
+    try{db.alerts.create({type:'system_error',title:'Clinic request failed',details:`${req.method} ${req.path} failed. Review durable jobs before retrying a mutation.`});}catch{/* Preserve the HTTP response when storage itself is unavailable. */}
+    if(res.headersSent){res.destroy();return;}
+    res.status(500).json({error:'Request failed. Review clinic alerts before retrying.'});
+  });
 
   return {
     app,

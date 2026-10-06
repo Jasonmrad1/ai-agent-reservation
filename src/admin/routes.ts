@@ -1,4 +1,5 @@
 import { beirutDateTimeToUtc, getBeirutTimeInfo, getBeirutTodayStr } from '../utils/timezone.js';
+import {asyncRoute} from '../security/async-route.js';
 import fs from 'fs';
 import { createAdminAuth, AdminAuth } from '../security/admin-auth.js';
 import path from 'path';
@@ -154,7 +155,7 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
     res.json({ rules, overrides });
   });
 
-  router.post('/api/availability/rules', requireAdminAuth, async (req: Request, res: Response) => {
+  router.post('/api/availability/rules', requireAdminAuth, asyncRoute(async (req: Request, res: Response) => {
     const { day_of_week, start_time, end_time, is_active, shifts } = req.body;
     if (day_of_week === undefined || !start_time || !end_time) {
       res.status(400).json({ error: 'Missing day_of_week, start_time, or end_time' });
@@ -182,9 +183,9 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
       affectedCount: conflicts.length,
       notifiedPatients,
     });
-  });
+  }));
 
-  router.post('/api/availability/rules/batch', requireAdminAuth, async (req: Request, res: Response) => {
+  router.post('/api/availability/rules/batch', requireAdminAuth, asyncRoute(async (req: Request, res: Response) => {
     const { rules } = req.body;
     if (!Array.isArray(rules)) {
       res.status(400).json({ error: 'Rules must be an array' });
@@ -220,9 +221,9 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
       affectedCount: notifiedPatients.length,
       notifiedPatients,
     });
-  });
+  }));
 
-  router.post('/api/availability/overrides', requireAdminAuth, async (req: Request, res: Response) => {
+  router.post('/api/availability/overrides', requireAdminAuth, asyncRoute(async (req: Request, res: Response) => {
     const { date, is_unavailable, start_time, end_time, reason, shifts } = req.body;
     if (!date) {
       res.status(400).json({ error: 'Date is required for an override' });
@@ -253,9 +254,9 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
       affectedCount: conflicts.length,
       notifiedPatients,
     });
-  });
+  }));
 
-  router.post('/api/availability/overrides/batch', requireAdminAuth, async (req: Request, res: Response) => {
+  router.post('/api/availability/overrides/batch', requireAdminAuth, asyncRoute(async (req: Request, res: Response) => {
     const { overrides } = req.body;
     if (!Array.isArray(overrides)) {
       res.status(400).json({ error: 'Overrides must be an array' });
@@ -295,7 +296,7 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
       affectedCount: notifiedPatients.length,
       notifiedPatients,
     });
-  });
+  }));
 
   router.delete('/api/availability/overrides/range', requireAdminAuth, (req: Request, res: Response) => {
     const { start_date, end_date } = req.body;
@@ -356,7 +357,7 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
   });
 
   // Google Calendar Integration Endpoints
-  router.get('/auth/google', requireAdminAuth, async (req: Request, res: Response) => {
+  router.get('/auth/google', requireAdminAuth, asyncRoute(async (req: Request, res: Response) => {
     const state = auth.oauthState(req);
     if (!state) { res.status(401).send('Sign in before connecting Google Calendar'); return; }
     const clientId = options.calendarClientId;
@@ -397,9 +398,9 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
     } catch (err: any) {
       res.status(500).json({ error: 'Could not start Google Calendar authorization' });
     }
-  });
+  }));
 
-  router.get('/oauth2callback', async (req: Request, res: Response) => {
+  router.get('/oauth2callback', asyncRoute(async (req: Request, res: Response) => {
     const code = req.query.code as string;
     if (!auth.consumeOAuthState(req)) { res.status(403).send('Invalid or expired OAuth state'); return; }
 
@@ -442,7 +443,7 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
     } catch (err: any) {
       res.status(500).json({ error: 'Could not connect Google Calendar' });
     }
-  });
+  }));
 
   router.get('/api/google-calendar/status', requireAdminAuth, (req: Request, res: Response) => {
     const refreshToken = db.settings.get('google_calendar_refresh_token', '');
@@ -486,7 +487,7 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
     res.json({ appointments: enriched });
   });
 
-  router.post('/api/appointments/:id/cancel', requireAdminAuth, async (req: Request, res: Response) => {
+  router.post('/api/appointments/:id/cancel', requireAdminAuth, asyncRoute(async (req: Request, res: Response) => {
     const appointmentId = String(req.params.id);
     const { reason } = req.body || {};
 
@@ -517,19 +518,19 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
     } catch (err: any) {
       res.status(400).json({ error: err?.message || String(err) });
     }
-  });
+  }));
 
-  router.post('/api/appointments/:id/complete', requireAdminAuth, async (req: Request, res: Response) => {
+  router.post('/api/appointments/:id/complete', requireAdminAuth, asyncRoute(async (req: Request, res: Response) => {
     try {
       const result = await billing.completeAppointmentAndBill(String(req.params.id));
       res.json({ success: true, ...result });
     } catch (err: any) {
       res.status(400).json({ error: err?.message || String(err) });
     }
-  });
+  }));
 
   // Direct edit appointment details (notes, address, service, visit_type)
-  router.patch('/api/appointments/:id', requireAdminAuth, async (req: Request, res: Response) => {
+  router.patch('/api/appointments/:id', requireAdminAuth, asyncRoute(async (req: Request, res: Response) => {
     const appointmentId = String(req.params.id);
     const appt = db.appointments.findById(appointmentId);
     if (!appt) {
@@ -546,10 +547,10 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
       res.json({success:true,appointment:updated});
     } catch(error:any) {res.status(400).json({error:error.message || 'Appointment edit failed'});}
 
-  });
+  }));
 
   // Doctor manually creates an appointment (walk-in, phone call, in-person)
-  router.post('/api/appointments/manual', requireAdminAuth, async (req: Request, res: Response) => {
+  router.post('/api/appointments/manual', requireAdminAuth, asyncRoute(async (req: Request, res: Response) => {
     const {
       phone,
       name,
@@ -652,10 +653,10 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
     } catch (err: any) {
       res.status(400).json({ error: err?.message || String(err) });
     }
-  });
+  }));
 
   // Doctor directly reschedules an appointment with optional override and WhatsApp ping
-  router.post('/api/appointments/:id/reschedule-direct', requireAdminAuth, async (req: Request, res: Response) => {
+  router.post('/api/appointments/:id/reschedule-direct', requireAdminAuth, asyncRoute(async (req: Request, res: Response) => {
     const appointmentId = String(req.params.id);
     const { date, time, visit_type, address, notes, override, send_whatsapp } = req.body;
 
@@ -737,10 +738,10 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
     } catch (err: any) {
       res.status(400).json({ error: err?.message || String(err) });
     }
-  });
+  }));
 
   // Doctor prompts AI to reschedule with client over WhatsApp
-  router.post('/api/appointments/:id/request-reschedule', requireAdminAuth, async (req: Request, res: Response) => {
+  router.post('/api/appointments/:id/request-reschedule', requireAdminAuth, asyncRoute(async (req: Request, res: Response) => {
     const appointmentId = String(req.params.id);
     const { doctorPrompt, proposedDate, proposedTime, language } = req.body;
 
@@ -832,10 +833,10 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
       suggestedSlots,
       appointment: db.appointments.findById(appt.id),
     });
-  });
+  }));
 
   // Doctor dispatches direct quick automated message to patient on WhatsApp
-  router.post('/api/appointments/:id/send-message', requireAdminAuth, async (req: Request, res: Response) => {
+  router.post('/api/appointments/:id/send-message', requireAdminAuth, asyncRoute(async (req: Request, res: Response) => {
     const appointmentId = String(req.params.id);
     const { messageText } = req.body;
 
@@ -878,7 +879,7 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
       messageSid: sendRes.messageSid,
       sentText: trimmed,
     });
-  });
+  }));
 
   // 3. Invoices
   router.get('/api/invoices', requireAdminAuth, (req: Request, res: Response) => {
@@ -886,14 +887,14 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
     res.json({ invoices });
   });
 
-  router.post('/api/invoices/:id/pay', requireAdminAuth, async (req: Request, res: Response) => {
+  router.post('/api/invoices/:id/pay', requireAdminAuth, asyncRoute(async (req: Request, res: Response) => {
     try {
       const invoice = await billing.markInvoicePaid(String(req.params.id));
       res.json({ success: true, invoice });
     } catch (err: any) {
       res.status(400).json({ error: err?.message || String(err) });
     }
-  });
+  }));
 
   // 4. Alerts
   router.get('/api/alerts', requireAdminAuth, (req: Request, res: Response) => {

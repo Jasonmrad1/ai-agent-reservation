@@ -1,0 +1,5 @@
+import {it,expect} from 'vitest';import request from 'supertest';import {createApp} from '../src/app.js';import {config} from '../src/config/index.js';import {MockWhatsAppGateway} from '../src/twilio/client.js';
+it('returns a checked HTTP error when an administrator send fails',async()=>{
+ const raw=new MockWhatsAppGateway();raw.shouldFail=true;const a=createApp({config:{...config,databaseUrl:':memory:'},gateway:raw});const c=a.db.customers.findOrCreate('+96171000161');const appt=a.db.appointments.create({customer_id:c.id,visit_type:'in_office',service:'Consultation',price:100,start_time:'2026-09-14T07:00:00Z',end_time:'2026-09-14T08:00:00Z',status:'booked'} as any);
+ const r=await request(a.app).post(`/admin/api/appointments/${appt.id}/send-message`).set('Authorization','Bearer '+config.adminSessionSecret).send({messageText:'private sentinel message'}).timeout({response:1000,deadline:2000});expect(r.status).toBe(500);expect(r.body.error).toBeTruthy();expect(r.text).not.toContain('private sentinel message');
+});
