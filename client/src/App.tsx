@@ -608,6 +608,7 @@ export const App: React.FC = () => {
         <main className="calendar-app-container">
           <div className="simulator-tab-card">
             <WhatsAppSimulator
+              adminKey={adminKey}
               onRefreshData={loadAppointments}
               showToast={showToast}
             />

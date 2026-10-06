@@ -4,7 +4,7 @@ import { AvailabilityRule, AvailabilityOverride, TimeInterval } from '../../type
 import { SupabaseSync } from '../supabase.js';
 
 export class AvailabilityRepository {
-  constructor(private db: DatabaseSync) {}
+  constructor(private db: DatabaseSync, private syncEnabled = true) {}
 
   private parseShifts(rawJson: string | null | undefined, fallbackStart: string, fallbackEnd: string): TimeInterval[] {
     if (rawJson) {
@@ -85,7 +85,7 @@ export class AvailabilityRepository {
     }
 
     const updated = this.getRuleForDay(dayOfWeek);
-    if (updated) SupabaseSync.syncAvailabilityRule(updated).catch(() => {});
+    if (updated && this.syncEnabled) SupabaseSync.syncAvailabilityRule(updated).catch(() => {});
   }
 
   public updateRulesBatch(
@@ -156,7 +156,7 @@ export class AvailabilityRepository {
         override.date
       );
       const res = { ...existing, ...override };
-      SupabaseSync.syncOverride(res).catch(() => {});
+      if (this.syncEnabled) SupabaseSync.syncOverride(res).catch(() => {});
       return res;
     }
 
@@ -183,13 +183,13 @@ export class AvailabilityRepository {
       shiftsJson
     );
 
-    SupabaseSync.syncOverride(newOverride).catch(() => {});
+    if (this.syncEnabled) SupabaseSync.syncOverride(newOverride).catch(() => {});
     return newOverride;
   }
 
   public deleteOverride(id: string): void {
     this.db.prepare('DELETE FROM availability_overrides WHERE id = ?').run(id);
-    SupabaseSync.deleteOverride(id).catch(() => {});
+    if (this.syncEnabled) SupabaseSync.deleteOverride(id).catch(() => {});
   }
 
   public deleteOverridesInRange(startDate: string, endDate: string): void {

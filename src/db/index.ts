@@ -34,18 +34,18 @@ export interface DatabaseContext {
   workflows: AppointmentWorkflowRepository;
 }
 
-export function createDatabaseContext(dbPath: string = ':memory:'): DatabaseContext {
+export function createDatabaseContext(dbPath: string = ':memory:', options: { syncEnabled?: boolean } = {}): DatabaseContext {
   const appDb = new AppDatabase(dbPath);
   return {
     appDb,
-    customers: new CustomerRepository(appDb.db),
+    customers: new CustomerRepository(appDb.db, options.syncEnabled ?? true),
     conversations: new ConversationRepository(appDb.db),
     messages: new MessageRepository(appDb.db),
-    appointments: new AppointmentRepository(appDb.db),
-    availability: new AvailabilityRepository(appDb.db),
-    invoices: new InvoiceRepository(appDb.db),
+    appointments: new AppointmentRepository(appDb.db, options.syncEnabled ?? true),
+    availability: new AvailabilityRepository(appDb.db, options.syncEnabled ?? true),
+    invoices: new InvoiceRepository(appDb.db, options.syncEnabled ?? true),
     alerts: new AdminAlertRepository(appDb.db),
-    settings: new SettingsRepository(appDb.db),
-    workflows: new AppointmentWorkflowRepository(appDb.db),
+    settings: new SettingsRepository(appDb.db, options.syncEnabled ?? true),
+    workflows: new AppointmentWorkflowRepository(appDb.db, options.syncEnabled ?? true),
   };
 }

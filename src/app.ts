@@ -25,6 +25,7 @@ export interface AppInstance {
   reminders: ReminderRunner;
   billing: BillingService;
   notifier: AdminNotificationService;
+  simulator: { db: DatabaseContext; gateway: MockWhatsAppGateway };
 }
 
 export interface CreateAppOptions {
@@ -155,12 +156,26 @@ export function createApp(options: CreateAppOptions = {}): AppInstance {
   app.use('/admin', adminRouter);
 
   // WhatsApp Simulator API (Zero-Twilio Testing Framework)
-  const simulatorRouter = createSimulatorRouter({
-    db,
-    agent,
-    reminders,
+  const sandboxDb = createDatabaseContext(cfg.nodeEnv === 'test' ? ':memory:' : 'data/simulator.sqlite', { syncEnabled: false });
+  const sandboxGateway = new MockWhatsAppGateway();
+  const sandboxCalendar = new InMemoryCalendarProvider();
+  const sandboxScheduler = new SchedulingEngine({ db: sandboxDb, calendar: sandboxCalendar });
+  const sandboxNotifier = new AdminNotificationService({ gateway: sandboxGateway, adminWhatsappNumber: cfg.adminWhatsappNumber, alerts: sandboxDb.alerts });
+  const sandboxAgent = new AgentCore({
+    client: process.env.SIMULATOR_LIVE_AI === 'true' ? geminiClient : new MockGeminiClient(),
+    scheduler: sandboxScheduler, notifier: sandboxNotifier,
   });
-  app.use('/api/simulator', simulatorRouter);
+  const simulatorRouter = createSimulatorRouter({
+    db: sandboxDb, agent: sandboxAgent,
+    reminders: new ReminderRunner({ db: sandboxDb, gateway: sandboxGateway, scheduler: sandboxScheduler, notifier: sandboxNotifier }),
+  });
+  app.use('/api/simulator', (req, res, next) => {
+    if (req.headers.authorization !== `Bearer ${cfg.adminSessionSecret}`) {
+      res.status(401).json({ error: 'Administrator authentication required' });
+      return;
+    }
+    next();
+  }, simulatorRouter);
 
   return {
     app,
@@ -172,5 +187,6 @@ export function createApp(options: CreateAppOptions = {}): AppInstance {
     reminders,
     billing,
     notifier,
+    simulator: { db: sandboxDb, gateway: sandboxGateway },
   };
 }

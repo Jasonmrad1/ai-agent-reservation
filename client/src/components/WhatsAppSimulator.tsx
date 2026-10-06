@@ -16,11 +16,13 @@ interface Message {
 }
 
 interface WhatsAppSimulatorProps {
+  adminKey: string;
   onRefreshData?: () => void;
   showToast?: (msg: string) => void;
 }
 
 export const WhatsAppSimulator: React.FC<WhatsAppSimulatorProps> = ({
+  adminKey,
   onRefreshData,
   showToast,
 }) => {
@@ -38,7 +40,7 @@ export const WhatsAppSimulator: React.FC<WhatsAppSimulatorProps> = ({
 
   const fetchHistory = async () => {
     try {
-      const res = await fetch(`/api/simulator/history?phone=${encodeURIComponent(phone)}`);
+      const res = await fetch(`/api/simulator/history?phone=${encodeURIComponent(phone)}`, { headers: { Authorization: `Bearer ${adminKey}` } });
       if (res.ok) {
         const data = await res.json();
         setMessages(data.messages || []);
@@ -73,7 +75,7 @@ export const WhatsAppSimulator: React.FC<WhatsAppSimulatorProps> = ({
     try {
       const res = await fetch('/api/simulator/message', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminKey}` },
         body: JSON.stringify({
           phone,
           name,

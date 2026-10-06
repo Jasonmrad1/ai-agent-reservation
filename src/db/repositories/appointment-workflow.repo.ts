@@ -4,7 +4,7 @@ import { PendingBookingWorkflow, WorkflowState, VisitType } from '../../types/in
 import { SupabaseSync } from '../supabase.js';
 
 export class AppointmentWorkflowRepository {
-  constructor(private db: DatabaseSync) {}
+  constructor(private db: DatabaseSync, private syncEnabled = true) {}
 
   public create(data: {
     customer_id: string;
@@ -75,7 +75,7 @@ export class AppointmentWorkflowRepository {
       workflow.updated_at
     );
 
-    SupabaseSync.syncWorkflow(workflow);
+    if (this.syncEnabled) SupabaseSync.syncWorkflow(workflow);
     return workflow;
   }
 
@@ -155,7 +155,7 @@ export class AppointmentWorkflowRepository {
       id
     );
 
-    SupabaseSync.syncWorkflow(updated);
+    if (this.syncEnabled) SupabaseSync.syncWorkflow(updated);
     return updated;
   }
 

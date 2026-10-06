@@ -2,7 +2,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { SupabaseSync } from '../supabase.js';
 
 export class SettingsRepository {
-  constructor(private db: DatabaseSync) {}
+  constructor(private db: DatabaseSync, private syncEnabled = true) {}
 
   public get(key: string, defaultValue: string = ''): string {
     try {
@@ -20,7 +20,7 @@ export class SettingsRepository {
       ON CONFLICT(key) DO UPDATE SET value = excluded.value
     `).run(key, value);
 
-    SupabaseSync.syncSetting(key, value).catch(() => {});
+    if (this.syncEnabled) SupabaseSync.syncSetting(key, value).catch(() => {});
   }
 
   public getAll(): Record<string, string> {

@@ -4,7 +4,7 @@ import { Invoice, InvoiceStatus } from '../../types/index.js';
 import { SupabaseSync } from '../supabase.js';
 
 export class InvoiceRepository {
-  constructor(private db: DatabaseSync) {}
+  constructor(private db: DatabaseSync, private syncEnabled = true) {}
 
   public create(data: {
     appointment_id: string;
@@ -46,7 +46,7 @@ export class InvoiceRepository {
       invoice.paid_at ?? null
     );
 
-    SupabaseSync.syncInvoice(invoice).catch(() => {});
+    if (this.syncEnabled) SupabaseSync.syncInvoice(invoice).catch(() => {});
     return invoice;
   }
 
@@ -85,7 +85,7 @@ export class InvoiceRepository {
     `).run(now, id);
 
     const inv = this.findById(id);
-    if (inv) SupabaseSync.syncInvoice(inv).catch(() => {});
+    if (inv && this.syncEnabled) SupabaseSync.syncInvoice(inv).catch(() => {});
   }
 
   private mapRow(row: any): Invoice {

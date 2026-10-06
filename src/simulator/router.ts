@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import { Router, Request, Response } from 'express';
 import { DatabaseContext } from '../db/index.js';
 import { AgentCore } from '../gemini/index.js';
@@ -80,7 +81,7 @@ export function createSimulatorRouter(options: SimulatorRouterOptions): Router {
         conversation.id,
         'inbound',
         incomingText,
-        'SIM_IN_' + Date.now(),
+        'SIM_IN_' + crypto.randomUUID(),
         'received',
         { simulated: true }
       );
@@ -111,7 +112,7 @@ export function createSimulatorRouter(options: SimulatorRouterOptions): Router {
         resetRateLimit(fromPhone);
 
         const resetReply = '🔄 Session Reset Complete!\nYour conversation history and active test booking have been cleared. You can now test a brand new booking from scratch.\n\nتمت إعادة ضبط المحادثة وحالة الحجز بنجاح. يمكنك الآن تجربة حجز جديد.';
-        db.messages.create(conversation.id, 'outbound', resetReply, 'SIM_OUT_' + Date.now(), 'sent');
+        db.messages.create(conversation.id, 'outbound', resetReply, 'SIM_OUT_' + crypto.randomUUID(), 'sent');
 
         return res.json({
           reply: resetReply,
@@ -125,7 +126,7 @@ export function createSimulatorRouter(options: SimulatorRouterOptions): Router {
       // 4. Security & Guardrails Check (0 tokens)
       const guardrail = validateInboundMessage(incomingText, fromPhone);
       if (!guardrail.allowed && guardrail.reply) {
-        db.messages.create(conversation.id, 'outbound', guardrail.reply, 'SIM_OUT_' + Date.now(), 'sent');
+        db.messages.create(conversation.id, 'outbound', guardrail.reply, 'SIM_OUT_' + crypto.randomUUID(), 'sent');
         return res.json({
           reply: guardrail.reply,
           customer,
@@ -139,7 +140,7 @@ export function createSimulatorRouter(options: SimulatorRouterOptions): Router {
       if (reminders) {
         const confirmationReply = reminders.handleConfirmationResponse(customer.id, incomingText);
         if (confirmationReply) {
-          db.messages.create(conversation.id, 'outbound', confirmationReply, 'SIM_OUT_' + Date.now(), 'sent');
+          db.messages.create(conversation.id, 'outbound', confirmationReply, 'SIM_OUT_' + crypto.randomUUID(), 'sent');
           return res.json({
             reply: confirmationReply,
             customer,
@@ -158,7 +159,7 @@ export function createSimulatorRouter(options: SimulatorRouterOptions): Router {
       });
 
       // 7. Store outbound reply in message history
-      db.messages.create(conversation.id, 'outbound', replyText, 'SIM_OUT_' + Date.now(), 'sent');
+      db.messages.create(conversation.id, 'outbound', replyText, 'SIM_OUT_' + crypto.randomUUID(), 'sent');
 
       const updatedAppointments = db.appointments.findUpcomingByCustomerId(customer.id, customer.phone);
 

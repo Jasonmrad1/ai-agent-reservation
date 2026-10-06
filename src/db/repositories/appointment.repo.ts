@@ -4,7 +4,7 @@ import { Appointment, AppointmentStatus, VisitType } from '../../types/index.js'
 import { SupabaseSync } from '../supabase.js';
 
 export class AppointmentRepository {
-  constructor(private db: DatabaseSync) {}
+  constructor(private db: DatabaseSync, private syncEnabled = true) {}
 
   public create(data: {
     customer_id: string;
@@ -61,7 +61,7 @@ export class AppointmentRepository {
       appt.updated_at
     );
 
-    SupabaseSync.syncAppointment(appt).catch(() => {});
+    if (this.syncEnabled) SupabaseSync.syncAppointment(appt).catch(() => {});
     return appt;
   }
 
@@ -175,7 +175,7 @@ export class AppointmentRepository {
     `).run(address, now, id);
 
     const appt = this.findById(id);
-    if (appt) SupabaseSync.syncAppointment(appt).catch(() => {});
+    if (appt && this.syncEnabled) SupabaseSync.syncAppointment(appt).catch(() => {});
   }
 
   public update(id: string, updates: Partial<Appointment>): void {
@@ -216,7 +216,7 @@ export class AppointmentRepository {
       updated.updated_at,
       id
     );
-    SupabaseSync.syncAppointment(updated).catch(() => {});
+    if (this.syncEnabled) SupabaseSync.syncAppointment(updated).catch(() => {});
   }
 
   public updateStatus(id: string, status: AppointmentStatus): void {
@@ -226,7 +226,7 @@ export class AppointmentRepository {
     `).run(status, now, id);
 
     const appt = this.findById(id);
-    if (appt) SupabaseSync.syncAppointment(appt).catch(() => {});
+    if (appt && this.syncEnabled) SupabaseSync.syncAppointment(appt).catch(() => {});
   }
 
   public reschedule(
@@ -255,7 +255,7 @@ export class AppointmentRepository {
     );
 
     const updated = this.findById(id);
-    if (updated) SupabaseSync.syncAppointment(updated).catch(() => {});
+    if (updated && this.syncEnabled) SupabaseSync.syncAppointment(updated).catch(() => {});
   }
 
   public cancel(id: string, notes?: string): void {
@@ -265,7 +265,7 @@ export class AppointmentRepository {
     `).run(notes || 'Cancelled by customer', now, id);
 
     const appt = this.findById(id);
-    if (appt) SupabaseSync.syncAppointment(appt).catch(() => {});
+    if (appt && this.syncEnabled) SupabaseSync.syncAppointment(appt).catch(() => {});
   }
 
   public setGoogleEventId(id: string, googleEventId: string): void {

@@ -19,7 +19,7 @@ export function normalizePhone(raw: string): string {
 }
 
 export class CustomerRepository {
-  constructor(private db: DatabaseSync) {}
+  constructor(private db: DatabaseSync, private syncEnabled = true) {}
 
   public findById(id: string): Customer | null {
     const row = this.db.prepare('SELECT * FROM customers WHERE id = ?').get(id) as any;
@@ -94,7 +94,7 @@ export class CustomerRepository {
       newCustomer.updated_at
     );
 
-    SupabaseSync.syncCustomer(newCustomer).catch(() => {});
+    if (this.syncEnabled) SupabaseSync.syncCustomer(newCustomer).catch(() => {});
     return newCustomer;
   }
 
@@ -105,7 +105,7 @@ export class CustomerRepository {
     `).run(name, now, id);
 
     const cust = this.findById(id);
-    if (cust) SupabaseSync.syncCustomer(cust).catch(() => {});
+    if (cust && this.syncEnabled) SupabaseSync.syncCustomer(cust).catch(() => {});
   }
 
   public updatePhone(id: string, phone: string): void {
@@ -115,7 +115,7 @@ export class CustomerRepository {
     `).run(phone, now, id);
 
     const cust = this.findById(id);
-    if (cust) SupabaseSync.syncCustomer(cust).catch(() => {});
+    if (cust && this.syncEnabled) SupabaseSync.syncCustomer(cust).catch(() => {});
   }
 
   public setOptOut(id: string, optedOut: boolean): void {
@@ -125,6 +125,6 @@ export class CustomerRepository {
     `).run(optedOut ? 1 : 0, now, id);
 
     const cust = this.findById(id);
-    if (cust) SupabaseSync.syncCustomer(cust).catch(() => {});
+    if (cust && this.syncEnabled) SupabaseSync.syncCustomer(cust).catch(() => {});
   }
 }
