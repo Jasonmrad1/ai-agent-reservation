@@ -1,5 +1,30 @@
 # Video demo for Dr. Ziad
 
+## Website recording with cinematic edits
+
+The current version is approximately **2 minutes 3 seconds**, at **1600 × 900**. It preserves the website's actual layout and controls. Every visible operation is performed through the browser UI. There are no injected captions, invented screens, or changes to the website's appearance. Editing adds fades and cross-dissolves between recorded scenes. English narration is optional.
+
+- [Narrated website video](../artifacts/demo-cinematic/Dr-Ziad-Website-Demo-Narrated.mp4).
+- [Website video without narration](../artifacts/demo-cinematic/Dr-Ziad-Website-Demo.mp4).
+
+The sequence starts by changing Monday and Tuesday opening hours to 09:30–17:30 and saving a 45-minute home-visit buffer. It then shows patient messages: booking, cancellation, booking again, rescheduling and collecting a home address. The clinic calendar follows: manual booking, moving a visit, Quick WhatsApp, cancellation and completion.
+
+The application runs with fictional patients, temporary in-memory databases and offline provider mocks. The built-in simulator has its own isolated records and schedule; the clinic hours changed in the opening scene belong to the clinic database. Quick WhatsApp demonstrates mock delivery, not a real message to a phone. Completion generates an invoice in storage; the recording does not add an invoice screen to the product.
+
+The recorder checks saved hours and buffer settings, patient reply patterns and appointment counts, calendar appointment statuses and invoice creation. This demonstrates the recorded workflows, not every possible conversation or live provider integration.
+
+After installing the tools below and building the application, regenerate this version with:
+
+```powershell
+node scripts/record-website-demo.mjs
+node scripts/edit-website-demo.mjs
+node scripts/narrate-demo.mjs artifacts/demo-cinematic Dr-Ziad-Website-Demo.mp4
+```
+
+Raw footage, scene screenshots, conversation responses and chapter timings are kept in `artifacts/demo-cinematic`. The scripts alter no application code and perform no hidden booking or schedule mutations. The exported narrated MP4 was decoded completely without errors, and its audio levels were checked to confirm the narration is present.
+
+## Earlier annotated overview
+
 The completed recording is approximately **2 minutes 14 seconds**, at **1600 × 900**.
 
 - [Narrated MP4](../artifacts/demo/Dr-Ziad-MVP-Demo-Narrated.mp4): English computer-generated voice and captions.
