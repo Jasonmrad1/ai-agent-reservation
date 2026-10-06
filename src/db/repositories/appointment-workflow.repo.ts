@@ -86,7 +86,7 @@ export class AppointmentWorkflowRepository {
       WHERE customer_id = ?
         AND state NOT IN ('booked', 'cancelled', 'expired', 'failed')
         AND expires_at > ?
-      ORDER BY updated_at DESC
+      ORDER BY updated_at DESC, rowid DESC
       LIMIT 1
     `).get(customerId, nowIso) as any;
 
@@ -97,7 +97,7 @@ export class AppointmentWorkflowRepository {
     const row = this.db.prepare(`
       SELECT * FROM pending_booking_workflows
       WHERE customer_id = ?
-      ORDER BY updated_at DESC
+      ORDER BY updated_at DESC, rowid DESC
       LIMIT 1
     `).get(customerId) as any;
 
@@ -185,7 +185,7 @@ export class AppointmentWorkflowRepository {
   }
 
   public listAll(): PendingBookingWorkflow[] {
-    const rows = this.db.prepare('SELECT * FROM pending_booking_workflows ORDER BY updated_at DESC').all() as any[];
+    const rows = this.db.prepare('SELECT * FROM pending_booking_workflows ORDER BY updated_at DESC, rowid DESC').all() as any[];
     return rows.map((r) => this.mapRow(r));
   }
 
