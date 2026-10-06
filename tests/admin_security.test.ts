@@ -3,6 +3,13 @@ import request from 'supertest';
 import { createApp } from '../src/app.js';
 import { config } from '../src/config/index.js';
 const make = () => createApp({ config: { ...config, nodeEnv: 'development', databaseUrl: ':memory:', adminSessionSecret: 'audit-secret' } });
+it('preserves a zero buffer and rejects invalid values without mutating settings',async()=>{
+ const a=make();const api=request(a.app);
+ expect((await api.post('/admin/api/settings').set('Authorization','Bearer audit-secret').send({home_visit_buffer_minutes:0})).body.home_visit_buffer_minutes).toBe(0);
+ expect((await api.get('/admin/api/settings').set('Authorization','Bearer audit-secret')).body.home_visit_buffer_minutes).toBe(0);
+ for(const value of ['abc',-1,1.5,481])expect((await api.post('/admin/api/settings').set('Authorization','Bearer audit-secret').send({home_visit_buffer_minutes:value})).status).toBe(400);
+ expect(a.db.settings.get('home_visit_buffer_minutes')).toBe('0');
+});
 
 it('does not expose refresh tokens through settings', async () => {
   const a=make(); a.db.settings.set('google_calendar_refresh_token','sentinel');

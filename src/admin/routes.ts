@@ -322,7 +322,7 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
         weekBufferMinutes = weekVal;
       }
     }
-    const defaultBufferMinutes = parseInt(db.settings.get('home_visit_buffer_minutes', '30'), 10) || 30;
+    const defaultBufferMinutes = Number(db.settings.get('home_visit_buffer_minutes', '30'));
     res.json({
       home_visit_buffer_minutes: weekBufferMinutes !== undefined ? weekBufferMinutes : defaultBufferMinutes,
       default_buffer_minutes: defaultBufferMinutes,
@@ -333,7 +333,9 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
   router.post('/api/settings', requireAdminAuth, (req: Request, res: Response) => {
     const { home_visit_buffer_minutes, week_date, set_as_default } = req.body;
     if (home_visit_buffer_minutes !== undefined) {
-      const minutes = Math.max(0, parseInt(String(home_visit_buffer_minutes), 10) || 0);
+      const minutes = Number(home_visit_buffer_minutes);
+      if (!Number.isInteger(minutes) || minutes < 0 || minutes > 480 || String(home_visit_buffer_minutes).trim()==='') {res.status(400).json({error:'Travel buffer must be an integer between 0 and 480'});return;}
+      if(week_date && (!/^\d{4}-\d{2}-\d{2}$/.test(week_date) || !Number.isFinite(Date.parse(week_date)))) {res.status(400).json({error:'Invalid week date'});return;}
       if (week_date && !set_as_default) {
         db.settings.set(`home_visit_buffer_minutes_week_${week_date}`, String(minutes));
       } else {
@@ -343,7 +345,7 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
         }
       }
     }
-    const bufferMinutes = parseInt(db.settings.get('home_visit_buffer_minutes', '30'), 10) || 30;
+    const bufferMinutes = Number(db.settings.get('home_visit_buffer_minutes', '30'));
     res.json({
       success: true,
       home_visit_buffer_minutes: bufferMinutes,
