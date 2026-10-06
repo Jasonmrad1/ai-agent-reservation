@@ -1580,7 +1580,7 @@ export class AgentCore {
     // If customer shares a location pin and has an active booking workflow awaiting address:
     if (incomingText.includes('📍 Shared Location') && activeWorkflow && activeWorkflow.date && activeWorkflow.time && activeWorkflow.state !== 'booked') {
       const pinAddress = incomingText.match(/📍 Shared Location: ([\s\S]*?)(?:\s*\| Maps:|$)/)?.[1]?.trim() || incomingText;
-      await this.executeTool(
+      const bookingResult = await this.executeTool(
         {
           name: 'book_appointment',
           args: {
@@ -1597,6 +1597,8 @@ export class AgentCore {
         conversation,
         db
       );
+
+      if (!bookingResult?.appointment_id || bookingResult.error) return `Your location was received, but the appointment could not be confirmed. ${bookingResult?.error || 'Please choose another available time.'}`;
 
       if (db.workflows) {
         db.workflows.transition(activeWorkflow.id, 'booked');
