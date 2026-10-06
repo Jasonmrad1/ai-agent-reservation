@@ -129,6 +129,11 @@ export function createApp(options: CreateAppOptions = {}): AppInstance {
   app.get('/simulator', (_req, res) => res.redirect('/admin/simulator'));
 
   // Twilio Webhooks
+  app.use(['/api/webhook/whatsapp','/webhook/whatsapp'],(req,res,next)=>{
+    if(req.path.endsWith('/status')){next();return;}
+    if((cfg.mode==='simulator' && cfg.nodeEnv!=='test') || (cfg.nodeEnv==='production' && cfg.mode==='clinic' && !readiness(db,cfg).ready)){res.status(503).send('Clinic messaging is not activated');return;}
+    next();
+  });
   const webhookRouter = createWebhookRouter({
     db,
     gateway,
