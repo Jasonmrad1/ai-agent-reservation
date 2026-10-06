@@ -63,7 +63,7 @@ export function createApp(options: CreateAppOptions = {}): AppInstance {
           cfg.twilioAuthToken,
           cfg.twilioWhatsappNumber || '',
           db.alerts,
-          process.env.STATUS_CALLBACK_URL
+          cfg.statusCallbackUrl
         )
       : new MockWhatsAppGateway()
   );

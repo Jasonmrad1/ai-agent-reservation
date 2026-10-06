@@ -5,6 +5,7 @@ export interface AppConfig {
   settingsEncryptionKey?:string;
   mode?: 'clinic' | 'simulator';
   publicBaseUrl?: string;
+  statusCallbackUrl?:string;
   port: number;
   databaseUrl: string;
   adminSessionSecret: string;
@@ -40,6 +41,7 @@ export interface AppConfig {
 export const config: AppConfig = {
   settingsEncryptionKey:process.env.SETTINGS_ENCRYPTION_KEY,
   publicBaseUrl: process.env.PUBLIC_BASE_URL,
+  statusCallbackUrl:process.env.STATUS_CALLBACK_URL,
   mode: process.env.APP_MODE === 'clinic' ? 'clinic' : 'simulator',
   port: parseInt(process.env.PORT || '3000', 10),
   databaseUrl: process.env.DATABASE_URL || 'data/automation.sqlite',
@@ -85,6 +87,7 @@ export function validateConfig(cfg: AppConfig): void {
   let base:URL;try{base=new URL(cfg.publicBaseUrl || '');}catch{throw new Error('Production clinic configuration requires a canonical HTTPS public URL');}
   if(base.protocol!=='https:' || base.username || base.password || base.search || base.hash || base.pathname!=='/')throw new Error('Production clinic configuration requires a canonical HTTPS origin');
   if(cfg.googleCalendarRedirectUri!==`${base.origin}/admin/oauth2callback`)throw new Error('Production Google callback must match the canonical public origin');
+  if(cfg.statusCallbackUrl!==`${base.origin}/api/webhook/whatsapp/status`)throw new Error('Production status callback must match the canonical signed webhook URL');
   if(!/^[a-f0-9]{64}$/i.test(cfg.settingsEncryptionKey || ''))throw new Error('Production settings encryption key must be 32 random bytes encoded as hex');
   for(const phone of [cfg.adminWhatsappNumber,cfg.twilioWhatsappNumber])if(!/^whatsapp:\+[1-9]\d{7,14}$/.test(phone || ''))throw new Error('Production configuration requires canonical international WhatsApp numbers');
 }
