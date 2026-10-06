@@ -1,3 +1,4 @@
+import {isUrgentMessage} from '../security/urgent.js';
 import crypto from 'node:crypto';
 import { Router, Request, Response } from 'express';
 import { DatabaseContext } from '../db/index.js';
@@ -124,7 +125,7 @@ export function createSimulatorRouter(options: SimulatorRouterOptions): Router {
       }
 
       // 4. Security & Guardrails Check (0 tokens)
-      const guardrail = validateInboundMessage(incomingText, fromPhone);
+      const guardrail = isUrgentMessage(incomingText) ? {allowed:true,reply:undefined,reason:undefined} : validateInboundMessage(incomingText, fromPhone);
       if (!guardrail.allowed && guardrail.reply) {
         db.messages.create(conversation.id, 'outbound', guardrail.reply, 'SIM_OUT_' + crypto.randomUUID(), 'sent');
         return res.json({

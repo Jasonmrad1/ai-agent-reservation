@@ -158,7 +158,7 @@ export function createWebhookRouter(options: WebhookHandlerOptions) {
     }
 
     // 6.2 Security, Prompt-Injection & Anti-Abuse Guardrails (0 Gemini tokens spent)
-    const guardrail = validateInboundMessage(incomingText, fromPhone);
+    const guardrail = isUrgentMessage(incomingText) ? {allowed:true,reply:undefined,reason:undefined} : validateInboundMessage(incomingText, fromPhone);
     if (!guardrail.allowed && guardrail.reply) {
       await gateway.sendMessage(fromPhone, guardrail.reply, customer.id);
       db.messages.create(conversation.id, 'outbound', guardrail.reply, null, 'sent');

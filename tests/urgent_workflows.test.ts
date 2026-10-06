@@ -4,3 +4,8 @@ it.each(['I have severe chest pain and shortness of breath','عندي ألم ف�
  const reply=await a.agent.processMessage({customer:c,conversation:v,incomingText:text,db:a.db});
  expect(reply).toContain('140');expect(a.db.appointments.findUpcomingByCustomerId(c.id)).toHaveLength(0);expect(a.db.conversations.findActiveByCustomerId(c.id)?.status).toBe('escalated');
 });
+import request from 'supertest';
+it('prioritizes emergency instructions over message length guardrails',async()=>{
+ const a=createApp({config:{...config,databaseUrl:':memory:'}});await request(a.app).post('/api/webhook/whatsapp').send({From:'+96171000126',Body:'severe chest pain '+ 'details '.repeat(100),MessageSid:'SM_LONG_URGENT'});
+ expect((a.gateway as any).sentMessages.find((m:any)=>m.to.includes('96171000126')).body).toContain('140');
+});
