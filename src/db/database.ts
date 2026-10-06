@@ -22,6 +22,8 @@ export class AppDatabase {
     // Enable foreign keys
     this.db.exec('PRAGMA foreign_keys = ON;');
     this.db.exec(SCHEMA_SQL);
+    const legacyAppointments=(this.db.prepare('SELECT count(*) AS n FROM appointments').get() as any).n;
+    this.db.prepare("INSERT OR IGNORE INTO settings(key,value) VALUES ('timezone_storage_version',?)").run(legacyAppointments ? 'legacy-review' : 'utc-v1');
 
     // Safe column migrations for existing SQLite databases
     try {
