@@ -1009,11 +1009,13 @@ export class MockGeminiClient implements GeminiClient {
     // Heuristic mock responses based on incoming keywords if not explicitly overridden
     const lower = params.incomingMessage.toLowerCase();
     if (lower.includes('available') || lower.includes('slots') || lower.includes('free')) {
+      const requested=parseDateTimeFromMessage(params.incomingMessage);
+      if(!requested?.date) return {text:'Which day would you like to check for available appointments?'};
       return {
         toolCalls: [
           {
             name: 'check_availability',
-            args: { date: '2026-09-10', visit_type: lower.includes('home') ? 'home_visit' : 'in_office' },
+            args: { date: requested.date, visit_type: lower.includes('home') ? 'home_visit' : 'in_office' },
           },
         ],
       };
