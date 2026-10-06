@@ -235,8 +235,10 @@ export function createWebhookRouter(options: WebhookHandlerOptions) {
     for(const job of jobs) {
       if(activeSenders.has(job.sender)) continue;
       activeSenders.add(job.sender);
-      const claim=db.appDb.db.prepare("UPDATE inbound_jobs SET status='processing' WHERE message_sid=? AND status='pending'").run(job.message_sid);
-      if (!claim.changes) {activeSenders.delete(job.sender);continue;}
+      try {
+        const claim=db.appDb.db.prepare("UPDATE inbound_jobs SET status='processing' WHERE message_sid=? AND status='pending'").run(job.message_sid);
+        if (!claim.changes) {activeSenders.delete(job.sender);continue;}
+      } catch(error) {activeSenders.delete(job.sender);throw error;}
       const dummy:any={type(){return this;},status(){return this;},send(){return this;},json(){return this;}};
       try {
         await processInboundPayload({body:JSON.parse(job.payload)} as Request,dummy);
