@@ -1704,7 +1704,7 @@ export class AgentCore {
           state: 'awaiting_address',
         });
       } else if (!incomingText.includes('📍 Shared Location') && !hasDateTimeKeywords && !/\b(cancel|reschedule|change|no|stop|ghayyer|elghe)\b/i.test(incomingText)) {
-        const address = incomingText.trim();
+        const address = incomingText.trim().replace(/^(?:my\s+)?(?:home\s+)?address\s*(?:is\s+|:\s*)/i,'').trim();
         const bookRes = await this.executeTool(
           {
             name: 'book_appointment',
@@ -2229,6 +2229,10 @@ ${upcomingScheduleDays.join('\n')}`;
         try {
           const visitType: VisitType = args.visit_type === 'home_visit' ? 'home_visit' : 'in_office';
           if (visitType === 'home_visit' && !args.address) {
+            const pending=db.workflows.findActiveByCustomerId(customer.id);
+            const details={date:args.date,time:args.time,visit_type:'home_visit' as const,service:args.service || 'Home Visit'};
+            if(pending) db.workflows.transition(pending.id,'awaiting_address',details);
+            else db.workflows.create({customer_id:customer.id,conversation_id:conversation.id,state:'awaiting_address',...details});
             return { error: 'Home address is required for booking a home visit. Please provide your address.' };
           }
 
