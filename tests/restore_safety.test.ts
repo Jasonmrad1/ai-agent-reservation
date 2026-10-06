@@ -1,0 +1,2 @@
+import {it,expect} from 'vitest';import {SupabaseSync} from '../src/db/supabase.js';import {createDatabaseContext} from '../src/db/index.js';
+it('rejects an implicit cloud restore instead of mutating local data',async()=>{const db=createDatabaseContext(':memory:');const c=db.customers.findOrCreate('+96171000111');await expect(SupabaseSync.hydrateFromSupabase(db)).rejects.toThrow(/explicit|restore/i);expect(db.customers.findById(c.id)).not.toBeNull();});
