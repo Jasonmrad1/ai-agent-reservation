@@ -79,4 +79,9 @@ export function validateConfig(cfg: AppConfig): void {
       !cfg.geminiApiKey || !cfg.googleCalendarClientId || !cfg.googleCalendarClientSecret) {
     throw new Error('Incomplete production clinic configuration: Twilio, Gemini and Google Calendar are required');
   }
+  if(cfg.databaseUrl===':memory:' || !cfg.databaseUrl)throw new Error('Production clinic configuration requires persistent SQLite storage');
+  let base:URL;try{base=new URL(cfg.publicBaseUrl || '');}catch{throw new Error('Production clinic configuration requires a canonical HTTPS public URL');}
+  if(base.protocol!=='https:' || base.username || base.password || base.search || base.hash || base.pathname!=='/')throw new Error('Production clinic configuration requires a canonical HTTPS origin');
+  if(cfg.googleCalendarRedirectUri!==`${base.origin}/admin/oauth2callback`)throw new Error('Production Google callback must match the canonical public origin');
+  for(const phone of [cfg.adminWhatsappNumber,cfg.twilioWhatsappNumber])if(!/^whatsapp:\+[1-9]\d{7,14}$/.test(phone || ''))throw new Error('Production configuration requires canonical international WhatsApp numbers');
 }
