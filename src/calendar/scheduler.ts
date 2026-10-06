@@ -168,13 +168,13 @@ export class SchedulingEngine {
     // Search range for existing appointments and events across the entire day
     const firstShiftStart = shifts[0].startMs;
     const lastShiftEnd = shifts[shifts.length - 1].endMs;
-    const searchStart = new Date(firstShiftStart - 2 * 60 * 60 * 1000);
-    const searchEnd = new Date(lastShiftEnd + 2 * 60 * 60 * 1000);
+    const searchStart = new Date(firstShiftStart - Math.max(homeBufferMs, 2 * 60 * 60 * 1000));
+    const searchEnd = new Date(lastShiftEnd + Math.max(homeBufferMs, 2 * 60 * 60 * 1000));
 
-    const dbAppointments = this.db.appointments.getAppointmentsInRange(
-      searchStart.toISOString(),
-      searchEnd.toISOString()
-    );
+    const dbAppointments = [
+      ...this.db.appointments.getAppointmentsInRange(searchStart.toISOString(), searchEnd.toISOString()),
+      ...(this.db.appDb.db.prepare('SELECT * FROM scheduling_reservations WHERE start_time < ? AND end_time > ?').all(searchEnd.toISOString(),searchStart.toISOString()) as Appointment[]),
+    ];
 
     const calEvents = await this.calendar.listEvents(searchStart, searchEnd);
 
@@ -301,7 +301,7 @@ export class SchedulingEngine {
           const evEndMs = ev.end.getTime();
 
           // Candidate directly overlaps event OR candidate (home visit) return buffer overlaps next event start
-          if (currentStartMs < evEndMs && (currentStartMs + slotDurationMs + commuteGap) > evStartMs) {
+          if ((currentStartMs - commuteGap) < evEndMs && (currentStartMs + slotDurationMs + commuteGap) > evStartMs) {
             conflict = true;
             break;
           }
@@ -341,7 +341,7 @@ export class SchedulingEngine {
     this.validateWindow(startTime, endTime, params.startTime, params.visitType, params.allowOverride);
     const reservation = this.acquireReservation(params.customerId, startTime, endTime, params.visitType);
     try {
-    const bufferMinutes = this.getHomeVisitBufferMinutes();
+    const bufferMinutes = this.getHomeVisitBufferMinutes(startTime.toISOString().slice(0,10));
     const bufferMs = (params.visitType === 'home_visit' ? bufferMinutes : 0) * 60 * 1000;
 
     {
@@ -396,7 +396,7 @@ export class SchedulingEngine {
       // Only home visits require a return commute buffer after the appointment
       const calCommuteGap = (params.visitType === 'home_visit' ? bufferMinutes : 0) * 60 * 1000;
       const calEvents = await this.calendar.listEvents(
-        startTime,
+        new Date(startTime.getTime() - calCommuteGap),
         new Date(endTime.getTime() + calCommuteGap)
       );
       for (const ev of calEvents) {
@@ -409,7 +409,7 @@ export class SchedulingEngine {
         }
         const evStartMs = ev.start.getTime();
         const evEndMs = ev.end.getTime();
-        if (startTime.getTime() < evEndMs && (endTime.getTime() + calCommuteGap) > evStartMs) {
+        if ((startTime.getTime() - calCommuteGap) < evEndMs && (endTime.getTime() + calCommuteGap) > evStartMs) {
           throw new Error(`Time slot conflict: Google Calendar has an existing event at this time.`);
         }
       }
@@ -479,7 +479,7 @@ export class SchedulingEngine {
     if (!['booked','confirmed','rescheduled'].includes(existing.status)) throw new Error('Only active appointments can be rescheduled');
     const reservation = this.acquireReservation(existing.customer_id, newStart, newEnd, visitType, existing.id);
     try {
-    const bufferMinutes = this.getHomeVisitBufferMinutes();
+    const bufferMinutes = this.getHomeVisitBufferMinutes(newStart.toISOString().slice(0,10));
     const bufferMs = (visitType === 'home_visit' ? bufferMinutes : 0) * 60 * 1000;
 
     {
