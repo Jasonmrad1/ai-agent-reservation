@@ -3,6 +3,11 @@ import request from 'supertest';
 import { createApp } from '../src/app.js';
 import { config } from '../src/config/index.js';
 const make = () => createApp({ config: { ...config, nodeEnv: 'development', databaseUrl: ':memory:', adminSessionSecret: 'audit-secret' } });
+it('reports the same injected Google configuration used by the provider',async()=>{
+ const a=createApp({config:{...config,databaseUrl:':memory:',googleCalendarClientId:'configured-id',googleCalendarClientSecret:'configured-secret',googleCalendarId:'clinic-calendar'}});
+ const r=await request(a.app).get('/admin/api/google-calendar/status').set('Authorization','Bearer '+config.adminSessionSecret);
+ expect(r.body.configured).toBe(true);expect(r.body.calendarId).toBe('clinic-calendar');
+});
 it('preserves a zero buffer and rejects invalid values without mutating settings',async()=>{
  const a=make();const api=request(a.app);
  expect((await api.post('/admin/api/settings').set('Authorization','Bearer audit-secret').send({home_visit_buffer_minutes:0})).body.home_visit_buffer_minutes).toBe(0);

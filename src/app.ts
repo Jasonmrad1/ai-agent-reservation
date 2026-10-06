@@ -152,6 +152,9 @@ export function createApp(options: CreateAppOptions = {}): AppInstance {
   const adminRouter = createAdminRouter({
     auth: adminAuth,
     calendarRedirectUri: cfg.googleCalendarRedirectUri,
+    calendarClientId: cfg.googleCalendarClientId,
+    calendarClientSecret: cfg.googleCalendarClientSecret,
+    calendarId: cfg.googleCalendarId,
     db,
     billing,
     adminSecret: cfg.adminSessionSecret,

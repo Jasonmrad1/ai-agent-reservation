@@ -17,6 +17,9 @@ export interface AdminRouterOptions {
   adminSecret: string;
   auth?: AdminAuth;
   calendarRedirectUri?: string;
+  calendarClientId?: string;
+  calendarClientSecret?: string;
+  calendarId?: string;
   scheduler?: SchedulingEngine;
   gateway?: WhatsAppGateway;
   geminiClient?: GeminiClient;
@@ -356,8 +359,8 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
   router.get('/auth/google', requireAdminAuth, async (req: Request, res: Response) => {
     const state = auth.oauthState(req);
     if (!state) { res.status(401).send('Sign in before connecting Google Calendar'); return; }
-    const clientId = process.env.GOOGLE_CALENDAR_CLIENT_ID;
-    const clientSecret = process.env.GOOGLE_CALENDAR_CLIENT_SECRET;
+    const clientId = options.calendarClientId;
+    const clientSecret = options.calendarClientSecret;
     const redirectUri = options.calendarRedirectUri || process.env.GOOGLE_CALENDAR_REDIRECT_URI || `${req.protocol}://${req.get('host')}/admin/oauth2callback`;
 
     if (!clientId || !clientSecret) {
@@ -406,8 +409,8 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
     }
 
     try {
-      const clientId = process.env.GOOGLE_CALENDAR_CLIENT_ID;
-      const clientSecret = process.env.GOOGLE_CALENDAR_CLIENT_SECRET;
+      const clientId = options.calendarClientId;
+      const clientSecret = options.calendarClientSecret;
       const redirectUri = options.calendarRedirectUri || process.env.GOOGLE_CALENDAR_REDIRECT_URI || `${req.protocol}://${req.get('host')}/admin/oauth2callback`;
 
       const { google } = await import('googleapis');
@@ -444,12 +447,12 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
   router.get('/api/google-calendar/status', requireAdminAuth, (req: Request, res: Response) => {
     const refreshToken = db.settings.get('google_calendar_refresh_token', '');
     const connectedAt = db.settings.get('google_calendar_connected_at', '');
-    const hasConfig = Boolean(process.env.GOOGLE_CALENDAR_CLIENT_ID && process.env.GOOGLE_CALENDAR_CLIENT_SECRET);
+    const hasConfig = Boolean(options.calendarClientId && options.calendarClientSecret);
     res.json({
       configured: hasConfig,
       connected: Boolean(refreshToken),
       connectedAt: connectedAt || null,
-      calendarId: process.env.GOOGLE_CALENDAR_ID || 'primary',
+      calendarId: options.calendarId || 'primary',
     });
   });
 
