@@ -95,3 +95,9 @@ export function beirutDateTimeToUtc(date: string, time: string): Date {
   if (matches.length!==1) throw new Error('Clinic time is ambiguous or nonexistent during daylight saving change; choose another time');
   return matches[0];
 }
+/** First real instant of a clinic date, including dates whose midnight is skipped. */
+export function beirutDayStart(date:string):Date {
+ const noon=beirutDateTimeToUtc(date,'12:00').getTime();let low=noon-36*3600000,high=noon;
+ while(low<high){const mid=Math.floor((low+high)/2);if(getBeirutTimeInfo(new Date(mid)).dateStr<date)low=mid+1;else high=mid;}
+ return new Date(low);
+}

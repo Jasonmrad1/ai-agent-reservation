@@ -1,4 +1,4 @@
-import { beirutDateTimeToUtc } from '../utils/timezone.js';
+import { beirutDayStart } from '../utils/timezone.js';
 import crypto from 'node:crypto';
 import { CalendarEvent } from '../types/index.js';
 import { withRetry } from '../utils/retry.js';
@@ -140,8 +140,8 @@ export class GoogleCalendarProvider implements CalendarProvider {
       for (const item of res.data.items || []) {
         if (item.status==='cancelled') continue;
         results.push({id:item.id,summary:item.summary || '',description:item.description,location:item.location,
-          start:item.start.dateTime ? new Date(item.start.dateTime) : beirutDateTimeToUtc(item.start.date,'00:00'),
-          end:item.end.dateTime ? new Date(item.end.dateTime) : beirutDateTimeToUtc(item.end.date,'00:00')});
+          start:item.start.dateTime ? new Date(item.start.dateTime) : beirutDayStart(item.start.date),
+          end:item.end.dateTime ? new Date(item.end.dateTime) : beirutDayStart(item.end.date)});
       }
       pageToken=res.data.nextPageToken;
     } while(pageToken);
