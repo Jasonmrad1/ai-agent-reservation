@@ -2,6 +2,8 @@
 
 ## Recommended: simulator journey with visible saved results
 
+[Editable demo and manual test script](DEMO_SCRIPT.md): exact messages, narration, click paths and calendar checkpoints for each scene.
+
 [Watch the simulator demo](../artifacts/demo-simulator/Dr-Ziad-Simulator-Demo.mp4).
 
 Approximately **2 minutes 12 seconds**, in **1080p**. [Interactive chapter player](../artifacts/demo-simulator/Watch-Demo.html) lets viewers jump between workflows when opened in a browser alongside the MP4.
