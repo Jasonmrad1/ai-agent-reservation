@@ -45,7 +45,7 @@ export function createWebhookRouter(options: WebhookHandlerOptions) {
       res.status(400).send('Invalid webhook payload'); return;
     }
     const messageSid = params.MessageSid;
-    const fromPhone = params.From;
+    const fromPhone = normalizePhone(params.From) || params.From;
     const profileName = params.ProfileName;
 
     // 1. Extract body, location pin, or voice notes
@@ -233,12 +233,13 @@ export function createWebhookRouter(options: WebhookHandlerOptions) {
   async function drain():Promise<void> {
     const jobs=db.appDb.db.prepare("SELECT * FROM inbound_jobs WHERE status='pending' ORDER BY created_at,rowid LIMIT 50").all() as any[];
     for(const job of jobs) {
-      if(activeSenders.has(job.sender)) continue;
-      activeSenders.add(job.sender);
+      const sender=normalizePhone(job.sender) || job.sender;
+      if(activeSenders.has(sender)) continue;
+      activeSenders.add(sender);
       try {
         const claim=db.appDb.db.prepare("UPDATE inbound_jobs SET status='processing' WHERE message_sid=? AND status='pending'").run(job.message_sid);
-        if (!claim.changes) {activeSenders.delete(job.sender);continue;}
-      } catch(error) {activeSenders.delete(job.sender);throw error;}
+        if (!claim.changes) {activeSenders.delete(sender);continue;}
+      } catch(error) {activeSenders.delete(sender);throw error;}
       const dummy:any={type(){return this;},status(){return this;},send(){return this;},json(){return this;}};
       try {
         await processInboundPayload({body:JSON.parse(job.payload)} as Request,dummy);
@@ -246,7 +247,7 @@ export function createWebhookRouter(options: WebhookHandlerOptions) {
       } catch(error:any) {
         db.appDb.db.prepare("UPDATE inbound_jobs SET status='review',last_error=? WHERE message_sid=?").run(String(error.message || error).slice(0,500),job.message_sid);
         db.alerts.create({type:'system_error',title:'Inbound processing needs review',details:`Message ${job.message_sid} failed. Check appointment/calendar outcomes before replaying.`});
-      } finally {activeSenders.delete(job.sender);}
+      } finally {activeSenders.delete(sender);}
     }
   }
   function recoverInterrupted():void {
@@ -260,7 +261,7 @@ export function createWebhookRouter(options: WebhookHandlerOptions) {
     if(typeof p.From!=='string' || typeof p.MessageSid!=='string' || !p.MessageSid || (p.Body!=null && typeof p.Body!=='string')) {res.status(400).send('Invalid webhook payload');return;}
     if(!p.Body?.trim() && !(p.Latitude && p.Longitude) && !(Number(p.NumMedia)>0)) {res.status(400).send('Missing message body');return;}
     if(!normalizePhone(p.From)){res.status(400).send('Invalid sender phone');return;}
-    db.appDb.db.prepare('INSERT OR IGNORE INTO inbound_jobs (message_sid,sender,payload,created_at) VALUES (?,?,?,?)').run(p.MessageSid,p.From,JSON.stringify(p),new Date().toISOString());
+    db.appDb.db.prepare('INSERT OR IGNORE INTO inbound_jobs (message_sid,sender,payload,created_at) VALUES (?,?,?,?)').run(p.MessageSid,normalizePhone(p.From)!,JSON.stringify(p),new Date().toISOString());
     if(!options.asyncProcessing) await drain();
     res.type('text/xml').send('<Response/>');
   }
