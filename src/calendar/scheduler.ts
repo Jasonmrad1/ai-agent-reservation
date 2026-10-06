@@ -96,6 +96,7 @@ export class SchedulingEngine {
    * Calculates active working shift segments for a given date, supporting split/non-continuous hours.
    */
   public getActiveShiftsForDate(dateStr: string): ActiveShift[] {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr) || !Number.isFinite(new Date(`${dateStr}T00:00:00Z`).getTime()) || new Date(`${dateStr}T00:00:00Z`).toISOString().slice(0,10) !== dateStr) throw new Error('Invalid calendar date');
     const override = this.db.availability.getOverrideForDate(dateStr);
     if (override && override.is_unavailable) {
       return []; // Doctor is completely off/vacation
@@ -149,6 +150,8 @@ export class SchedulingEngine {
     durationMinutes: number = this.defaultSlotDurationMinutes,
     referenceNow?: Date
   ): Promise<string[]> {
+    if (!Number.isInteger(durationMinutes) || durationMinutes <= 0 || durationMinutes > 480) throw new Error('Invalid appointment duration');
+    if (dateStr < getBeirutTimeInfo(referenceNow || new Date()).dateStr) return [];
     const shifts = this.getActiveShiftsForDate(dateStr);
     if (shifts.length === 0) {
       return [];
@@ -328,14 +331,16 @@ export class SchedulingEngine {
     const durationMs = this.defaultSlotDurationMinutes * 60 * 1000;
     const endTime = params.endTime ? new Date(params.endTime) : new Date(startTime.getTime() + durationMs);
 
+    this.validateWindow(startTime, endTime, params.startTime, params.visitType, params.allowOverride);
     const bufferMinutes = this.getHomeVisitBufferMinutes();
     const bufferMs = (params.visitType === 'home_visit' ? bufferMinutes : 0) * 60 * 1000;
 
-    if (!params.allowOverride) {
+    {
       // Check if slot falls inside one of the active shifts for the day
       const dateStr = startTime.toISOString().split('T')[0];
       const shifts = this.getActiveShiftsForDate(dateStr);
-      if (shifts.length > 0) {
+      if (!params.allowOverride) {
+        if (shifts.length === 0) throw new Error("Clinic is closed; no active working hours on this date");
         const fitsInShift = shifts.some((s) => {
           if (params.visitType === 'home_visit') {
             // No pre-buffer needed — doctor is already present at shift start.
@@ -457,14 +462,17 @@ export class SchedulingEngine {
     const durationMs = (new Date(existing.end_time).getTime() - new Date(existing.start_time).getTime()) || (60 * 60 * 1000);
     const newEnd = params.newEndTime ? new Date(params.newEndTime) : new Date(newStart.getTime() + durationMs);
 
+    this.validateWindow(newStart, newEnd, params.newStartTime, visitType, params.allowOverride);
+    if (!['booked','confirmed','rescheduled'].includes(existing.status)) throw new Error('Only active appointments can be rescheduled');
     const bufferMinutes = this.getHomeVisitBufferMinutes();
     const bufferMs = (visitType === 'home_visit' ? bufferMinutes : 0) * 60 * 1000;
 
-    if (!params.allowOverride) {
+    {
       // Check shifts
       const dateStr = newStart.toISOString().split('T')[0];
       const shifts = this.getActiveShiftsForDate(dateStr);
-      if (shifts.length > 0) {
+      if (!params.allowOverride) {
+        if (shifts.length === 0) throw new Error("Clinic is closed; no active working hours on this date");
         const fitsInShift = shifts.some((s) => {
           if (visitType === 'home_visit') {
             return (newStart.getTime() >= s.startMs && newEnd.getTime() + bufferMs <= s.endMs);
@@ -662,6 +670,20 @@ export class SchedulingEngine {
     }
 
     return conflicts;
+  }
+
+  private validateWindow(start: Date, end: Date, rawStart: string, visitType: VisitType, override?: boolean): void {
+    if (!Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime())) throw new Error('Invalid appointment date or time');
+    this.getActiveShiftsForDate(rawStart.slice(0,10));
+    if (visitType !== 'in_office' && visitType !== 'home_visit') throw new Error('Invalid visit type');
+    const duration = (end.getTime()-start.getTime())/60000;
+    if (duration <= 0 || duration > 480) throw new Error('End time must follow start time; invalid duration');
+    if (start.getTime() <= Date.now()) throw new Error('Appointment must be in the future, not in the past');
+    if (!override) {
+      const now = getBeirutTimeInfo(); const date = start.toISOString().slice(0,10);
+      const lead = visitType === 'home_visit' ? this.getHomeVisitBufferMinutes(date) : 15;
+      if (date === now.dateStr && start.getUTCHours()*60+start.getUTCMinutes() < now.totalMinutes+lead) throw new Error('Insufficient advance notice for appointment');
+    }
   }
 
   /**
