@@ -638,7 +638,7 @@ export class SchedulingEngine {
 
       const apptStartMs = apptDate.getTime();
       const apptEndMs = new Date(appt.end_time).getTime();
-      const fits = shiftIntervals.some((s) => apptStartMs >= s.startMs && apptEndMs <= s.endMs);
+      const fits = shiftIntervals.some((s) => apptStartMs >= s.startMs && apptEndMs+(appt.visit_type==='home_visit' ? this.getHomeVisitBufferMinutes(dateStr)*60000 : 0) <= s.endMs);
 
       if (!fits) {
         conflicts.push(appt);
