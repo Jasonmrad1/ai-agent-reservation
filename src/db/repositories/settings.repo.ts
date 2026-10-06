@@ -1,5 +1,4 @@
 import { DatabaseSync } from 'node:sqlite';
-import { SupabaseSync } from '../supabase.js';
 
 export class SettingsRepository {
   constructor(private db: DatabaseSync, private syncEnabled = true) {}
@@ -20,7 +19,6 @@ export class SettingsRepository {
       ON CONFLICT(key) DO UPDATE SET value = excluded.value
     `).run(key, value);
 
-    if (this.syncEnabled) SupabaseSync.syncSetting(key, value).catch(() => {});
   }
 
   public getAll(): Record<string, string> {

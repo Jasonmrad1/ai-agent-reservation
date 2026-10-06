@@ -1,7 +1,6 @@
 import { DatabaseSync } from 'node:sqlite';
 import crypto from 'node:crypto';
 import { Appointment, AppointmentStatus, VisitType } from '../../types/index.js';
-import { SupabaseSync } from '../supabase.js';
 
 export class AppointmentRepository {
   constructor(private db: DatabaseSync, private syncEnabled = true) {}
@@ -61,7 +60,6 @@ export class AppointmentRepository {
       appt.updated_at
     );
 
-    if (this.syncEnabled) SupabaseSync.syncAppointment(appt).catch(() => {});
     return appt;
   }
 
@@ -137,7 +135,6 @@ export class AppointmentRepository {
     `).run(address, now, id);
 
     const appt = this.findById(id);
-    if (appt && this.syncEnabled) SupabaseSync.syncAppointment(appt).catch(() => {});
   }
 
   public update(id: string, updates: Partial<Appointment>): void {
@@ -178,7 +175,6 @@ export class AppointmentRepository {
       updated.updated_at,
       id
     );
-    if (this.syncEnabled) SupabaseSync.syncAppointment(updated).catch(() => {});
   }
 
   public updateStatus(id: string, status: AppointmentStatus): void {
@@ -188,7 +184,6 @@ export class AppointmentRepository {
     `).run(status, now, id);
 
     const appt = this.findById(id);
-    if (appt && this.syncEnabled) SupabaseSync.syncAppointment(appt).catch(() => {});
   }
 
   public reschedule(
@@ -217,7 +212,6 @@ export class AppointmentRepository {
     );
 
     const updated = this.findById(id);
-    if (updated && this.syncEnabled) SupabaseSync.syncAppointment(updated).catch(() => {});
   }
 
   public cancel(id: string, notes?: string): void {
@@ -227,7 +221,6 @@ export class AppointmentRepository {
     `).run(notes || 'Cancelled by customer', now, id);
 
     const appt = this.findById(id);
-    if (appt && this.syncEnabled) SupabaseSync.syncAppointment(appt).catch(() => {});
   }
 
   public setGoogleEventId(id: string, googleEventId: string): void {
@@ -243,7 +236,6 @@ export class AppointmentRepository {
     this.db.prepare(`
       UPDATE appointments SET ${col} = 1, updated_at = ? WHERE id = ?
     `).run(now, id);
-    const updated=this.findById(id);if(updated && this.syncEnabled) SupabaseSync.syncAppointment(updated).catch(()=>{});
   }
 
   public getPendingReminders(type: '24h' | '1h', now: Date = new Date()): (Appointment & { customer_phone: string; customer_name: string | null })[] {

@@ -4,7 +4,8 @@ import { createAdminAuth } from './security/admin-auth.js';
 import path from 'path';
 import express from 'express';
 import { DatabaseContext, createDatabaseContext } from './db/index.js';
-import { SupabaseSync } from './db/supabase.js';
+import { getSupabaseClient } from './db/supabase.js';
+import { ReplicaWorker } from './db/replication.js';
 import { CalendarProvider, InMemoryCalendarProvider, GoogleCalendarProvider } from './calendar/provider.js';
 import { SchedulingEngine } from './calendar/scheduler.js';
 import { WhatsAppGateway, MockWhatsAppGateway, TwilioWhatsAppGateway } from './twilio/client.js';
@@ -27,6 +28,7 @@ export interface AppInstance {
   reminders: ReminderRunner;
   billing: BillingService;
   notifier: AdminNotificationService;
+  replica: ReplicaWorker;
   outbox: DurableWhatsAppGateway;
   inbox: {drain():Promise<void>;recoverInterrupted():void};
   simulator: { db: DatabaseContext; gateway: MockWhatsAppGateway };
@@ -47,7 +49,7 @@ export function createApp(options: CreateAppOptions = {}): AppInstance {
 
   // 1. Database
   const db = options.db || createDatabaseContext(cfg.databaseUrl);
-  SupabaseSync.hydrateFromSupabase(db).catch(() => {});
+  const replica = new ReplicaWorker(db,getSupabaseClient(cfg));
 
   // 2. Gateway
   const rawGateway = options.gateway || (
@@ -178,6 +180,7 @@ export function createApp(options: CreateAppOptions = {}): AppInstance {
     app,
     db,
     gateway:rawGateway,
+    replica,
     outbox:gateway,
     inbox:webhookRouter,
     calendar,

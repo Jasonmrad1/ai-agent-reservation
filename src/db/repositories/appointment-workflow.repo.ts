@@ -1,7 +1,6 @@
 import { DatabaseSync } from 'node:sqlite';
 import crypto from 'node:crypto';
 import { PendingBookingWorkflow, WorkflowState, VisitType } from '../../types/index.js';
-import { SupabaseSync } from '../supabase.js';
 
 export class AppointmentWorkflowRepository {
   constructor(private db: DatabaseSync, private syncEnabled = true) {}
@@ -75,7 +74,6 @@ export class AppointmentWorkflowRepository {
       workflow.updated_at
     );
 
-    if (this.syncEnabled) SupabaseSync.syncWorkflow(workflow);
     return workflow;
   }
 
@@ -155,7 +153,6 @@ export class AppointmentWorkflowRepository {
       id
     );
 
-    if (this.syncEnabled) SupabaseSync.syncWorkflow(updated);
     return updated;
   }
 

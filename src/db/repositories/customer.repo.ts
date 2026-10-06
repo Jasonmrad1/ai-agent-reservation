@@ -1,7 +1,6 @@
 import { DatabaseSync } from 'node:sqlite';
 import crypto from 'node:crypto';
 import { Customer } from '../../types/index.js';
-import { SupabaseSync } from '../supabase.js';
 
 export function normalizePhone(raw: string): string {
   if (typeof raw !== 'string' || !raw.trim()) return '';
@@ -87,7 +86,6 @@ export class CustomerRepository {
       newCustomer.updated_at
     );
 
-    if (this.syncEnabled) SupabaseSync.syncCustomer(newCustomer).catch(() => {});
     return newCustomer;
   }
 
@@ -98,7 +96,6 @@ export class CustomerRepository {
     `).run(name, now, id);
 
     const cust = this.findById(id);
-    if (cust && this.syncEnabled) SupabaseSync.syncCustomer(cust).catch(() => {});
   }
 
   public updatePhone(id: string, phone: string): void {
@@ -110,7 +107,6 @@ export class CustomerRepository {
     `).run(phone, now, id);
 
     const cust = this.findById(id);
-    if (cust && this.syncEnabled) SupabaseSync.syncCustomer(cust).catch(() => {});
   }
 
   public setOptOut(id: string, optedOut: boolean): void {
@@ -120,6 +116,5 @@ export class CustomerRepository {
     `).run(optedOut ? 1 : 0, now, id);
 
     const cust = this.findById(id);
-    if (cust && this.syncEnabled) SupabaseSync.syncCustomer(cust).catch(() => {});
   }
 }

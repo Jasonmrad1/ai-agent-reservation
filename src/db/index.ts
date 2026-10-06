@@ -1,3 +1,4 @@
+import { installReplicationTriggers } from './replication.js';
 export * from './schema.js';
 export * from './database.js';
 export * from './repositories/customer.repo.js';
@@ -36,6 +37,7 @@ export interface DatabaseContext {
 
 export function createDatabaseContext(dbPath: string = ':memory:', options: { syncEnabled?: boolean } = {}): DatabaseContext {
   const appDb = new AppDatabase(dbPath);
+  installReplicationTriggers(appDb.db,options.syncEnabled ?? true);
   return {
     appDb,
     customers: new CustomerRepository(appDb.db, options.syncEnabled ?? true),

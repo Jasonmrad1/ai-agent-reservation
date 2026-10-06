@@ -1,7 +1,6 @@
 import { DatabaseSync } from 'node:sqlite';
 import crypto from 'node:crypto';
 import { AvailabilityRule, AvailabilityOverride, TimeInterval } from '../../types/index.js';
-import { SupabaseSync } from '../supabase.js';
 
 export class AvailabilityRepository {
   constructor(private db: DatabaseSync, private syncEnabled = true) {}
@@ -85,7 +84,6 @@ export class AvailabilityRepository {
     }
 
     const updated = this.getRuleForDay(dayOfWeek);
-    if (updated && this.syncEnabled) SupabaseSync.syncAvailabilityRule(updated).catch(() => {});
   }
 
   public updateRulesBatch(
@@ -156,7 +154,6 @@ export class AvailabilityRepository {
         override.date
       );
       const res = { ...existing, ...override };
-      if (this.syncEnabled) SupabaseSync.syncOverride(res).catch(() => {});
       return res;
     }
 
@@ -183,13 +180,11 @@ export class AvailabilityRepository {
       shiftsJson
     );
 
-    if (this.syncEnabled) SupabaseSync.syncOverride(newOverride).catch(() => {});
     return newOverride;
   }
 
   public deleteOverride(id: string): void {
     this.db.prepare('DELETE FROM availability_overrides WHERE id = ?').run(id);
-    if (this.syncEnabled) SupabaseSync.deleteOverride(id).catch(() => {});
   }
 
   public deleteOverridesInRange(startDate: string, endDate: string): void {

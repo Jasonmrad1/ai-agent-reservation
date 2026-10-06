@@ -16,7 +16,7 @@ const server = app.listen(config.port, () => {
 
 instance.inbox.recoverInterrupted();
 instance.outbox.recoverInterrupted();
-const messagingTimer=setInterval(()=>{void instance.inbox.drain();void instance.outbox.drain();},1000);
+const messagingTimer=setInterval(()=>{void instance.inbox.drain();void instance.outbox.drain();void instance.replica.drain();},1000);
 const reconciliationTimer = setInterval(() => { void instance.scheduler.reconcileCalendarOperations(); }, 60000);
 void instance.scheduler.reconcileCalendarOperations();
 
