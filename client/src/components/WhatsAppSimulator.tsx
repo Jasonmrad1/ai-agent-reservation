@@ -1,3 +1,4 @@
+import { checkedFetch, clinicToday } from '../api';
 import React, { useState, useEffect, useRef } from 'react';
 import {
   IconCalendar,
@@ -40,7 +41,7 @@ export const WhatsAppSimulator: React.FC<WhatsAppSimulatorProps> = ({
 
   const fetchHistory = async () => {
     try {
-      const res = await fetch(`/api/simulator/history?phone=${encodeURIComponent(phone)}`, { headers: { Authorization: `Bearer ${adminKey}` } });
+      const res = await checkedFetch(`/api/simulator/history?phone=${encodeURIComponent(phone)}`, { headers: { Authorization: `Bearer ${adminKey}` } });
       if (res.ok) {
         const data = await res.json();
         setMessages(data.messages || []);
@@ -73,7 +74,7 @@ export const WhatsAppSimulator: React.FC<WhatsAppSimulatorProps> = ({
     setLoading(true);
 
     try {
-      const res = await fetch('/api/simulator/message', {
+      const res = await checkedFetch('/api/simulator/message', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminKey}`, 'x-csrf-token': window.__CSRF_TOKEN__ || '' },
         body: JSON.stringify({

@@ -2723,3 +2723,9 @@ textarea:focus {
     box-shadow: var(--shadow-sm);
   }
 }
+
+.clinic-attention {margin:12px 20px;padding:12px;border:1px solid var(--border-color,#ccc);border-radius:10px;}
+.clinic-attention summary {cursor:pointer;font-weight:600;}
+.clinic-attention article {padding:10px 0;border-bottom:1px solid #ddd;}
+.clinic-attention article button {margin-left:12px;padding:6px 12px;}
+.clinic-attention p {white-space:pre-wrap;overflow-wrap:anywhere;}

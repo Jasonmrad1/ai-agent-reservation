@@ -1,0 +1,4 @@
+import {it,expect,vi,afterEach} from 'vitest';import {checkedFetch} from '../client/src/api.js';
+afterEach(()=>vi.unstubAllGlobals());
+it('rejects failed HTTP mutations so the dashboard cannot show success',async()=>{vi.stubGlobal('fetch',vi.fn().mockResolvedValue(new Response(JSON.stringify({error:'Calendar unavailable'}),{status:400})));await expect(checkedFetch('/admin/api/appointments/1/cancel',{method:'POST'})).rejects.toThrow('Calendar unavailable');});
+it('uses session CSRF credentials and redirects expired login',async()=>{const location={href:''};vi.stubGlobal('window',{__CSRF_TOKEN__:'csrf-token',location});const transport=vi.fn().mockResolvedValue(new Response('{}',{status:401}));vi.stubGlobal('fetch',transport);await expect(checkedFetch('/admin/api/settings',{method:'POST'})).rejects.toThrow(/sign in/i);expect(location.href).toBe('/admin/login');expect(new Headers(transport.mock.calls[0][1].headers).get('x-csrf-token')).toBe('csrf-token');});

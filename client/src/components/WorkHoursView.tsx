@@ -1,3 +1,4 @@
+import { checkedFetch, clinicToday } from '../api';
 import React, { useState, useEffect, useRef } from 'react';
 import { AvailabilityRule, DateOverride, TimeInterval } from '../types';
 import {
@@ -135,8 +136,8 @@ export const WorkHoursView: React.FC<WorkHoursViewProps> = ({
   const [selectedWeekMonday, setSelectedWeekMonday] = useState<Date>(() => getMonday(new Date()));
   const [viewMode, setViewMode] = useState<'visual' | 'form'>('visual');
   const [localRules, setLocalRules] = useState<AvailabilityRule[]>([]);
-  const [selectedBuffer, setSelectedBuffer] = useState<number>(commuteBufferMinutes || 30);
-  const [defaultBuffer, setDefaultBuffer] = useState<number>(commuteBufferMinutes || 30);
+  const [selectedBuffer, setSelectedBuffer] = useState<number>(commuteBufferMinutes ?? 30);
+  const [defaultBuffer, setDefaultBuffer] = useState<number>(commuteBufferMinutes ?? 30);
   const [newDate, setNewDate] = useState('');
   const [newReason, setNewReason] = useState('');
 
@@ -147,7 +148,7 @@ export const WorkHoursView: React.FC<WorkHoursViewProps> = ({
 
   // Keep defaultBuffer in sync whenever the prop changes (global default loaded from DB)
   useEffect(() => {
-    setDefaultBuffer(commuteBufferMinutes || 30);
+    setDefaultBuffer(commuteBufferMinutes ?? 30);
   }, [commuteBufferMinutes]);
 
   // Sync rules and overrides when props, scopeMode or selectedWeekMonday change
@@ -228,14 +229,14 @@ export const WorkHoursView: React.FC<WorkHoursViewProps> = ({
     }
     const weekDate = formatDateIso(selectedWeekMonday);
     let cancelled = false;
-    fetch(`/admin/api/settings&week=${weekDate}`, {
+    checkedFetch(`/admin/api/settings?week=${weekDate}`, {
       headers: { Authorization: `Bearer ${adminKey}` },
     })
       .then((r) => r.json())
       .then((data) => {
         if (!cancelled) {
           const val = Number(data.home_visit_buffer_minutes);
-          setSelectedBuffer(val > 0 ? val : defaultBuffer);
+          setSelectedBuffer(Number.isFinite(val) && val >= 0 ? val : defaultBuffer);
         }
       })
       .catch(() => {

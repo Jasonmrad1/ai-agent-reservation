@@ -22,7 +22,7 @@ export interface Appointment {
   conversation_history?: Array<{
     direction: 'inbound' | 'outbound';
     body: string;
-    timestamp: string;
+    created_at: string;
   }>;
 }
 

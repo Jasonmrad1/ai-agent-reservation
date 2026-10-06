@@ -5,7 +5,7 @@
   "main": "dist/index.js",
   "type": "module",
   "scripts": {
-    "build": "node client/build.js && tsc",
+    "build": "npm run typecheck && node client/build.js && tsc",
     "build:client": "node client/build.js",
     "start": "node dist/index.js",
     "dev": "tsx watch src/index.ts",
@@ -13,7 +13,8 @@
     "tunnel": "node tunnel.js",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:integration": "vitest run --config vitest.integration.config.ts"
+    "test:integration": "vitest run --config vitest.integration.config.ts",
+    "typecheck": "tsc --noEmit && tsc -p client/tsconfig.json"
   },
   "keywords": [
     "whatsapp",
@@ -42,6 +43,7 @@
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.7",
     "@types/supertest": "^6.0.2",
+    "esbuild": "0.28.2",
     "supertest": "^7.0.0",
     "tsx": "^4.19.3",
     "typescript": "^5.7.3",

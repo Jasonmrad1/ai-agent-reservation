@@ -1,3 +1,4 @@
+import { clinicToday } from '../api';
 import React, { useState } from 'react';
 import {
   IconX,
@@ -44,7 +45,8 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({
   defaultDate,
   defaultTime,
 }) => {
-  const todayStr = new Date().toISOString().split('T')[0];
+  const today=clinicToday();
+  const todayStr=`${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
 
   const [phone, setPhone] = useState('');
   const [name, setName] = useState('');

@@ -1,3 +1,5 @@
+import { ClinicAttention, ClinicAlert } from './components/ClinicAttention';
+import { checkedFetch, clinicToday } from './api';
 import React, { useState, useEffect, useCallback } from 'react';
 import { Appointment, AvailabilityRule, DateOverride, TimeInterval } from './types';
 import { Header } from './components/Header';
@@ -38,7 +40,7 @@ export const App: React.FC = () => {
   const [rules, setRules] = useState<AvailabilityRule[]>([]);
   const [overrides, setOverrides] = useState<DateOverride[]>([]);
   const [commuteBufferMinutes, setCommuteBufferMinutes] = useState<number>(30);
-  const [currentWeekMonday, setCurrentWeekMonday] = useState<Date>(() => getMonday(new Date()));
+  const [currentWeekMonday, setCurrentWeekMonday] = useState<Date>(() => getMonday(clinicToday()));
   const [showHoursOverlay, setShowHoursOverlay] = useState<boolean>(true);
 
   // Modals state
@@ -67,10 +69,17 @@ export const App: React.FC = () => {
     };
   }, [adminKey]);
 
+  const [alerts,setAlerts]=useState<ClinicAlert[]>([]);
+  const [connectionError,setConnectionError]=useState('');
+  const loadAlerts=useCallback(async()=>{
+    try {const response=await checkedFetch('/admin/api/alerts',{headers:getHeaders()});setAlerts((await response.json()).alerts || []);setConnectionError('');}
+    catch(e:any){setConnectionError(e.message);}
+  },[getHeaders]);
+
   // Load appointments
   const loadAppointments = useCallback(async () => {
     try {
-      const res = await fetch(`/admin/api/appointments`, {
+      const res = await checkedFetch(`/admin/api/appointments`, {
         headers: getHeaders(),
       });
       const data = await res.json();
@@ -84,7 +93,7 @@ export const App: React.FC = () => {
   // Load availability
   const loadAvailability = useCallback(async () => {
     try {
-      const res = await fetch(`/admin/api/availability`, {
+      const res = await checkedFetch(`/admin/api/availability`, {
         headers: getHeaders(),
       });
       const data = await res.json();
@@ -98,7 +107,7 @@ export const App: React.FC = () => {
   // Load settings (commute buffer)
   const loadSettings = useCallback(async () => {
     try {
-      const res = await fetch(`/admin/api/settings`, {
+      const res = await checkedFetch(`/admin/api/settings`, {
         headers: getHeaders(),
       });
       const data = await res.json();
@@ -115,7 +124,7 @@ export const App: React.FC = () => {
 
   const loadGoogleStatus = useCallback(async () => {
     try {
-      const res = await fetch(`/admin/api/google-calendar/status`, {
+      const res = await checkedFetch(`/admin/api/google-calendar/status`, {
         headers: getHeaders(),
       });
       const data = await res.json();
@@ -132,7 +141,7 @@ export const App: React.FC = () => {
   const handleDisconnectGoogle = async () => {
     if (!confirm('Disconnect Google Calendar? Future appointments will no longer sync to Google Calendar.')) return;
     try {
-      await fetch(`/admin/api/google-calendar/disconnect`, {
+      await checkedFetch(`/admin/api/google-calendar/disconnect`, {
         method: 'POST',
         headers: getHeaders(),
       });
@@ -148,6 +157,7 @@ export const App: React.FC = () => {
     loadAvailability();
     loadSettings();
     loadGoogleStatus();
+    loadAlerts();
 
     // Check if redirected back from Google OAuth
     const params = new URLSearchParams(window.location.search);
@@ -156,6 +166,12 @@ export const App: React.FC = () => {
       window.history.replaceState({}, '', window.location.pathname + ``);
     }
   }, [loadAppointments, loadAvailability, loadSettings, loadGoogleStatus, adminKey, showToast]);
+
+  useEffect(()=>{
+    const refresh=()=>{if(!document.hidden){void loadAppointments();void loadAvailability();void loadAlerts();void loadGoogleStatus();}};
+    const timer=setInterval(refresh,15000);window.addEventListener('focus',refresh);
+    return()=>{clearInterval(timer);window.removeEventListener('focus',refresh);};
+  },[loadAppointments,loadAvailability,loadAlerts,loadGoogleStatus]);
 
   // Keyboard Escape listener to dismiss any active modal
   useEffect(() => {
@@ -186,7 +202,7 @@ export const App: React.FC = () => {
   };
 
   const handleTodayWeek = () => {
-    setCurrentWeekMonday(getMonday(new Date()));
+    setCurrentWeekMonday(getMonday(clinicToday()));
   };
 
   // Toggle Day bookable / closed directly on calendar
@@ -198,7 +214,7 @@ export const App: React.FC = () => {
     const shifts = rule?.shifts || [{ start_time: start, end_time: end }];
 
     try {
-      const res = await fetch(`/admin/api/availability/rules`, {
+      const res = await checkedFetch(`/admin/api/availability/rules`, {
         method: 'POST',
         headers: getHeaders(),
         body: JSON.stringify({
@@ -212,7 +228,7 @@ export const App: React.FC = () => {
       if (res.ok) {
         const data = await res.json();
         if (data.affectedCount > 0) {
-          showToast(`Saved! Automatically messaged ${data.affectedCount} affected patient(s) on WhatsApp to reschedule.`);
+          showToast(`Saved! ${data.affectedCount} appointment(s) need review; ${data.notifiedPatients?.length || 0} notification(s) accepted.`);
           loadAppointments();
           loadAlerts();
         } else {
@@ -227,9 +243,8 @@ export const App: React.FC = () => {
 
   // Update commute travel buffer
   const handleUpdateCommuteBuffer = async (minutes: number, weekDate?: string, setAsDefault: boolean = false) => {
-    setCommuteBufferMinutes(minutes);
     try {
-      await fetch(`/admin/api/settings`, {
+      await checkedFetch(`/admin/api/settings`, {
         method: 'POST',
         headers: getHeaders(),
         body: JSON.stringify({
@@ -238,6 +253,7 @@ export const App: React.FC = () => {
           set_as_default: setAsDefault,
         }),
       });
+      setCommuteBufferMinutes(minutes);
       showToast(`Commute buffer saved (${minutes} mins).`);
     } catch (err: any) {
       alert(`Error updating commute buffer: ${err.message}`);
@@ -287,7 +303,7 @@ export const App: React.FC = () => {
     });
 
     try {
-      const res = await fetch(`/admin/api/availability/rules/batch`, {
+      const res = await checkedFetch(`/admin/api/availability/rules/batch`, {
         method: 'POST',
         headers: getHeaders(),
         body: JSON.stringify({ rules: newRules }),
@@ -310,7 +326,7 @@ export const App: React.FC = () => {
 
   const handleSaveRule = async (rule: AvailabilityRule) => {
     try {
-      const res = await fetch(`/admin/api/availability/rules`, {
+      const res = await checkedFetch(`/admin/api/availability/rules`, {
         method: 'POST',
         headers: getHeaders(),
         body: JSON.stringify(rule),
@@ -334,7 +350,7 @@ export const App: React.FC = () => {
 
   const handleSaveAllRules = async (allRules: AvailabilityRule[], targetWeekMonday?: Date) => {
     try {
-      const res = await fetch(`/admin/api/availability/rules/batch`, {
+      const res = await checkedFetch(`/admin/api/availability/rules/batch`, {
         method: 'POST',
         headers: getHeaders(),
         body: JSON.stringify({ rules: allRules }),
@@ -362,7 +378,7 @@ export const App: React.FC = () => {
 
   const handleAddOverride = async (date: string, reason: string) => {
     try {
-      const res = await fetch(`/admin/api/availability/overrides`, {
+      const res = await checkedFetch(`/admin/api/availability/overrides`, {
         method: 'POST',
         headers: getHeaders(),
         body: JSON.stringify({ date, is_unavailable: true, reason }),
@@ -388,7 +404,7 @@ export const App: React.FC = () => {
     targetWeekMonday?: Date
   ) => {
     try {
-      const res = await fetch(`/admin/api/availability/overrides/batch`, {
+      const res = await checkedFetch(`/admin/api/availability/overrides/batch`, {
         method: 'POST',
         headers: getHeaders(),
         body: JSON.stringify({ overrides: overridesList }),
@@ -415,7 +431,7 @@ export const App: React.FC = () => {
 
   const handleResetWeekOverrides = async (startDate: string, endDate: string) => {
     try {
-      const res = await fetch(`/admin/api/availability/overrides/range`, {
+      const res = await checkedFetch(`/admin/api/availability/overrides/range`, {
         method: 'DELETE',
         headers: getHeaders(),
         body: JSON.stringify({ start_date: startDate, end_date: endDate }),
@@ -431,7 +447,7 @@ export const App: React.FC = () => {
 
   const handleDeleteOverride = async (id: string) => {
     try {
-      await fetch(`/admin/api/availability/overrides/${id}`, {
+      await checkedFetch(`/admin/api/availability/overrides/${id}`, {
         method: 'DELETE',
         headers: getHeaders(),
       });
@@ -446,7 +462,7 @@ export const App: React.FC = () => {
   const handleCancelAppointment = async (appt: Appointment) => {
     if (!confirm('Are you sure you want to cancel this visit?')) return;
     try {
-      await fetch(`/admin/api/appointments/${appt.id}/cancel`, {
+      await checkedFetch(`/admin/api/appointments/${appt.id}/cancel`, {
         method: 'POST',
         headers: getHeaders(),
       });
@@ -461,7 +477,7 @@ export const App: React.FC = () => {
   const handleCompleteAppointment = async (appt: Appointment) => {
     if (!confirm('Mark this visit as completed?')) return;
     try {
-      await fetch(`/admin/api/appointments/${appt.id}/complete`, {
+      await checkedFetch(`/admin/api/appointments/${appt.id}/complete`, {
         method: 'POST',
         headers: getHeaders(),
       });
@@ -480,7 +496,7 @@ export const App: React.FC = () => {
     proposedTime?: string;
     language: string;
   }) => {
-    const res = await fetch(`/admin/api/appointments/${params.appointmentId}/request-reschedule`, {
+    const res = await checkedFetch(`/admin/api/appointments/${params.appointmentId}/request-reschedule`, {
       method: 'POST',
       headers: getHeaders(),
       body: JSON.stringify({
@@ -500,7 +516,7 @@ export const App: React.FC = () => {
   };
 
   const handleSubmitQuickMessage = async (appointmentId: string, messageText: string) => {
-    const res = await fetch(`/admin/api/appointments/${appointmentId}/send-message`, {
+    const res = await checkedFetch(`/admin/api/appointments/${appointmentId}/send-message`, {
       method: 'POST',
       headers: getHeaders(),
       body: JSON.stringify({ messageText }),
@@ -515,7 +531,7 @@ export const App: React.FC = () => {
   };
 
   const handleManualBooking = async (formData: ManualBookingData) => {
-    const res = await fetch(`/admin/api/appointments/manual`, {
+    const res = await checkedFetch(`/admin/api/appointments/manual`, {
       method: 'POST',
       headers: getHeaders(),
       body: JSON.stringify(formData),
@@ -530,7 +546,7 @@ export const App: React.FC = () => {
   };
 
   const handleDirectReschedule = async (params: DirectMoveParams) => {
-    const res = await fetch(`/admin/api/appointments/${params.appointmentId}/reschedule-direct`, {
+    const res = await checkedFetch(`/admin/api/appointments/${params.appointmentId}/reschedule-direct`, {
       method: 'POST',
       headers: getHeaders(),
       body: JSON.stringify(params),
@@ -566,6 +582,8 @@ export const App: React.FC = () => {
         onDisconnectGoogle={handleDisconnectGoogle}
       />
 
+      {connectionError && <p role="alert">Updates unavailable: {connectionError}</p>}
+      {activeTab!=='simulator' && <ClinicAttention alerts={alerts} onRefresh={()=>{void loadAlerts();}}/>}
       {activeTab === 'appointments' && (
         <CalendarGrid
           currentWeekMonday={currentWeekMonday}
