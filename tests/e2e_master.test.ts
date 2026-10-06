@@ -82,6 +82,9 @@ describe('🏆 MASTER END-TO-END CLINIC LIFECYCLE SUITE (DR. ZIAD EL KHOURY)', (
     expect(gateway.sentMessages.length).toBe(0); // AI remained silent
 
     // =========================================================================
+    await request(app).post('/api/webhook/whatsapp').send({From:PATIENT_PHONE,Body:'/resume bot',MessageSid:'SM_EXPLICIT_RESUME'});
+    gateway.clear();
+
     // STEP 3: Patient explicitly requests a booking in Lebanese Arabizi
     // "Hakim bde maw3ad bkra tnen aal 10 bil 3iyade"
     // =========================================================================

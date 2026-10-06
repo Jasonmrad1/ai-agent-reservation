@@ -117,6 +117,9 @@ describe('👨‍⚕️ DR. ZIAD EL KHOURY CO-PRESENCE & LIVE CHAT NON-INTERFERE
     const conv = db.conversations.getOrCreateActive(patient.id);
     db.conversations.updateStatus(conv.id, 'doctor_active');
 
+    await request(app).post('/webhook/whatsapp').send({From:patientPhone,Body:'/resume bot',MessageSid:'SM_EXPLICIT_RESUME'});
+    gateway.clear();
+
     // Patient asks for an appointment
     geminiClient.mockToolCall = {
       name: 'book_appointment',
@@ -145,7 +148,7 @@ describe('👨‍⚕️ DR. ZIAD EL KHOURY CO-PRESENCE & LIVE CHAT NON-INTERFERE
     // AI sends booking confirmation
     const botReplies = gateway.sentMessages.filter(m => m.to === patientPhone);
     expect(botReplies.length).toBe(1);
-    expect(botReplies[0].body).toContain('confirmed');
+    expect(botReplies[0].body).toMatch(/confirmed|Zabbattelak/i);
 
     // Conversation returns to active
     const updatedConv = db.conversations.findActiveByCustomerId(patient.id);

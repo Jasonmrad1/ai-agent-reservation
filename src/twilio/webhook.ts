@@ -1,3 +1,4 @@
+import { isUrgentMessage } from '../security/urgent.js';
 import { Request, Response } from 'express';
 import { DatabaseContext } from '../db/index.js';
 import { WhatsAppGateway } from './client.js';
@@ -175,29 +176,13 @@ export function createWebhookRouter(options: WebhookHandlerOptions) {
     // 7. Doctor Direct Chat Co-presence (Yielding to Dr. Ziad during 1-on-1 human conversation or active escalation)
     const lower = incomingText.toLowerCase();
     const upper = incomingText.toUpperCase();
-    const isConfirmation = upper === 'YES' || upper === 'CONFIRM' || upper === 'EHH' || upper === 'AKID' || upper === 'OUI' || upper === 'TAMAM';
-    const explicitScheduling = (
-      isConfirmation ||
-      lower.includes('maw3ad') ||
-      lower.includes('appointment') ||
-      lower.includes('book') ||
-      lower.includes('reschedule') ||
-      lower.includes('cancel') ||
-      lower.includes('aymta fade') ||
-      lower.includes('bot') ||
-      lower.includes('assistant') ||
-      lower.includes('help')
-    );
-
-    if ((conversation.status === 'doctor_active' || conversation.status === 'escalated') && !explicitScheduling) {
-      console.log(`[Twilio Webhook] 👨‍⚕️ Conversation with ${customer.phone} is in ${conversation.status} mode. Yielding to Dr. Ziad.`);
-      res.type('text/xml').send('<Response/>');
-      return;
+    const resumeBot=incomingText.trim().toLowerCase()==='/resume bot';
+    if ((conversation.status==='doctor_active' || conversation.status==='escalated') && !resumeBot && !isUrgentMessage(incomingText)) {
+      res.type('text/xml').send('<Response/>'); return;
     }
-
-    if (explicitScheduling && (conversation.status === 'doctor_active' || conversation.status === 'escalated')) {
-      db.conversations.updateStatus(conversation.id, 'active');
-      conversation.status = 'active';
+    if (resumeBot) {
+      db.conversations.updateStatus(conversation.id,'active');conversation.status='active';
+      res.type('text/xml').send('<Response/>');return;
     }
 
     // 8. Process Message with Gemini Core (with multi-model failover)

@@ -111,6 +111,9 @@ describe('👨‍⚕️ HUMAN HANDOFF & WHATSAPP BUSINESS DIRECT LINK SUITE', ()
     const updatedConv = db.conversations.findActiveByCustomerId(cust.id)!;
     expect(updatedConv.status).toBe('doctor_active');
 
+    await request(app).post('/api/webhook/whatsapp').send({From:PATIENT_PHONE,Body:'/resume bot',MessageSid:'SM_EXPLICIT_RESUME'});
+    gateway.clear();
+
     // 6. Patient asks to book a follow-up -> AI smoothly re-engages and completes booking
     gateway.clear();
     geminiClient.mockToolCall = {

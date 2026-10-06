@@ -37,6 +37,17 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
     res.clearCookie('clinic_session', { path: '/' }); res.json({ success: true });
   });
 
+  router.get('/api/conversations', requireAdminAuth, (_req,res)=>{
+    res.json({conversations:db.appDb.db.prepare("SELECT conversations.*, customers.phone, customers.name FROM conversations JOIN customers ON customers.id=conversations.customer_id WHERE conversations.status != 'closed' ORDER BY conversations.updated_at DESC LIMIT 200").all()});
+  });
+  router.post('/api/conversations/:id/control',requireAdminAuth,(req,res)=>{
+    const status=req.body?.action==='takeover' ? 'doctor_active' : req.body?.action==='resume' ? 'active' : null;
+    const conv=db.appDb.db.prepare('SELECT id FROM conversations WHERE id=?').get(String(req.params.id));
+    if (!conv) {res.status(404).json({error:'Conversation not found'});return;}
+    if (!status) {res.status(400).json({error:'Choose takeover or resume'});return;}
+    db.conversations.updateStatus(String(req.params.id),status);res.json({success:true,status});
+  });
+
   // Helper: notify affected patients and mark appointment rescheduled when shifts change
   const notifyAndRescheduleConflicts = async (
     conflicts: Appointment[],
@@ -847,6 +858,8 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
       return;
     }
 
+    const manualConversation=db.conversations.getOrCreateActive(customer.id);
+    db.conversations.updateStatus(manualConversation.id,'doctor_active');
     const trimmed = String(messageText).trim();
     const sendRes = await gateway.sendMessage(customer.phone, trimmed, customer.id);
     const conv = db.conversations.getOrCreateActive(customer.id);
