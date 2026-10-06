@@ -327,6 +327,9 @@ export class SchedulingEngine {
    * Books an appointment deterministically after validating against shifts and commute travel buffer.
    */
   public async bookAppointment(params: BookAppointmentParams): Promise<Appointment> {
+    if(!this.db.customers.findById(params.customerId))throw new Error('Booking patient does not exist');
+    if(params.price!==undefined && (!Number.isFinite(params.price) || params.price<0))throw new Error('Appointment price must be finite and non-negative');
+    if(typeof params.service!=='string' || !params.service.trim() || params.service.length>200)throw new Error('Invalid appointment service');
     const operationKey = params.operationId ? `${params.customerId}:${params.operationId}` : null;
     if (operationKey) {
       const previous = this.db.appDb.db.prepare('SELECT appointment_id FROM appointment_operations WHERE operation_key = ?').get(operationKey) as any;
