@@ -52,7 +52,7 @@ export function createApp(options: CreateAppOptions = {}): AppInstance {
 
   // 1. Database
   if(!options.db && cfg.nodeEnv==='production' && cfg.databaseUrl!==':memory:' && fs.existsSync(cfg.databaseUrl)) backupSqliteFile(cfg.databaseUrl,path.join(path.dirname(cfg.databaseUrl),'backups'));
-  const db = options.db || createDatabaseContext(cfg.databaseUrl);
+  const db = options.db || createDatabaseContext(cfg.databaseUrl,{encryptionKey:cfg.settingsEncryptionKey});
   const replica = new ReplicaWorker(db,getSupabaseClient(cfg),cfg.supabaseUrl);
 
   // 2. Gateway

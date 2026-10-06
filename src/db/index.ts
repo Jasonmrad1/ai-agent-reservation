@@ -35,7 +35,7 @@ export interface DatabaseContext {
   workflows: AppointmentWorkflowRepository;
 }
 
-export function createDatabaseContext(dbPath: string = ':memory:', options: { syncEnabled?: boolean } = {}): DatabaseContext {
+export function createDatabaseContext(dbPath: string = ':memory:', options: { syncEnabled?: boolean;encryptionKey?:string } = {}): DatabaseContext {
   const appDb = new AppDatabase(dbPath);
   installReplicationTriggers(appDb.db,options.syncEnabled ?? true);
   return {
@@ -47,7 +47,7 @@ export function createDatabaseContext(dbPath: string = ':memory:', options: { sy
     availability: new AvailabilityRepository(appDb.db, options.syncEnabled ?? true),
     invoices: new InvoiceRepository(appDb.db, options.syncEnabled ?? true),
     alerts: new AdminAlertRepository(appDb.db),
-    settings: new SettingsRepository(appDb.db, options.syncEnabled ?? true),
+    settings: new SettingsRepository(appDb.db, options.syncEnabled ?? true,options.encryptionKey),
     workflows: new AppointmentWorkflowRepository(appDb.db, options.syncEnabled ?? true),
   };
 }
