@@ -109,7 +109,7 @@ export class GoogleCalendarProvider implements CalendarProvider {
       } catch (error: any) {
         if (error.code !== 409 && error.response?.status !== 409) throw error;
         const existing = await client.events.get({calendarId:this.calendarId,eventId:id});
-        if (existing.data.start?.dateTime !== event.start.toISOString() || existing.data.end?.dateTime !== event.end.toISOString()) throw new Error('Calendar ID conflict requires reconciliation');
+        if (new Date(existing.data.start?.dateTime || '').getTime() !== event.start.getTime() || new Date(existing.data.end?.dateTime || '').getTime() !== event.end.getTime()) throw new Error('Calendar ID conflict requires reconciliation');
         return id;
       }
     });
