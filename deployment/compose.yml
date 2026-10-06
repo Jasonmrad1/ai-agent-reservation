@@ -1,0 +1,16 @@
+services:
+  clinic:
+    build: ..
+    restart: unless-stopped
+    init: true
+    stop_grace_period: 70s
+    ports:
+      - "127.0.0.1:3000:3000"
+    env_file: ../.env
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: /app/data/automation.sqlite
+    volumes:
+      - clinic-data:/app/data
+volumes:
+  clinic-data:
