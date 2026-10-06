@@ -83,3 +83,25 @@ Run `git show <commit>` to see the exact changes in that entry. Test links below
 | `acf90ad` | fix(http): forward asynchronous failures without crashing or hanging requests | [async_http_failures.test.ts](../tests/async_http_failures.test.ts) |
 | `e9de597` | fix(messaging): persist inbound requests before patient lookup | [inbound_storage_failure.test.ts](../tests/inbound_storage_failure.test.ts) |
 | `9746285` | docs(verification): record final offline checks and live deployment limits | No test-file changes in this commit |
+
+## Follow-up fixes
+
+The latest patient-flow review is explained in [PATIENT_FLOW_FIXES.md](PATIENT_FLOW_FIXES.md). Full regression result: 237 passed, zero failed; application build passed.
+
+| Commit | Change | Regression tests |
+|---|---|---|
+| `3a60ef1` | fix(handoff): suppress guardrail replies during human takeover | [handoff_guardrails.test.ts](../tests/handoff_guardrails.test.ts) |
+| `ed60cd0` | fix(outbox): store send intent and audit message atomically | [outbound_atomic_intent.test.ts](../tests/outbound_atomic_intent.test.ts) |
+| `cfc857d` | fix(replica): exclude credentials from queued changes and restore | [credential_replica_filter.test.ts](../tests/credential_replica_filter.test.ts) |
+| `c5c3fcf` | fix(outbox): reject duplicate jobs without provider acceptance | [outbound_idempotency_outcome.test.ts](../tests/outbound_idempotency_outcome.test.ts) |
+| `fcb6ca6` | fix(outbox): release worker lock when database claims fail | [outbound_claim_recovery.test.ts](../tests/outbound_claim_recovery.test.ts) |
+| `2567738` | fix(inbox): release patient lock after database claim failure | [inbound_claim_recovery.test.ts](../tests/inbound_claim_recovery.test.ts) |
+| `f85a6fd` | fix(inbox): serialize canonical patient phone numbers | [inbound_phone_ordering.test.ts](../tests/inbound_phone_ordering.test.ts) |
+| `6de4450` | fix(booking): keep affirmative replies in the active booking flow | [patient_booking_yes.test.ts](../tests/patient_booking_yes.test.ts) |
+| `68c0ffd` | fix(booking): preserve additional visit intent across patient messages | [patient_additional_booking.test.ts](../tests/patient_additional_booking.test.ts) |
+| `f79a3e7` | fix(simulator): persist and honor patient messaging consent | [simulator_patient_consent.test.ts](../tests/simulator_patient_consent.test.ts) |
+| `cd611c2` | fix(simulator): honor doctor takeover and explicit bot resume | [simulator_patient_handoff.test.ts](../tests/simulator_patient_handoff.test.ts) |
+| `3b0d7bb` | fix(simulator): check the date requested by the patient | [simulator_requested_date.test.ts](../tests/simulator_requested_date.test.ts) |
+| `9db01b9` | fix(simulator): prioritize cancellation over appointment keywords | [patient_cancellation_phrase.test.ts](../tests/patient_cancellation_phrase.test.ts) |
+| `c3fc22d` | fix(simulator): reschedule to the requested patient slot | [patient_reschedule_phrase.test.ts](../tests/patient_reschedule_phrase.test.ts) |
+| `c46465f` | fix(simulator): ask for missing booking details without inventing them | [simulator_missing_booking_details.test.ts](../tests/simulator_missing_booking_details.test.ts) |

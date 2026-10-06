@@ -4,6 +4,8 @@ A WhatsApp appointment assistant with an administrator dashboard and an offline 
 
 **Current status: the simulator MVP is available. Live clinic activation still requires provider verification, clinic configuration and a controlled live pilot.** The previous README described the system as production ready too broadly; this document explains the actual changes and limits.
 
+**Latest patient-flow review:** [Read what failed, what changed, and how replies and saved records were checked](docs/PATIENT_FLOW_FIXES.md). This covers ordinary booking, additional visits, cancellation, rescheduling, consent and human takeover in the offline simulator.
+
 ## Did the review find bugs that could make the agent malfunction?
 
 Yes. The most consequential weaknesses were:
