@@ -1,6 +1,6 @@
 import { isUrgentMessage } from '../security/urgent.js';
 import { Request, Response } from 'express';
-import { DatabaseContext } from '../db/index.js';
+import { DatabaseContext,normalizePhone } from '../db/index.js';
 import { WhatsAppGateway } from './client.js';
 import { verifyTwilioWebhook } from './verifier.js';
 import { sanitizeWhatsAppText } from '../gemini/agent.js';
@@ -257,7 +257,7 @@ export function createWebhookRouter(options: WebhookHandlerOptions) {
     const p=req.body || {};
     if(typeof p.From!=='string' || typeof p.MessageSid!=='string' || !p.MessageSid || (p.Body!=null && typeof p.Body!=='string')) {res.status(400).send('Invalid webhook payload');return;}
     if(!p.Body?.trim() && !(p.Latitude && p.Longitude) && !(Number(p.NumMedia)>0)) {res.status(400).send('Missing message body');return;}
-    try {db.customers.findOrCreate(p.From);} catch {res.status(400).send('Invalid sender phone');return;}
+    if(!normalizePhone(p.From)){res.status(400).send('Invalid sender phone');return;}
     db.appDb.db.prepare('INSERT OR IGNORE INTO inbound_jobs (message_sid,sender,payload,created_at) VALUES (?,?,?,?)').run(p.MessageSid,p.From,JSON.stringify(p),new Date().toISOString());
     if(!options.asyncProcessing) await drain();
     res.type('text/xml').send('<Response/>');
