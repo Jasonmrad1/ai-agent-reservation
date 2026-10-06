@@ -6,6 +6,8 @@
  */
 
 import readline from 'readline';
+import {config} from '../src/config/index.js';
+import {simulatorRequest} from '../src/simulator/client.js';
 
 const API_BASE = process.env.SERVER_URL || 'http://localhost:3000/api/simulator';
 
@@ -43,7 +45,7 @@ async function checkHealth(): Promise<boolean> {
 async function sendMessage(text: string) {
   try {
     process.stdout.write('🤖 Clinic Assistant is typing...\r');
-    const res = await fetch(`${API_BASE}/message`, {
+    const res = await simulatorRequest(`${API_BASE}/message`,config.adminSessionSecret, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -84,7 +86,7 @@ async function sendMessage(text: string) {
 
 async function showHistory() {
   try {
-    const res = await fetch(`${API_BASE}/history?phone=${encodeURIComponent(currentPhone)}`);
+    const res = await simulatorRequest(`${API_BASE}/history?phone=${encodeURIComponent(currentPhone)}`,config.adminSessionSecret);
     if (!res.ok) {
       console.log('❌ Could not fetch history');
       return;
