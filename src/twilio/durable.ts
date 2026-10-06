@@ -12,7 +12,10 @@ export class DurableWhatsAppGateway implements WhatsAppGateway {
     if (!customer) throw new Error('Message recipient is missing');
     if(options.idempotencyKey) {
       const existing=this.db.appDb.db.prepare('SELECT * FROM outbound_jobs WHERE idempotency_key=?').get(options.idempotencyKey) as any;
-      if(existing) return {messageSid:existing.message_sid || 'OUTBOX_'+existing.id,status:existing.status==='accepted' ? 'sent' : 'queued',to:existing.recipient,body:existing.body};
+      if(existing) {
+        if(existing.status!=='accepted' || !existing.message_sid) throw new Error(`Outbound job ${existing.id} is not accepted (${existing.status})`);
+        return {messageSid:existing.message_sid,status:'sent',to:existing.recipient,body:existing.body};
+      }
     }
     const conv=this.db.conversations.getOrCreateActive(customer.id);
     const sql=this.db.appDb.db;
