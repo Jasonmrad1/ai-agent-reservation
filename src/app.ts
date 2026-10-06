@@ -13,7 +13,7 @@ import { ReminderRunner } from './reminders/runner.js';
 import { BillingService } from './billing/service.js';
 import { createAdminRouter } from './admin/routes.js';
 import { createSimulatorRouter } from './simulator/router.js';
-import { AppConfig, config as defaultAppConfig } from './config/index.js';
+import { AppConfig, config as defaultAppConfig, validateConfig } from './config/index.js';
 
 export interface AppInstance {
   app: express.Application;
@@ -39,6 +39,7 @@ export interface CreateAppOptions {
 
 export function createApp(options: CreateAppOptions = {}): AppInstance {
   const cfg = options.config || defaultAppConfig;
+  validateConfig(cfg);
 
   // 1. Database
   const db = options.db || createDatabaseContext(cfg.databaseUrl);
@@ -46,7 +47,7 @@ export function createApp(options: CreateAppOptions = {}): AppInstance {
 
   // 2. Gateway
   const gateway = options.gateway || (
-    cfg.twilioAccountSid && cfg.twilioAuthToken
+    cfg.mode !== 'simulator' && cfg.twilioAccountSid && cfg.twilioAuthToken
       ? new TwilioWhatsAppGateway(
           cfg.twilioAccountSid,
           cfg.twilioAuthToken,
@@ -59,7 +60,7 @@ export function createApp(options: CreateAppOptions = {}): AppInstance {
 
   // 3. Calendar
   const calendar = options.calendar || (
-    cfg.googleCalendarClientId && cfg.googleCalendarClientSecret
+    cfg.mode !== 'simulator' && cfg.googleCalendarClientId && cfg.googleCalendarClientSecret
       ? new GoogleCalendarProvider({
           clientId: cfg.googleCalendarClientId,
           clientSecret: cfg.googleCalendarClientSecret,
@@ -86,7 +87,7 @@ export function createApp(options: CreateAppOptions = {}): AppInstance {
 
   // 6. Gemini Agent
   const geminiClient = options.geminiClient || (
-    cfg.geminiApiKey
+    cfg.mode !== 'simulator' && cfg.geminiApiKey
       ? new LiveGeminiClient(cfg.geminiApiKey)
       : new MockGeminiClient()
   );
@@ -156,7 +157,7 @@ export function createApp(options: CreateAppOptions = {}): AppInstance {
   app.use('/admin', adminRouter);
 
   // WhatsApp Simulator API (Zero-Twilio Testing Framework)
-  const sandboxDb = createDatabaseContext(cfg.nodeEnv === 'test' ? ':memory:' : 'data/simulator.sqlite', { syncEnabled: false });
+  const sandboxDb = createDatabaseContext(cfg.databaseUrl === ':memory:' ? ':memory:' : 'data/simulator.sqlite', { syncEnabled: false });
   const sandboxGateway = new MockWhatsAppGateway();
   const sandboxCalendar = new InMemoryCalendarProvider();
   const sandboxScheduler = new SchedulingEngine({ db: sandboxDb, calendar: sandboxCalendar });

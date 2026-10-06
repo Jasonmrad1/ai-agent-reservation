@@ -2,6 +2,7 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 export interface AppConfig {
+  mode?: 'clinic' | 'simulator';
   port: number;
   databaseUrl: string;
   adminSessionSecret: string;
@@ -35,6 +36,7 @@ export interface AppConfig {
 }
 
 export const config: AppConfig = {
+  mode: process.env.APP_MODE === 'clinic' ? 'clinic' : process.env.APP_MODE === 'simulator' ? 'simulator' : undefined,
   port: parseInt(process.env.PORT || '3000', 10),
   databaseUrl: process.env.DATABASE_URL || 'data/automation.sqlite',
   adminSessionSecret: process.env.ADMIN_SESSION_SECRET || 'dev_secret_change_in_production_123',
@@ -61,3 +63,18 @@ export const config: AppConfig = {
   nodeEnv: process.env.NODE_ENV || 'development',
 };
 
+export function validateConfig(cfg: AppConfig): void {
+  if (!Number.isInteger(cfg.port) || cfg.port < 1 || cfg.port > 65535 ||
+      !Number.isFinite(cfg.homeVisitBufferMinutes) || cfg.homeVisitBufferMinutes < 0) {
+    throw new Error('Invalid application configuration: port or travel buffer');
+  }
+  if (cfg.nodeEnv !== 'production') return;
+  if (cfg.adminSessionSecret.length < 32 || cfg.adminSessionSecret.includes('change_in_production')) {
+    throw new Error('Invalid production configuration: a strong administrator secret is required');
+  }
+  if (cfg.mode === 'simulator') return;
+  if (!cfg.twilioAccountSid || !cfg.twilioAuthToken || !cfg.twilioWhatsappNumber ||
+      !cfg.geminiApiKey || !cfg.googleCalendarClientId || !cfg.googleCalendarClientSecret) {
+    throw new Error('Incomplete production clinic configuration: Twilio, Gemini and Google Calendar are required');
+  }
+}
