@@ -188,6 +188,21 @@ export function createApp(options: CreateAppOptions = {}): AppInstance {
     client: process.env.SIMULATOR_LIVE_AI === 'true' ? geminiClient : new MockGeminiClient(),
     scheduler: sandboxScheduler, notifier: sandboxNotifier,
   });
+  // Reuse the real calendar and hours controls with sandbox services only.
+  // Authentication remains backed by the clinic session; sandbox routes cannot
+  // enter login, OAuth or other pages of the reused admin router.
+  const sandboxAdmin = createAdminRouter({
+    auth: adminAuth, db: sandboxDb, adminSecret: cfg.adminSessionSecret,
+    billing: new BillingService({db: sandboxDb,gateway: sandboxGateway}),
+    scheduler: sandboxScheduler, gateway: sandboxGateway,
+    geminiClient: new MockGeminiClient(),
+  });
+  app.use('/api/simulator/admin',adminAuth.middleware,(req,res,next)=>{
+    if(!/^\/api\/(appointments|availability|settings|alerts|conversations|invoices)(?:\/|$)/.test(req.path)){
+      res.status(404).json({error:'Sandbox calendar endpoint not found'});return;
+    }
+    sandboxAdmin(req,res,next);
+  });
   const simulatorRouter = createSimulatorRouter({
     db: sandboxDb, agent: sandboxAgent,
     reminders: new ReminderRunner({ db: sandboxDb, gateway: sandboxGateway, scheduler: sandboxScheduler, notifier: sandboxNotifier }),

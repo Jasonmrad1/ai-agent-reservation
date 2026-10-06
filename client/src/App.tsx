@@ -123,6 +123,7 @@ export const App: React.FC = () => {
   const [googleStatus, setGoogleStatus] = useState<{ configured: boolean; connected: boolean; calendarId?: string } | null>(null);
 
   const loadGoogleStatus = useCallback(async () => {
+    if(isSimulatorRoute)return;
     try {
       const res = await checkedFetch(`/admin/api/google-calendar/status`, {
         headers: getHeaders(),
@@ -563,6 +564,7 @@ export const App: React.FC = () => {
   return (
     <div className="react-calendar-app">
       <Header
+        simulatorMode={isSimulatorRoute}
         activeTab={activeTab}
         onTabChange={setActiveTab}
         currentWeekMonday={currentWeekMonday}
@@ -578,7 +580,7 @@ export const App: React.FC = () => {
           setIsManualBookingOpen(true);
         }}
         googleStatus={googleStatus}
-        onConnectGoogle={handleConnectGoogle}
+        onConnectGoogle={isSimulatorRoute ? undefined : handleConnectGoogle}
         onDisconnectGoogle={handleDisconnectGoogle}
       />
 
@@ -617,8 +619,8 @@ export const App: React.FC = () => {
         />
       )}
 
-      {activeTab === 'simulator' && (
-        <main className="calendar-app-container">
+      {(isSimulatorRoute || activeTab === 'simulator') && (
+        <main className="calendar-app-container" style={{display:activeTab === 'simulator' ? undefined : 'none'}}>
           <div className="simulator-tab-card">
             <WhatsAppSimulator
               adminKey={adminKey}

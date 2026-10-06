@@ -8,6 +8,7 @@ import {
 } from './Icons';
 
 interface HeaderProps {
+  simulatorMode?: boolean;
   activeTab: 'appointments' | 'work_hours' | 'simulator';
   onTabChange: (tab: 'appointments' | 'work_hours' | 'simulator') => void;
   currentWeekMonday: Date;
@@ -25,6 +26,7 @@ interface HeaderProps {
 }
 
 export const Header: React.FC<HeaderProps> = ({
+  simulatorMode = false,
   activeTab,
   onTabChange,
   currentWeekMonday,
@@ -77,7 +79,11 @@ export const Header: React.FC<HeaderProps> = ({
             <IconClock size={14} />
             <span>Work Hours</span>
           </button>
+          {simulatorMode && <button className={`nav-tab-btn ${activeTab === 'simulator' ? 'active' : ''}`} onClick={() => onTabChange('simulator')}>
+            <IconCalendar size={14} /><span>Patient Simulator</span>
+          </button>}
         </div>
+        {simulatorMode && <span style={{color:'var(--emerald-primary)',fontSize:12,marginLeft:12}}>Sandbox calendar</span>}
       </div>
 
       {/* Right: Date Navigator & Functional Doctor Tools */}

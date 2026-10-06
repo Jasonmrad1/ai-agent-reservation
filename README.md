@@ -10,6 +10,8 @@ A WhatsApp appointment assistant with an administrator dashboard and an offline 
 
 **Video demo:** [Actual website recording with cinematic transitions, optional narration and regeneration instructions](docs/DEMO_VIDEO.md).
 
+**Simulator calendar:** On `/admin/simulator`, Calendar and Work Hours now use the simulator's isolated database. Configure hours, send a patient message, then open Calendar to inspect the saved booking. Use Patient Simulator to return to the same chat. Clinic records and live gateways remain separate.
+
 ## Did the review find bugs that could make the agent malfunction?
 
 Yes. The most consequential weaknesses were:

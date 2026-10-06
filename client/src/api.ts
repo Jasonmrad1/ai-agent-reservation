@@ -1,5 +1,8 @@
 /** Reject HTTP failures before an action can display a success message. */
 export async function checkedFetch(input:RequestInfo|URL,init:RequestInit={}):Promise<Response> {
+  if(typeof input==='string' && input.startsWith('/admin/api/') && typeof window!=='undefined' && window.location.pathname==='/admin/simulator'){
+    input='/api/simulator/admin'+input.slice('/admin'.length);
+  }
   const headers=new Headers(init.headers);
   if(typeof window!=='undefined' && window.__CSRF_TOKEN__) headers.set('x-csrf-token',window.__CSRF_TOKEN__);
   const response=await fetch(input,{...init,headers,credentials:'same-origin'});
