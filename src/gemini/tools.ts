@@ -1,4 +1,4 @@
-import { FunctionDeclaration, SchemaType } from '@google/generative-ai';
+import { FunctionDeclaration, Type as SchemaType } from '@google/genai';
 
 export const CLINIC_SERVICES = [
   { name: 'Physiotherapy & Rehabilitation', duration: 60, price: 120, description: 'Physiotherapy, musculoskeletal rehab, and manual therapy.' },
@@ -11,7 +11,7 @@ export const CLINIC_SERVICES = [
 export const CLINIC_POLICIES = {
   hours: 'Custom clinic schedule configured weekly by Dr. Ziad.',
   cancellationPolicy: 'Appointments can be cancelled or rescheduled up to 2 hours before the scheduled time with no penalty.',
-  emergencyPolicy: 'In case of severe acute medical emergencies, please call emergency services (112) or visit the nearest ER immediately.',
+  emergencyPolicy: 'In case of severe acute medical emergencies, please call Lebanese Red Cross (140) or visit the nearest ER immediately.',
 };
 
 export const CHECK_AVAILABILITY_TOOL: FunctionDeclaration = {

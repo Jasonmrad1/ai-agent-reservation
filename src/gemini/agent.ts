@@ -1,5 +1,5 @@
 import { isUrgentMessage } from '../security/urgent.js';
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { GoogleGenAI } from '@google/genai';
 import { Customer, Conversation, Appointment, VisitType, PendingBookingWorkflow } from '../types/index.js';
 import { DatabaseContext } from '../db/index.js';
 import { SchedulingEngine } from '../calendar/scheduler.js';
@@ -64,16 +64,6 @@ export interface GeminiClient {
   }): Promise<string>;
 }
 
-const FALLBACK_MODEL_POOL = [
-  process.env.GEMINI_MODEL || 'gemini-3.5-flash',
-  'gemini-3.5-flash',
-  'gemini-3.5-flash-lite',
-  'gemini-3.8-flash',
-  'gemini-flash-lite-latest',
-  'gemini-3.6-flash',
-  'gemini-3.7-flash',
-  'gemini-flash-latest',
-];
 
 export function detectLanguage(text: string = ''): 'english' | 'arabizi' | 'arabic' | 'french' {
   if (!text) return 'english';
@@ -550,13 +540,14 @@ function extractPendingInOfficeSelection(
 }
 
 export class LiveGeminiClient implements GeminiClient {
-  private genAI: GoogleGenerativeAI;
+  private genAI: GoogleGenAI;
   private modelPool: string[];
 
   constructor(apiKey: string, modelName?: string) {
-    this.genAI = new GoogleGenerativeAI(apiKey);
-    const primary = modelName || process.env.GEMINI_MODEL || 'gemini-flash-latest';
-    this.modelPool = Array.from(new Set([primary, ...FALLBACK_MODEL_POOL]));
+    this.genAI = new GoogleGenAI({apiKey,httpOptions:{timeout:10000,retryOptions:{attempts:1}}});
+    const primary = modelName || process.env.GEMINI_MODEL || 'gemini-3.5-flash';
+    this.modelPool = Array.from(new Set([primary,...(process.env.GEMINI_FALLBACK_MODELS || '').split(',').map(s=>s.trim()).filter(Boolean)])).slice(0,3);
+    if(this.modelPool.some(name=>!/^[a-z0-9.-]+$/.test(name))) throw new Error('Invalid configured Gemini model');
   }
 
   public async generateResponse(params: {
@@ -569,30 +560,23 @@ export class LiveGeminiClient implements GeminiClient {
 
     for (const modelName of this.modelPool) {
       try {
-        const model = this.genAI.getGenerativeModel({
-          model: modelName,
-          systemInstruction: params.systemPrompt,
-          tools: [{ functionDeclarations: params.tools as any }],
+        const response = await this.genAI.models.generateContent({
+          model:modelName,
+          contents:[...params.conversationHistory,{role:'user',parts:[{text:params.incomingMessage}]}],
+          config:{systemInstruction:params.systemPrompt,tools:params.tools.length ? [{functionDeclarations:params.tools}] : undefined,maxOutputTokens:2048,httpOptions:{timeout:10000},abortSignal:AbortSignal.timeout(10000)}
         });
-
-        const chat = model.startChat({
-          history: params.conversationHistory as any,
-        });
-
-        const result = await chat.sendMessage(params.incomingMessage);
-        const response = result.response;
-        const functionCalls = response.functionCalls();
+        const functionCalls=response.functionCalls;
 
         if (functionCalls && functionCalls.length > 0) {
           return {
             toolCalls: functionCalls.map((fc) => ({
-              name: fc.name,
+              name: fc.name || '',
               args: fc.args as Record<string, any>,
             })),
           };
         }
 
-        const rawText = response.text ? response.text().trim() : '';
+        const rawText = response.text?.trim() || '';
 
         // Fallback: check if text response is a JSON-formatted tool invocation
         const jsonMatch = rawText.match(/```(?:json)?\s*([\s\S]*?)\s*```/) || [null, rawText];
@@ -636,11 +620,6 @@ No asterisks (* or **). No money or pricing mentions. No service selection. Resp
 
     for (const modelName of this.modelPool) {
       try {
-        const model = this.genAI.getGenerativeModel({
-          model: modelName,
-          systemInstruction: draftingInstruction,
-        });
-
         const transcriptBlock = params.conversationTranscript ? `${params.conversationTranscript}\n\n` : '';
         const prompt = `
 ${transcriptBlock}User asked / message: "${params.userQuery}"
@@ -712,8 +691,8 @@ Guidelines:
 - Keep it concise, high-touch, and empathetic. Do NOT use asterisks.
 `;
 
-        const result = await model.generateContent(prompt);
-        const text = result.response.text()?.trim() || '';
+        const result=await this.genAI.models.generateContent({model:modelName,contents:prompt,config:{systemInstruction:draftingInstruction,maxOutputTokens:2048,httpOptions:{timeout:10000},abortSignal:AbortSignal.timeout(10000)}});
+        const text=result.text?.trim() || '';
         if (text.length > 0) {
           return text;
         }
@@ -965,10 +944,10 @@ Guidelines:
     language?: string;
   }): Promise<string> {
     return withRetry(async () => {
-      const model = this.genAI.getGenerativeModel({
+      const outreachConfig = {
         model: this.modelPool[0] || 'gemini-flash-latest',
         systemInstruction: SYSTEM_PROMPT,
-      });
+      };
 
       let slotDirective = '';
       if (params.proposedDate && params.proposedTime) {
@@ -1004,8 +983,8 @@ Write a polite, warm, and professional WhatsApp message to the patient.
 Keep it natural and concise (1 to 3 short sentences) suitable for a WhatsApp text from a clinic.
 `;
 
-      const result = await model.generateContent(prompt);
-      return result.response.text();
+      const result=await this.genAI.models.generateContent({model:outreachConfig.model,contents:prompt,config:{systemInstruction:outreachConfig.systemInstruction,maxOutputTokens:1024,httpOptions:{timeout:10000},abortSignal:AbortSignal.timeout(10000)}});
+      return result.text || '';
     });
   }
 }
