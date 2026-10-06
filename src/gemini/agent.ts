@@ -1696,6 +1696,9 @@ export class AgentCore {
 
     // Text address for home visit awaiting address
     if (activeWorkflow && activeWorkflow.state === 'awaiting_address' && activeWorkflow.date && activeWorkflow.time) {
+      if (/^(?:(?:yes|ok|okay|sure|confirm|thank you|thanks|merci|merci beaucoup|tamam|shukran|شكراً|شكرا|نعم|تمام|أكيد)(?:\s+(?:please|thanks|thank you|doctor))?)[.!\s]*$/i.test(incomingText.trim())) {
+        return 'Please share your home address or send a WhatsApp location pin to complete your home visit booking.';
+      }
       if (hasDateTimeKeywords && parsedDateTimeInAwaiting && db.workflows) {
         // Patient selected a different slot while in awaiting_address
         db.workflows.update(activeWorkflow.id, {
