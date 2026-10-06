@@ -51,7 +51,7 @@ export class ReminderRunner {
       ].join('\n');
 
       try {
-        const sendRes = await this.gateway.sendMessage(appt.customer_phone, body, appt.customer_id);
+        const sendRes = await this.gateway.sendMessage(appt.customer_phone, body, appt.customer_id,{category:'reminder',variables:{'1':formatEnglishDate(appt.start_time),'2':appt.visit_type==='home_visit' ? appt.address || 'Home visit' : 'Clinic'}});
         this.db.appointments.markReminderSent(appt.id, '24h');
 
         const conv = this.db.conversations.getOrCreateActive(appt.customer_id);
@@ -93,7 +93,7 @@ export class ReminderRunner {
       const body = `👋 Reminder: Your appointment for ${appt.service} is coming up in about 1 hour (${timeStr}). ${locationStr}!`;
 
       try {
-        const sendRes = await this.gateway.sendMessage(appt.customer_phone, body, appt.customer_id);
+        const sendRes = await this.gateway.sendMessage(appt.customer_phone, body, appt.customer_id,{category:'reminder',variables:{'1':formatEnglishDate(appt.start_time),'2':appt.visit_type==='home_visit' ? appt.address || 'Home visit' : 'Clinic'}});
         this.db.appointments.markReminderSent(appt.id, '1h');
 
         const conv = this.db.conversations.getOrCreateActive(appt.customer_id);

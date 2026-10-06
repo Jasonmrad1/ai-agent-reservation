@@ -62,7 +62,7 @@ export function createApp(options: CreateAppOptions = {}): AppInstance {
       : new MockWhatsAppGateway()
   );
 
-  const gateway = new DurableWhatsAppGateway(db,rawGateway);
+  const gateway = new DurableWhatsAppGateway(db,rawGateway,{enforceWindow:cfg.nodeEnv==='production' && cfg.mode!=='simulator',templates:{reminder:process.env.WHATSAPP_TEMPLATE_REMINDER || '',invoice:process.env.WHATSAPP_TEMPLATE_INVOICE || '',schedule_change:process.env.WHATSAPP_TEMPLATE_SCHEDULE_CHANGE || '',admin_alert:process.env.WHATSAPP_TEMPLATE_ADMIN_ALERT || ''}});
 
   // 3. Calendar
   const calendar = options.calendar || (

@@ -1,17 +1,21 @@
 import crypto from 'node:crypto';
 import { DatabaseContext } from '../db/index.js';
-import { WhatsAppGateway, SendMessageResult } from './client.js';
+import { WhatsAppGateway, SendMessageResult, SendMessageOptions } from './client.js';
 
 /** Persist intent before sending. Uncertain provider writes require human reconciliation. */
 export class DurableWhatsAppGateway implements WhatsAppGateway {
   private active = new Set<string>();
-  constructor(private db: DatabaseContext, private provider: WhatsAppGateway) {}
-  async sendMessage(to: string, body: string, customerId?: string): Promise<SendMessageResult> {
+  constructor(private db: DatabaseContext, private provider: WhatsAppGateway, private policy:{enforceWindow?:boolean;templates?:Record<string,string>}={}) {}
+  async sendMessage(to: string, body: string, customerId?: string, options:SendMessageOptions={}): Promise<SendMessageResult> {
     const id=crypto.randomUUID();
     const customer=customerId ? this.db.customers.findById(customerId) : this.db.customers.findOrCreate(to);
     if (!customer) throw new Error('Message recipient is missing');
+    if(options.idempotencyKey) {
+      const existing=this.db.appDb.db.prepare('SELECT * FROM outbound_jobs WHERE idempotency_key=?').get(options.idempotencyKey) as any;
+      if(existing) return {messageSid:existing.message_sid || 'OUTBOX_'+existing.id,status:existing.status==='accepted' ? 'sent' : 'queued',to:existing.recipient,body:existing.body};
+    }
     const conv=this.db.conversations.getOrCreateActive(customer.id);
-    this.db.appDb.db.prepare("INSERT INTO outbound_jobs (id,recipient,body,customer_id,conversation_id,status,created_at) VALUES (?,?,?,?,?,'pending',?)").run(id,to,body,customer.id,conv.id,new Date().toISOString());
+    this.db.appDb.db.prepare("INSERT INTO outbound_jobs (id,recipient,body,customer_id,conversation_id,status,created_at,options,idempotency_key) VALUES (?,?,?,?,?,'pending',?,?,?)").run(id,to,body,customer.id,conv.id,new Date().toISOString(),JSON.stringify(options),options.idempotencyKey || null);
     this.db.messages.create(conv.id,'outbound',body,'OUTBOX_'+id,'queued');
     return this.attempt(id);
   }
@@ -20,8 +24,20 @@ export class DurableWhatsAppGateway implements WhatsAppGateway {
     this.active.add(id);
     const sql=this.db.appDb.db;const job=sql.prepare('SELECT * FROM outbound_jobs WHERE id=?').get(id) as any;
     try {
-      sql.prepare("UPDATE outbound_jobs SET status='sending',attempts=attempts+1 WHERE id=?").run(id);
-      const result=await this.provider.sendMessage(job.recipient,job.body,job.customer_id);
+      const options:SendMessageOptions=JSON.parse(job.options || '{}');
+      const customer=this.db.customers.findById(job.customer_id);
+      if(customer?.opted_out && !options.allowOptOut) throw new Error('Recipient has opted out');
+      if(this.policy.enforceWindow) {
+        const latest=sql.prepare("SELECT messages.created_at FROM messages JOIN conversations ON conversations.id=messages.conversation_id WHERE conversations.customer_id=? AND messages.direction='inbound' ORDER BY messages.created_at DESC,messages.rowid DESC LIMIT 1").get(job.customer_id) as any;
+        const windowOpen=latest && Date.now()-new Date(latest.created_at).getTime()<86400000;
+        if(!windowOpen) {
+          const contentSid=this.policy.templates?.[options.category || 'reply'];
+          if(!contentSid || !options.variables) throw new Error('Approved WhatsApp template and variables are required outside the 24-hour window');
+          options.contentSid=contentSid;
+        }
+      }
+      sql.prepare("UPDATE outbound_jobs SET status='sending' ,attempts=attempts+1 WHERE id=?").run(id);
+      const result=await this.provider.sendMessage(job.recipient,job.body,job.customer_id,options);
       sql.exec('BEGIN IMMEDIATE');
       try {
         sql.prepare("UPDATE outbound_jobs SET status='accepted',message_sid=?,last_error=NULL WHERE id=?").run(result.messageSid,id);

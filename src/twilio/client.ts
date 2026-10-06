@@ -10,8 +10,15 @@ export interface SendMessageResult {
   body: string;
 }
 
+export interface SendMessageOptions {
+  category?: 'reply'|'reminder'|'invoice'|'schedule_change'|'admin_alert'|'manual'|'optout';
+  variables?: Record<string,string>;
+  contentSid?: string;
+  allowOptOut?: boolean;
+  idempotencyKey?: string;
+}
 export interface WhatsAppGateway {
-  sendMessage(to: string, body: string, customerId?: string): Promise<SendMessageResult>;
+  sendMessage(to: string, body: string, customerId?: string, options?: SendMessageOptions): Promise<SendMessageResult>;
 }
 
 export class MockWhatsAppGateway implements WhatsAppGateway {
@@ -57,13 +64,15 @@ export class TwilioWhatsAppGateway implements WhatsAppGateway {
     this.client = twilio(accountSid, authToken);
   }
 
-  public async sendMessage(to: string, body: string, customerId?: string): Promise<SendMessageResult> {
+  public async sendMessage(to: string, body: string, customerId?: string, options:SendMessageOptions={}): Promise<SendMessageResult> {
     // Format recipient number (ensure 'whatsapp:' prefix)
     const formattedTo = to.startsWith('whatsapp:') ? to : `whatsapp:${to}`;
     const formattedFrom = this.fromNumber.startsWith('whatsapp:') ? this.fromNumber : `whatsapp:${this.fromNumber}`;
 
     try {
-      const createOptions: any = {from:formattedFrom,to:formattedTo,body};
+      const createOptions: any = {from:formattedFrom,to:formattedTo};
+      if(options.contentSid) {createOptions.contentSid=options.contentSid;createOptions.contentVariables=JSON.stringify(options.variables || {});}
+      else createOptions.body=body;
       if(this.statusCallback && this.statusCallback!=='none') createOptions.statusCallback=this.statusCallback;
       // Sending is not idempotent. Retry only through the durable outbox after a definite rejection.
       const response=await this.client.messages.create(createOptions);

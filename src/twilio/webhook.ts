@@ -112,7 +112,7 @@ export function createWebhookRouter(options: WebhookHandlerOptions) {
     if (OPT_OUT_KEYWORDS.has(upperText)) {
       db.customers.setOptOut(customer.id, true);
       const optOutReply = 'You have been unsubscribed and will receive no further messages. Reply START to resubscribe.';
-      await gateway.sendMessage(fromPhone, optOutReply, customer.id);
+      await gateway.sendMessage(fromPhone, optOutReply, customer.id,{category:'optout',allowOptOut:true});
       db.messages.create(conversation.id, 'outbound', optOutReply, null, 'sent');
       res.type('text/xml').send('<Response/>');
       return;

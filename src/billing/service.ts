@@ -78,7 +78,7 @@ export class BillingService {
     ].join('\n');
 
     try {
-      const sendRes = await this.gateway.sendMessage(customer.phone, body, customer.id);
+      const sendRes = await this.gateway.sendMessage(customer.phone, body, customer.id,{category:'invoice',variables:{'1':invoice.id.substring(0,8).toUpperCase(),'2':invoice.amount.toFixed(2),'3':invoice.status}});
       const conv = this.db.conversations.getOrCreateActive(customer.id);
       this.db.messages.create(conv.id, 'outbound', body, sendRes.messageSid, 'sent');
     } catch (err: any) {

@@ -104,7 +104,7 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
       // Send WhatsApp message if gateway is available
       if (gateway) {
         try {
-          const sendRes = await gateway.sendMessage(customer.phone, outreachMessage, customer.id);
+          const sendRes = await gateway.sendMessage(customer.phone, outreachMessage, customer.id,{category:'schedule_change',variables:{'1':new Date(appt.start_time).toLocaleString('en-US',{timeZone:'Asia/Beirut'})}});
           const conv = db.conversations.getOrCreateActive(customer.id);
           db.messages.create(conv.id, 'outbound', outreachMessage, sendRes.messageSid, 'sent');
         } catch (err) {
@@ -804,7 +804,7 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
     }
 
     // Dispatch via WhatsApp Gateway
-    const sendRes = await gateway.sendMessage(customer.phone, outreachMessage, customer.id);
+    const sendRes = await gateway.sendMessage(customer.phone, outreachMessage, customer.id,{category:'schedule_change',variables:{'1':new Date(appt.start_time).toLocaleString('en-US',{timeZone:'Asia/Beirut'})}});
     const conv = db.conversations.getOrCreateActive(customer.id);
     db.messages.create(conv.id, 'outbound', outreachMessage, sendRes.messageSid, 'sent');
 

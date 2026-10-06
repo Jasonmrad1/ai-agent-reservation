@@ -21,7 +21,7 @@ export class AdminNotificationService {
 
   private async send(message: string, alertTitle: string, alertDetails: string): Promise<void> {
     try {
-      await this.gateway.sendMessage(this.adminNumber, message);
+      await this.gateway.sendMessage(this.adminNumber, message,undefined,{category:'admin_alert',variables:{'1':alertTitle,'2':alertDetails}});
     } catch (err: any) {
       // If admin notification fails, log alert in DB so it appears on admin dashboard
       this.alerts.create({

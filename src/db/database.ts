@@ -31,6 +31,9 @@ export class AppDatabase {
       this.db.exec('ALTER TABLE availability_overrides ADD COLUMN shifts TEXT;');
     } catch {}
 
+    for(const column of ['options TEXT','idempotency_key TEXT']) {try {this.db.exec('ALTER TABLE outbound_jobs ADD COLUMN '+column);}catch{}}
+    this.db.exec('CREATE UNIQUE INDEX IF NOT EXISTS outbound_idempotency ON outbound_jobs(idempotency_key)');
+
     // Ensure default settings
     try {
       this.db.prepare(`
