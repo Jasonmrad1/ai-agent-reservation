@@ -147,6 +147,8 @@ export class ReminderRunner {
 
     // 1. Direct Confirmation
     if (upper === 'YES' || upper === 'CONFIRM' || upper === 'TAMAM' || upper === 'EHH' || upper === 'AKID' || upper === 'OUI') {
+      // A short answer belongs to the booking question currently in progress.
+      if(this.db.workflows.findActiveByCustomerId(customerId)) return null;
       this.db.appointments.updateStatus(active.id, 'confirmed');
       return 'Thank you! Your appointment has been confirmed with Dr. Ziad El Khoury. We look forward to seeing you!';
     }
