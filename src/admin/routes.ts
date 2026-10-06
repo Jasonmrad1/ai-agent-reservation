@@ -1,4 +1,5 @@
 import fs from 'fs';
+import { createAdminAuth, AdminAuth } from '../security/admin-auth.js';
 import path from 'path';
 import express, { Router, Request, Response, NextFunction } from 'express';
 import { DatabaseContext } from '../db/index.js';
@@ -13,6 +14,8 @@ export interface AdminRouterOptions {
   db: DatabaseContext;
   billing: BillingService;
   adminSecret: string;
+  auth?: AdminAuth;
+  calendarRedirectUri?: string;
   scheduler?: SchedulingEngine;
   gateway?: WhatsAppGateway;
   geminiClient?: GeminiClient;
@@ -22,18 +25,16 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
   const router = Router();
   const { db, billing, adminSecret, scheduler, gateway, geminiClient } = options;
 
-  // Simple auth middleware: checks Authorization header or query param
-  const requireAdminAuth = (req: Request, res: Response, next: NextFunction) => {
-    const authHeader = req.headers.authorization;
-    const queryKey = req.query.key as string;
-    const token = authHeader ? authHeader.replace('Bearer ', '') : queryKey;
-
-    if (!token || token !== adminSecret) {
-      res.status(401).json({ error: 'Unauthorized: Invalid or missing admin credentials' });
-      return;
-    }
-    next();
-  };
+  const auth = options.auth || createAdminAuth(db, adminSecret, { legacyQuery: process.env.NODE_ENV === 'test' });
+  const requireAdminAuth = auth.middleware;
+  router.get('/login', (_req, res) => res.type('html').send('<!doctype html><meta name="viewport" content="width=device-width"><title>Clinic login</title><form method="post" action="/admin/login"><label>Administrator password <input type="password" name="secret" required autocomplete="current-password"></label><button>Sign in</button></form>'));
+  router.post('/login', auth.login);
+  router.get('/api/session', requireAdminAuth, (_req, res) => res.json({ csrfToken: res.locals.csrfToken || null }));
+  router.post('/logout', requireAdminAuth, (req, res) => {
+    const active = auth.session(req);
+    if (active) db.appDb.db.prepare('DELETE FROM admin_sessions WHERE token_hash = ?').run(active.token_hash);
+    res.clearCookie('clinic_session', { path: '/' }); res.json({ success: true });
+  });
 
   // Helper: notify affected patients and mark appointment rescheduled when shifts change
   const notifyAndRescheduleConflicts = async (
@@ -311,7 +312,7 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
     res.json({
       home_visit_buffer_minutes: weekBufferMinutes !== undefined ? weekBufferMinutes : defaultBufferMinutes,
       default_buffer_minutes: defaultBufferMinutes,
-      all: db.settings.getAll(),
+      all: Object.fromEntries(Object.entries(db.settings.getAll()).filter(([key]) => !/token|secret|password|credential/i.test(key))),
     });
   });
 
@@ -336,16 +337,12 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
   });
 
   // Google Calendar Integration Endpoints
-  router.get('/auth/google', async (req: Request, res: Response) => {
-    const key = (req.query.key as string) || '';
-    if (key !== adminSecret) {
-      res.status(401).send('Unauthorized: Invalid admin key');
-      return;
-    }
-
+  router.get('/auth/google', requireAdminAuth, async (req: Request, res: Response) => {
+    const state = auth.oauthState(req);
+    if (!state) { res.status(401).send('Sign in before connecting Google Calendar'); return; }
     const clientId = process.env.GOOGLE_CALENDAR_CLIENT_ID;
     const clientSecret = process.env.GOOGLE_CALENDAR_CLIENT_SECRET;
-    const redirectUri = process.env.GOOGLE_CALENDAR_REDIRECT_URI || `${req.protocol}://${req.get('host')}/oauth2callback`;
+    const redirectUri = options.calendarRedirectUri || process.env.GOOGLE_CALENDAR_REDIRECT_URI || `${req.protocol}://${req.get('host')}/admin/oauth2callback`;
 
     if (!clientId || !clientSecret) {
       res.status(400).send(`
@@ -357,7 +354,7 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
           <p style="color:#94a3b8;max-width:500px;margin:16px auto;line-height:1.6;">
             Please add <code>GOOGLE_CALENDAR_CLIENT_ID</code> and <code>GOOGLE_CALENDAR_CLIENT_SECRET</code> to your <code>.env</code> file.
           </p>
-          <a href="/admin?key=${key}" style="display:inline-block;margin-top:20px;padding:10px 20px;background:#00f59b;color:#000;text-decoration:none;border-radius:8px;font-weight:700;">&larr; Back to Dashboard</a>
+          <a href="/admin/dashboard" style="display:inline-block;margin-top:20px;padding:10px 20px;background:#00f59b;color:#000;text-decoration:none;border-radius:8px;font-weight:700;">&larr; Back to Dashboard</a>
         </body>
         </html>
       `);
@@ -374,18 +371,18 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
           'https://www.googleapis.com/auth/calendar.events',
           'https://www.googleapis.com/auth/calendar.readonly',
         ],
-        state: key,
+        state,
       });
 
       res.redirect(authUrl);
     } catch (err: any) {
-      res.status(500).send(`Failed to start Google OAuth: ${err?.message || err}`);
+      res.status(500).json({ error: 'Could not start Google Calendar authorization' });
     }
   });
 
   router.get('/oauth2callback', async (req: Request, res: Response) => {
     const code = req.query.code as string;
-    const adminKey = (req.query.state as string) || adminSecret;
+    if (!auth.consumeOAuthState(req)) { res.status(403).send('Invalid or expired OAuth state'); return; }
 
     if (!code) {
       res.status(400).send('Missing authorization code from Google');
@@ -395,7 +392,7 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
     try {
       const clientId = process.env.GOOGLE_CALENDAR_CLIENT_ID;
       const clientSecret = process.env.GOOGLE_CALENDAR_CLIENT_SECRET;
-      const redirectUri = process.env.GOOGLE_CALENDAR_REDIRECT_URI || `${req.protocol}://${req.get('host')}/oauth2callback`;
+      const redirectUri = options.calendarRedirectUri || process.env.GOOGLE_CALENDAR_REDIRECT_URI || `${req.protocol}://${req.get('host')}/admin/oauth2callback`;
 
       const { google } = await import('googleapis');
       const oauth2Client = new google.auth.OAuth2(clientId, clientSecret, redirectUri);
@@ -411,7 +408,7 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
         <html>
         <head>
           <title>Google Calendar Connected</title>
-          <meta http-equiv="refresh" content="2;url=/admin?key=${adminKey}&google_connected=1">
+          <meta http-equiv="refresh" content="2;url=/admin/dashboard?google_connected=1">
           <style>
             body { background: #000; color: #fff; font-family: -apple-system, sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; }
             .badge { background: rgba(0, 245, 155, 0.15); color: #00f59b; border: 1px solid #00f59b; padding: 10px 20px; border-radius: 24px; font-weight: 700; font-size: 16px; margin-bottom: 12px; }
@@ -424,7 +421,7 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
         </html>
       `);
     } catch (err: any) {
-      res.status(500).send(`Failed to exchange Google OAuth code: ${err?.message || err}`);
+      res.status(500).json({ error: 'Could not connect Google Calendar' });
     }
   });
 
@@ -891,10 +888,10 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
   });
 
   // 5. Admin Dashboard Web UI - Microsoft Teams Calendar Experience (React App)
-  router.use(express.static(path.resolve(process.cwd(), 'public')));
+  router.use(express.static(path.resolve(process.cwd(), 'public'), { index: false }));
 
   const sendAppHtml = (req: Request, res: Response) => {
-    const key = (req.query.key as string) || '';
+
     const indexPath = path.resolve(process.cwd(), 'public', 'index.html');
     if (!fs.existsSync(indexPath)) {
       res.status(500).send('React frontend bundle not found. Please run "node client/build.js".');
@@ -902,13 +899,14 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
     }
     let html = fs.readFileSync(indexPath, 'utf-8');
     // Inject admin key so React app can immediately authenticate API calls
-    const keyScript = `<script>window.__ADMIN_KEY__ = ${JSON.stringify(key)};</script>`;
+    const keyScript = `<script>window.__CSRF_TOKEN__ = ${JSON.stringify(res.locals.csrfToken || '')};</script>`;
     html = html.replace('</head>', `  ${keyScript}\n</head>`);
     res.type('html').send(html);
   };
 
-  router.get('/dashboard', sendAppHtml);
-  router.get('/simulator', sendAppHtml);
+  router.get('/', requireAdminAuth, sendAppHtml);
+  router.get('/dashboard', requireAdminAuth, sendAppHtml);
+  router.get('/simulator', requireAdminAuth, sendAppHtml);
 
   return router;
 }

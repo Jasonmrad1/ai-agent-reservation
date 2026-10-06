@@ -9,7 +9,7 @@ const server = app.listen(config.port, () => {
   console.log(`🚀 Customer Texting & Scheduling Service is running!`);
   console.log(`📡 Port: ${config.port}`);
   console.log(`💬 WhatsApp Webhook: http://localhost:${config.port}/api/webhook/whatsapp`);
-  console.log(`🩺 Admin Dashboard: http://localhost:${config.port}/admin/dashboard?key=${config.adminSessionSecret}`);
+  console.log(`🩺 Admin Dashboard: http://localhost:${config.port}/admin/login`);
   console.log(`❤️  Health Check: http://localhost:${config.port}/health`);
   console.log(`====================================================`);
 });

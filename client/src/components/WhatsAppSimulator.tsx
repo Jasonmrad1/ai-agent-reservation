@@ -75,7 +75,7 @@ export const WhatsAppSimulator: React.FC<WhatsAppSimulatorProps> = ({
     try {
       const res = await fetch('/api/simulator/message', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminKey}` },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminKey}`, 'x-csrf-token': window.__CSRF_TOKEN__ || '' },
         body: JSON.stringify({
           phone,
           name,

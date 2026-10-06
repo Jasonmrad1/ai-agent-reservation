@@ -1,4 +1,5 @@
 import fs from 'fs';
+import { createAdminAuth } from './security/admin-auth.js';
 import path from 'path';
 import express from 'express';
 import { DatabaseContext, createDatabaseContext } from './db/index.js';
@@ -113,16 +114,7 @@ export function createApp(options: CreateAppOptions = {}): AppInstance {
     res.json({ status: 'ok', uptime: process.uptime(), timestamp: new Date().toISOString() });
   });
 
-  // Standalone WhatsApp Simulator UI Route
-  app.get('/simulator', (req, res) => {
-    const indexPath = path.resolve(process.cwd(), 'public', 'index.html');
-    if (!fs.existsSync(indexPath)) {
-      res.status(500).send('Frontend bundle not found. Run npm run build:client.');
-      return;
-    }
-    const html = fs.readFileSync(indexPath, 'utf-8');
-    res.type('html').send(html);
-  });
+  app.get('/simulator', (_req, res) => res.redirect('/admin/simulator'));
 
   // Twilio Webhooks
   const webhookRouter = createWebhookRouter({
@@ -147,7 +139,10 @@ export function createApp(options: CreateAppOptions = {}): AppInstance {
   app.post('/webhook/whatsapp/status', webhookRouter.handleStatusCallback);
 
   // Admin Dashboard & API
+  const adminAuth = createAdminAuth(db, cfg.adminSessionSecret, { secure: cfg.nodeEnv === 'production', legacyQuery: cfg.nodeEnv === 'test', publicBaseUrl: cfg.publicBaseUrl });
   const adminRouter = createAdminRouter({
+    auth: adminAuth,
+    calendarRedirectUri: cfg.googleCalendarRedirectUri,
     db,
     billing,
     adminSecret: cfg.adminSessionSecret,
@@ -171,13 +166,7 @@ export function createApp(options: CreateAppOptions = {}): AppInstance {
     db: sandboxDb, agent: sandboxAgent,
     reminders: new ReminderRunner({ db: sandboxDb, gateway: sandboxGateway, scheduler: sandboxScheduler, notifier: sandboxNotifier }),
   });
-  app.use('/api/simulator', (req, res, next) => {
-    if (req.headers.authorization !== `Bearer ${cfg.adminSessionSecret}`) {
-      res.status(401).json({ error: 'Administrator authentication required' });
-      return;
-    }
-    next();
-  }, simulatorRouter);
+  app.use('/api/simulator', adminAuth.middleware, simulatorRouter);
 
   return {
     app,

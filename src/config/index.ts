@@ -54,7 +54,7 @@ export const config: AppConfig = {
   googleCalendarClientId: process.env.GOOGLE_CALENDAR_CLIENT_ID,
   googleCalendarClientSecret: process.env.GOOGLE_CALENDAR_CLIENT_SECRET,
   googleCalendarId: process.env.GOOGLE_CALENDAR_ID || 'primary',
-  googleCalendarRedirectUri: process.env.GOOGLE_CALENDAR_REDIRECT_URI || 'http://localhost:3000/oauth2callback',
+  googleCalendarRedirectUri: process.env.GOOGLE_CALENDAR_REDIRECT_URI || 'http://localhost:3000/admin/oauth2callback',
 
   stripeSecretKey: process.env.STRIPE_SECRET_KEY,
 

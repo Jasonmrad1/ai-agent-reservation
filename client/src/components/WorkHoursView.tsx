@@ -228,7 +228,7 @@ export const WorkHoursView: React.FC<WorkHoursViewProps> = ({
     }
     const weekDate = formatDateIso(selectedWeekMonday);
     let cancelled = false;
-    fetch(`/admin/api/settings?key=${adminKey}&week=${weekDate}`, {
+    fetch(`/admin/api/settings&week=${weekDate}`, {
       headers: { Authorization: `Bearer ${adminKey}` },
     })
       .then((r) => r.json())

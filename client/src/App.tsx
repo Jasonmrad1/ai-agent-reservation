@@ -13,6 +13,7 @@ import { ManualBookingModal, ManualBookingData } from './components/ManualBookin
 declare global {
   interface Window {
     __ADMIN_KEY__?: string;
+    __CSRF_TOKEN__?: string;
   }
 }
 
@@ -27,14 +28,7 @@ function getMonday(d: Date | string | number) {
 
 export const App: React.FC = () => {
   // Get admin key from window global or URL search params
-  const [adminKey] = useState<string>(() => {
-    if (typeof window !== 'undefined') {
-      if (window.__ADMIN_KEY__) return window.__ADMIN_KEY__;
-      const urlParams = new URLSearchParams(window.location.search);
-      return urlParams.get('key') || 'admin-secret-2026';
-    }
-    return 'admin-secret-2026';
-  });
+  const [adminKey] = useState('');
 
   const isSimulatorRoute = typeof window !== 'undefined' && window.location.pathname.includes('simulator');
   const [activeTab, setActiveTab] = useState<'appointments' | 'work_hours' | 'simulator'>(() => {
@@ -68,6 +62,7 @@ export const App: React.FC = () => {
   const getHeaders = useCallback(() => {
     return {
       'Content-Type': 'application/json',
+      'x-csrf-token': window.__CSRF_TOKEN__ || '',
       Authorization: `Bearer ${adminKey}`,
     };
   }, [adminKey]);
@@ -75,7 +70,7 @@ export const App: React.FC = () => {
   // Load appointments
   const loadAppointments = useCallback(async () => {
     try {
-      const res = await fetch(`/admin/api/appointments?key=${adminKey}`, {
+      const res = await fetch(`/admin/api/appointments`, {
         headers: getHeaders(),
       });
       const data = await res.json();
@@ -89,7 +84,7 @@ export const App: React.FC = () => {
   // Load availability
   const loadAvailability = useCallback(async () => {
     try {
-      const res = await fetch(`/admin/api/availability?key=${adminKey}`, {
+      const res = await fetch(`/admin/api/availability`, {
         headers: getHeaders(),
       });
       const data = await res.json();
@@ -103,7 +98,7 @@ export const App: React.FC = () => {
   // Load settings (commute buffer)
   const loadSettings = useCallback(async () => {
     try {
-      const res = await fetch(`/admin/api/settings?key=${adminKey}`, {
+      const res = await fetch(`/admin/api/settings`, {
         headers: getHeaders(),
       });
       const data = await res.json();
@@ -120,7 +115,7 @@ export const App: React.FC = () => {
 
   const loadGoogleStatus = useCallback(async () => {
     try {
-      const res = await fetch(`/admin/api/google-calendar/status?key=${adminKey}`, {
+      const res = await fetch(`/admin/api/google-calendar/status`, {
         headers: getHeaders(),
       });
       const data = await res.json();
@@ -131,13 +126,13 @@ export const App: React.FC = () => {
   }, [adminKey, getHeaders]);
 
   const handleConnectGoogle = () => {
-    window.location.href = `/admin/auth/google?key=${adminKey}`;
+    window.location.href = `/admin/auth/google`;
   };
 
   const handleDisconnectGoogle = async () => {
     if (!confirm('Disconnect Google Calendar? Future appointments will no longer sync to Google Calendar.')) return;
     try {
-      await fetch(`/admin/api/google-calendar/disconnect?key=${adminKey}`, {
+      await fetch(`/admin/api/google-calendar/disconnect`, {
         method: 'POST',
         headers: getHeaders(),
       });
@@ -158,7 +153,7 @@ export const App: React.FC = () => {
     const params = new URLSearchParams(window.location.search);
     if (params.get('google_connected') === '1') {
       showToast('Google Calendar connected and synced successfully!');
-      window.history.replaceState({}, '', window.location.pathname + `?key=${adminKey}`);
+      window.history.replaceState({}, '', window.location.pathname + ``);
     }
   }, [loadAppointments, loadAvailability, loadSettings, loadGoogleStatus, adminKey, showToast]);
 
@@ -203,7 +198,7 @@ export const App: React.FC = () => {
     const shifts = rule?.shifts || [{ start_time: start, end_time: end }];
 
     try {
-      const res = await fetch(`/admin/api/availability/rules?key=${adminKey}`, {
+      const res = await fetch(`/admin/api/availability/rules`, {
         method: 'POST',
         headers: getHeaders(),
         body: JSON.stringify({
@@ -234,7 +229,7 @@ export const App: React.FC = () => {
   const handleUpdateCommuteBuffer = async (minutes: number, weekDate?: string, setAsDefault: boolean = false) => {
     setCommuteBufferMinutes(minutes);
     try {
-      await fetch(`/admin/api/settings?key=${adminKey}`, {
+      await fetch(`/admin/api/settings`, {
         method: 'POST',
         headers: getHeaders(),
         body: JSON.stringify({
@@ -292,7 +287,7 @@ export const App: React.FC = () => {
     });
 
     try {
-      const res = await fetch(`/admin/api/availability/rules/batch?key=${adminKey}`, {
+      const res = await fetch(`/admin/api/availability/rules/batch`, {
         method: 'POST',
         headers: getHeaders(),
         body: JSON.stringify({ rules: newRules }),
@@ -315,7 +310,7 @@ export const App: React.FC = () => {
 
   const handleSaveRule = async (rule: AvailabilityRule) => {
     try {
-      const res = await fetch(`/admin/api/availability/rules?key=${adminKey}`, {
+      const res = await fetch(`/admin/api/availability/rules`, {
         method: 'POST',
         headers: getHeaders(),
         body: JSON.stringify(rule),
@@ -339,7 +334,7 @@ export const App: React.FC = () => {
 
   const handleSaveAllRules = async (allRules: AvailabilityRule[], targetWeekMonday?: Date) => {
     try {
-      const res = await fetch(`/admin/api/availability/rules/batch?key=${adminKey}`, {
+      const res = await fetch(`/admin/api/availability/rules/batch`, {
         method: 'POST',
         headers: getHeaders(),
         body: JSON.stringify({ rules: allRules }),
@@ -367,7 +362,7 @@ export const App: React.FC = () => {
 
   const handleAddOverride = async (date: string, reason: string) => {
     try {
-      const res = await fetch(`/admin/api/availability/overrides?key=${adminKey}`, {
+      const res = await fetch(`/admin/api/availability/overrides`, {
         method: 'POST',
         headers: getHeaders(),
         body: JSON.stringify({ date, is_unavailable: true, reason }),
@@ -393,7 +388,7 @@ export const App: React.FC = () => {
     targetWeekMonday?: Date
   ) => {
     try {
-      const res = await fetch(`/admin/api/availability/overrides/batch?key=${adminKey}`, {
+      const res = await fetch(`/admin/api/availability/overrides/batch`, {
         method: 'POST',
         headers: getHeaders(),
         body: JSON.stringify({ overrides: overridesList }),
@@ -420,7 +415,7 @@ export const App: React.FC = () => {
 
   const handleResetWeekOverrides = async (startDate: string, endDate: string) => {
     try {
-      const res = await fetch(`/admin/api/availability/overrides/range?key=${adminKey}`, {
+      const res = await fetch(`/admin/api/availability/overrides/range`, {
         method: 'DELETE',
         headers: getHeaders(),
         body: JSON.stringify({ start_date: startDate, end_date: endDate }),
@@ -436,7 +431,7 @@ export const App: React.FC = () => {
 
   const handleDeleteOverride = async (id: string) => {
     try {
-      await fetch(`/admin/api/availability/overrides/${id}?key=${adminKey}`, {
+      await fetch(`/admin/api/availability/overrides/${id}`, {
         method: 'DELETE',
         headers: getHeaders(),
       });
@@ -451,7 +446,7 @@ export const App: React.FC = () => {
   const handleCancelAppointment = async (appt: Appointment) => {
     if (!confirm('Are you sure you want to cancel this visit?')) return;
     try {
-      await fetch(`/admin/api/appointments/${appt.id}/cancel?key=${adminKey}`, {
+      await fetch(`/admin/api/appointments/${appt.id}/cancel`, {
         method: 'POST',
         headers: getHeaders(),
       });
@@ -466,7 +461,7 @@ export const App: React.FC = () => {
   const handleCompleteAppointment = async (appt: Appointment) => {
     if (!confirm('Mark this visit as completed?')) return;
     try {
-      await fetch(`/admin/api/appointments/${appt.id}/complete?key=${adminKey}`, {
+      await fetch(`/admin/api/appointments/${appt.id}/complete`, {
         method: 'POST',
         headers: getHeaders(),
       });
@@ -485,7 +480,7 @@ export const App: React.FC = () => {
     proposedTime?: string;
     language: string;
   }) => {
-    const res = await fetch(`/admin/api/appointments/${params.appointmentId}/request-reschedule?key=${adminKey}`, {
+    const res = await fetch(`/admin/api/appointments/${params.appointmentId}/request-reschedule`, {
       method: 'POST',
       headers: getHeaders(),
       body: JSON.stringify({
@@ -505,7 +500,7 @@ export const App: React.FC = () => {
   };
 
   const handleSubmitQuickMessage = async (appointmentId: string, messageText: string) => {
-    const res = await fetch(`/admin/api/appointments/${appointmentId}/send-message?key=${adminKey}`, {
+    const res = await fetch(`/admin/api/appointments/${appointmentId}/send-message`, {
       method: 'POST',
       headers: getHeaders(),
       body: JSON.stringify({ messageText }),
@@ -520,7 +515,7 @@ export const App: React.FC = () => {
   };
 
   const handleManualBooking = async (formData: ManualBookingData) => {
-    const res = await fetch(`/admin/api/appointments/manual?key=${adminKey}`, {
+    const res = await fetch(`/admin/api/appointments/manual`, {
       method: 'POST',
       headers: getHeaders(),
       body: JSON.stringify(formData),
@@ -535,7 +530,7 @@ export const App: React.FC = () => {
   };
 
   const handleDirectReschedule = async (params: DirectMoveParams) => {
-    const res = await fetch(`/admin/api/appointments/${params.appointmentId}/reschedule-direct?key=${adminKey}`, {
+    const res = await fetch(`/admin/api/appointments/${params.appointmentId}/reschedule-direct`, {
       method: 'POST',
       headers: getHeaders(),
       body: JSON.stringify(params),
