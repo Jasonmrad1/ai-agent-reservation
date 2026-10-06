@@ -269,13 +269,14 @@ export function createWebhookRouter(options: WebhookHandlerOptions) {
     }
 
     if (messageSid && messageStatus) {
-      db.messages.updateStatusBySid(messageSid, messageStatus);
+      const changed=db.messages.updateStatusBySid(messageSid, messageStatus);
 
-      if (messageStatus === 'failed' || messageStatus === 'undelivered') {
+      const failureDetails=`Message SID: ${messageSid}. Error code: ${params.ErrorCode || 'None'}`;
+      if ((messageStatus === 'failed' || messageStatus === 'undelivered') && !db.appDb.db.prepare('SELECT id FROM admin_alerts WHERE details=?').get(failureDetails)) {
         db.alerts.create({
           type: 'delivery_failure',
           title: `WhatsApp Delivery Failed (${messageStatus})`,
-          details: `Message SID: ${messageSid}. Error code: ${params.ErrorCode || 'None'}`,
+          details: failureDetails,
         });
       }
     }

@@ -10,7 +10,7 @@ export class MessageRepository {
     direction: MessageDirection,
     body: string,
     messageSid?: string | null,
-    status: 'received' | 'queued' | 'sent' | 'delivered' | 'failed' | 'undelivered' = 'received',
+    status: Message['status'] = 'received',
     rawPayload?: any
   ): Message {
     if (messageSid) {const existing=this.findByMessageSid(messageSid);if(existing) return existing;}
@@ -78,9 +78,14 @@ export class MessageRepository {
     }));
   }
 
-  public updateStatusBySid(messageSid: string, status: Message['status']): void {
-    this.db.prepare(`
-      UPDATE messages SET status = ? WHERE message_sid = ?
-    `).run(status, messageSid);
+  public updateStatusBySid(messageSid:string,status:Message['status']):boolean {
+    const rank:Record<string,number>={received:0,queued:0,sending:1,sent:2,failed:3,undelivered:3,delivered:4,read:5};
+    const previous=this.db.prepare('SELECT status FROM message_status_events WHERE message_sid=?').get(messageSid) as any;
+    const current=this.findByMessageSid(messageSid);
+    if ((previous && rank[previous.status]>=rank[status]) || (current && rank[current.status]>=rank[status])) return false;
+    this.db.prepare('INSERT INTO message_status_events (message_sid,status) VALUES (?,?) ON CONFLICT(message_sid) DO UPDATE SET status=excluded.status').run(messageSid,status);
+    this.db.prepare('UPDATE messages SET status=? WHERE message_sid=?').run(status,messageSid);
+    this.db.prepare('UPDATE outbound_jobs SET status=? WHERE message_sid=?').run(status,messageSid);
+    return true;
   }
 }

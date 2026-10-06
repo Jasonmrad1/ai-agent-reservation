@@ -28,6 +28,8 @@ export class DurableWhatsAppGateway implements WhatsAppGateway {
         sql.prepare('UPDATE messages SET message_sid=?,status=? WHERE message_sid=?').run(result.messageSid,result.status,'OUTBOX_'+id);
         sql.exec('COMMIT');
       } catch(e) {sql.exec('ROLLBACK');throw e;}
+      const callback=sql.prepare('SELECT status FROM message_status_events WHERE message_sid=?').get(result.messageSid) as any;
+      if(callback) {sql.prepare('DELETE FROM message_status_events WHERE message_sid=?').run(result.messageSid);this.db.messages.updateStatusBySid(result.messageSid,callback.status);}
       return result;
     } catch(error:any) {
       const definitive=error.status===429 || error.status===400 || error.code===20429 || /Simulated WhatsApp/.test(error.message || '');

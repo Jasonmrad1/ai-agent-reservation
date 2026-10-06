@@ -70,7 +70,7 @@ export interface Message {
   direction: MessageDirection;
   body: string;
   message_sid?: string | null;
-  status: 'received' | 'queued' | 'sent' | 'delivered' | 'failed' | 'undelivered';
+  status: 'received' | 'queued' | 'sending' | 'sent' | 'delivered' | 'read' | 'failed' | 'undelivered';
   raw_payload?: string | null;
   created_at: string;
 }
