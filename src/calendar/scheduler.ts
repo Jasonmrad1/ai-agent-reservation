@@ -1,4 +1,5 @@
 import { DatabaseContext } from '../db/index.js';
+import crypto from 'node:crypto';
 import { CalendarProvider } from './provider.js';
 import { Appointment, VisitType } from '../types/index.js';
 import { computeFreeWindows } from '../utils/slots.js';
@@ -12,6 +13,7 @@ export interface SchedulerOptions {
 }
 
 export interface BookAppointmentParams {
+  operationId?: string;
   customerId: string;
   customerPhone: string;
   customerName?: string | null;
@@ -323,6 +325,11 @@ export class SchedulingEngine {
    * Books an appointment deterministically after validating against shifts and commute travel buffer.
    */
   public async bookAppointment(params: BookAppointmentParams): Promise<Appointment> {
+    const operationKey = params.operationId ? `${params.customerId}:${params.operationId}` : null;
+    if (operationKey) {
+      const previous = this.db.appDb.db.prepare('SELECT appointment_id FROM appointment_operations WHERE operation_key = ?').get(operationKey) as any;
+      if (previous) return this.db.appointments.findById(previous.appointment_id)!;
+    }
     if (params.visitType === 'home_visit' && !params.address) {
       throw new Error('A physical address is required for home visits.');
     }
@@ -332,6 +339,8 @@ export class SchedulingEngine {
     const endTime = params.endTime ? new Date(params.endTime) : new Date(startTime.getTime() + durationMs);
 
     this.validateWindow(startTime, endTime, params.startTime, params.visitType, params.allowOverride);
+    const reservation = this.acquireReservation(params.customerId, startTime, endTime, params.visitType);
+    try {
     const bufferMinutes = this.getHomeVisitBufferMinutes();
     const bufferMs = (params.visitType === 'home_visit' ? bufferMinutes : 0) * 60 * 1000;
 
@@ -439,7 +448,11 @@ export class SchedulingEngine {
       notes: params.notes || null,
     });
 
+    if (operationKey) this.db.appDb.db.prepare('INSERT INTO appointment_operations (operation_key, appointment_id) VALUES (?, ?)').run(operationKey, appt.id);
     return appt;
+    } finally {
+      this.db.appDb.db.prepare('DELETE FROM scheduling_reservations WHERE id = ?').run(reservation);
+    }
   }
 
   /**
@@ -464,6 +477,8 @@ export class SchedulingEngine {
 
     this.validateWindow(newStart, newEnd, params.newStartTime, visitType, params.allowOverride);
     if (!['booked','confirmed','rescheduled'].includes(existing.status)) throw new Error('Only active appointments can be rescheduled');
+    const reservation = this.acquireReservation(existing.customer_id, newStart, newEnd, visitType, existing.id);
+    try {
     const bufferMinutes = this.getHomeVisitBufferMinutes();
     const bufferMs = (visitType === 'home_visit' ? bufferMinutes : 0) * 60 * 1000;
 
@@ -540,6 +555,9 @@ export class SchedulingEngine {
     );
 
     return this.db.appointments.findById(existing.id)!;
+    } finally {
+      this.db.appDb.db.prepare('DELETE FROM scheduling_reservations WHERE id = ?').run(reservation);
+    }
   }
 
   /**
@@ -670,6 +688,27 @@ export class SchedulingEngine {
     }
 
     return conflicts;
+  }
+
+  private acquireReservation(customerId: string, start: Date, end: Date, visitType: VisitType, appointmentId?: string): string {
+    const sql = this.db.appDb.db;
+    const buffer = this.getHomeVisitBufferMinutes(start.toISOString().slice(0,10))*60000;
+    sql.exec('BEGIN IMMEDIATE');
+    try {
+      if (appointmentId && sql.prepare('SELECT id FROM scheduling_reservations WHERE appointment_id = ?').get(appointmentId)) throw new Error('Appointment change already in progress');
+      const rows = [
+        ...sql.prepare("SELECT id, visit_type, start_time, end_time FROM appointments WHERE status IN ('booked','confirmed','rescheduled')").all(),
+        ...sql.prepare('SELECT appointment_id AS id, visit_type, start_time, end_time FROM scheduling_reservations').all(),
+      ] as Array<{id?:string;visit_type:string;start_time:string;end_time:string}>;
+      for (const row of rows) {
+        if (appointmentId && row.id === appointmentId) continue;
+        const travel = visitType === 'home_visit' || row.visit_type === 'home_visit' ? buffer : 0;
+        if (start.getTime() < new Date(row.end_time).getTime()+travel && end.getTime()+travel > new Date(row.start_time).getTime()) throw new Error('Time slot conflict: appointment, reservation or travel buffer already occupies this time.');
+      }
+      const id=crypto.randomUUID();
+      sql.prepare('INSERT INTO scheduling_reservations (id, customer_id, appointment_id, visit_type, start_time, end_time, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)').run(id, customerId, appointmentId || null, visitType, start.toISOString(), end.toISOString(), new Date().toISOString());
+      sql.exec('COMMIT'); return id;
+    } catch (error) { sql.exec('ROLLBACK'); throw error; }
   }
 
   private validateWindow(start: Date, end: Date, rawStart: string, visitType: VisitType, override?: boolean): void {

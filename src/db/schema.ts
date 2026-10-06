@@ -1,4 +1,12 @@
 export const SCHEMA_SQL = `
+CREATE TABLE IF NOT EXISTS scheduling_reservations (
+  id TEXT PRIMARY KEY, customer_id TEXT NOT NULL, appointment_id TEXT,
+  visit_type TEXT NOT NULL, start_time TEXT NOT NULL, end_time TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS appointment_operations (
+  operation_key TEXT PRIMARY KEY, appointment_id TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS customers (
   id TEXT PRIMARY KEY,
   phone TEXT UNIQUE NOT NULL,
