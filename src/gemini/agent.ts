@@ -1046,16 +1046,19 @@ export class MockGeminiClient implements GeminiClient {
     }
 
     if (lower.includes('book') || lower.includes('appointment')) {
+      const requested=parseDateTimeFromMessage(params.incomingMessage);
+      if(!requested?.date || !requested.time) return {text:'What day and time would you like for your appointment?'};
+      if(!/home|clinic|in[- ]?office/.test(lower)) return {toolCalls:[{name:'check_availability',args:{date:requested.date}}]};
       return {
         toolCalls: [
           {
             name: 'book_appointment',
             args: {
-              date: '2026-09-10',
-              time: '10:00',
+              date: requested.date,
+              time: requested.time,
               visit_type: lower.includes('home') ? 'home_visit' : 'in_office',
               service: 'General Consultation',
-              address: lower.includes('home') ? '789 Pine Ave' : undefined,
+              address: undefined,
             },
           },
         ],
