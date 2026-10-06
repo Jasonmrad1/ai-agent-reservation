@@ -89,6 +89,15 @@ export function createSimulatorRouter(options: SimulatorRouterOptions): Router {
 
       // 3. Check Testing Reset Command (#reset / /reset / #clear)
       const lower = incomingText.toLowerCase();
+      const command=incomingText.toUpperCase();
+      if(['STOP','STOPALL','UNSUBSCRIBE','QUIT','OPTOUT','START','UNSTOP'].includes(command)) {
+        const optedOut=!['START','UNSTOP'].includes(command);
+        db.customers.setOptOut(customer.id,optedOut);customer.opted_out=optedOut;
+        const reply=optedOut ? 'You have been unsubscribed. Reply START to resume clinic messages.' : 'Clinic messages have resumed. How can we help you?';
+        db.messages.create(conversation.id,'outbound',reply,'SIM_OUT_'+crypto.randomUUID(),'sent');
+        return res.json({reply,customer,conversationId:conversation.id,appointments:db.appointments.findUpcomingByCustomerId(customer.id)});
+      }
+      if(customer.opted_out) return res.json({reply:'',customer,conversationId:conversation.id,appointments:db.appointments.findUpcomingByCustomerId(customer.id)});
       if (lower === '#reset' || lower === '/reset' || lower === '#clear' || lower === '/clear') {
         console.log('[router] Operation recorded');
         const activeAppts = db.appointments.findUpcomingByCustomerId(customer.id, customer.phone);
