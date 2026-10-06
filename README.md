@@ -1,3 +1,5 @@
+> Current setup and reliability instructions: [MVP and deployment operations](docs/OPERATIONS.md). Start with `APP_MODE=simulator` for zero-credit testing. Live phone activation requires provider verification and clinic review. Older feature descriptions below are historical; the operations guide defines the current behavior.
+
 # 🩺 ClinicFlow — Intelligent WhatsApp Medical Scheduling & Texting Automation
 
 [![Tests](https://img.shields.io/badge/Tests-108%20Passing%20(22%20Suites)-emerald?style=flat-square&logo=vitest)](tests/)

@@ -14,7 +14,11 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:integration": "vitest run --config vitest.integration.config.ts",
-    "typecheck": "tsc --noEmit && tsc -p client/tsconfig.json"
+    "typecheck": "tsc --noEmit && tsc -p client/tsconfig.json",
+    "backup": "tsx scripts/backup.ts",
+    "migrate:times": "tsx scripts/review-legacy-times.ts",
+    "restore:replica": "tsx scripts/restore-replica.ts",
+    "schema:replica": "tsx scripts/generate-replica-schema.ts"
   },
   "keywords": [
     "whatsapp",
@@ -48,5 +52,8 @@
     "tsx": "^4.19.3",
     "typescript": "^5.7.3",
     "vitest": "5.0.3"
+  },
+  "engines": {
+    "node": ">=24.14.0"
   }
 }
