@@ -749,6 +749,11 @@ export class SchedulingEngine {
     if (op.reservation_id) this.db.appDb.db.prepare('DELETE FROM scheduling_reservations WHERE id = ?').run(op.reservation_id);
   }
   private reconciling=false;
+  /** Call only during single-process startup, before accepting scheduling work. */
+  public recoverInterruptedReservations():void {
+    const result=this.db.appDb.db.prepare('DELETE FROM scheduling_reservations WHERE id NOT IN (SELECT reservation_id FROM calendar_operations WHERE reservation_id IS NOT NULL)').run();
+    if(result.changes)this.db.alerts.create({type:'system_error',title:'Interrupted slot validation recovered',details:`Released ${result.changes} reservations with no calendar-write journal. Pending remote writes remain reserved.`});
+  }
   public async reconcileCalendarOperations():Promise<void> {
     if (this.reconciling) return;this.reconciling=true;
     try {

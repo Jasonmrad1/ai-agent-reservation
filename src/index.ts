@@ -12,6 +12,7 @@ const tasks=new BackgroundTasks(name=>{
 });
 if(config.mode==='clinic'){
 instance.inbox.recoverInterrupted();instance.outbox.recoverInterrupted();
+instance.scheduler.recoverInterruptedReservations();
 tasks.every('inbox',1000,()=>instance.inbox.drain());
 tasks.every('outbox',1000,()=>instance.outbox.drain());
 tasks.every('replica',1000,()=>instance.replica.drain());
