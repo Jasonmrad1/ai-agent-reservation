@@ -4,3 +4,4 @@ const atLeast=(actual:string,min:string)=>{const a=actual.split('.').map(Number)
 function safe(name:string,min:string){const versions=Object.entries(lock()).filter(([path])=>path.endsWith('node_modules/'+name)).map(([,p]:any)=>p.version);expect(versions.length).toBeGreaterThan(0);expect(versions.every(v=>atLeast(v,min))).toBe(true);}
 it('locks proxy-addr with the IP spoofing fix',()=>safe('proxy-addr','2.0.8'));
 it('locks qs with the denial-of-service fixes',()=>safe('qs','6.16.0'));
+it('locks source-map-js with the event-loop denial-of-service fix',()=>safe('source-map-js','1.2.2'));
