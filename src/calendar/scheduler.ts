@@ -650,7 +650,7 @@ export class SchedulingEngine {
     const buffer = this.getHomeVisitBufferMinutes(getBeirutTimeInfo(start).dateStr)*60000;
     sql.exec('BEGIN IMMEDIATE');
     try {
-      if (appointmentId && sql.prepare('SELECT id FROM scheduling_reservations WHERE appointment_id = ?').get(appointmentId)) throw new Error('Appointment change already in progress');
+      if (appointmentId && (sql.prepare('SELECT id FROM scheduling_reservations WHERE appointment_id = ?').get(appointmentId) || sql.prepare("SELECT id FROM calendar_operations WHERE json_extract(payload,'$.appointmentId')=?").get(appointmentId))) throw new Error('Appointment change already in progress');
       const rows = [
         ...sql.prepare("SELECT id, visit_type, start_time, end_time FROM appointments WHERE status IN ('booked','confirmed','rescheduled')").all(),
         ...sql.prepare('SELECT appointment_id AS id, visit_type, start_time, end_time FROM scheduling_reservations').all(),
@@ -692,6 +692,7 @@ export class SchedulingEngine {
     if (existing.status==='cancelled') return existing;
     if (!['booked','confirmed','rescheduled'].includes(existing.status)) throw new Error('Only active appointments can be cancelled');
     if (this.db.appDb.db.prepare('SELECT id FROM scheduling_reservations WHERE appointment_id = ?').get(existing.id)) throw new Error('Appointment change already in progress');
+    if (this.db.appDb.db.prepare("SELECT id FROM calendar_operations WHERE json_extract(payload,'$.appointmentId')=?").get(existing.id)) throw new Error('Appointment change already in progress');
     return this.applyCalendarOperation(this.journal('cancel',{appointmentId:existing.id,eventId:existing.google_event_id,reason}));
   }
 
