@@ -1,56 +1,31 @@
-import { createApp } from './app.js';
-import { config } from './config/index.js';
+import {createApp} from './app.js';
+import {config} from './config/index.js';
+import {BackgroundTasks} from './runtime/background.js';
+import {backupSqliteFile} from './db/backup.js';
+import path from 'node:path';
 
-const instance = createApp();
-const { app, reminders } = instance;
-
-const server = app.listen(config.port, () => {
-  console.log(`====================================================`);
-  console.log(`🚀 Customer Texting & Scheduling Service is running!`);
-  console.log(`📡 Port: ${config.port}`);
-  console.log(`💬 WhatsApp Webhook: http://localhost:${config.port}/api/webhook/whatsapp`);
-  console.log(`🩺 Admin Dashboard: http://localhost:${config.port}/admin/login`);
-  console.log(`❤️  Health Check: http://localhost:${config.port}/health`);
-  console.log(`====================================================`);
+const instance=createApp();
+const server=instance.app.listen(config.port,()=>console.log(`Clinic service listening on ${config.port}; dashboard: /admin/login`));
+instance.inbox.recoverInterrupted();instance.outbox.recoverInterrupted();
+const tasks=new BackgroundTasks(name=>{
+ console.error(`Background job failed: ${name}`);
+ instance.db.alerts.create({type:'system_error',title:'Background job failed',details:`Job ${name} failed. Review the protected clinic queues.`});
 });
-
-instance.inbox.recoverInterrupted();
-instance.outbox.recoverInterrupted();
-const messagingTimer=setInterval(()=>{void instance.inbox.drain();void instance.outbox.drain();void instance.replica.drain();},1000);
-const reconciliationTimer = setInterval(() => { void instance.scheduler.reconcileCalendarOperations(); }, 60000);
-void instance.scheduler.reconcileCalendarOperations();
-
-// Periodic reminder job (runs every 15 minutes in production)
-const REMINDER_INTERVAL_MS = 15 * 60 * 1000;
-let remindersRunning=false;
-async function runReminders() {
-  if(remindersRunning) return;remindersRunning=true;
-  try {
-    const sent24 = await reminders.send24HourReminders();
-    const sent1 = await reminders.send1HourReminders();
-    if (sent24 > 0 || sent1 > 0) {
-      console.log(`[Reminders] Sent ${sent24} 24-hour reminders and ${sent1} 1-hour reminders.`);
-    }
-  } catch (err) {
-    console.error('[Reminders] Error running reminder jobs:', err);
-  }
-  finally {remindersRunning=false;}
+tasks.every('inbox',1000,()=>instance.inbox.drain());
+tasks.every('outbox',1000,()=>instance.outbox.drain());
+tasks.every('replica',1000,()=>instance.replica.drain());
+tasks.every('calendar',60000,()=>instance.scheduler.reconcileCalendarOperations());
+tasks.every('reminders',15*60000,async()=>{await instance.reminders.send24HourReminders();await instance.reminders.send1HourReminders();});
+if(config.databaseUrl!==':memory:')tasks.every('backup',24*60*60000,async()=>{
+ backupSqliteFile(config.databaseUrl,process.env.BACKUP_DIRECTORY || path.join(path.dirname(config.databaseUrl),'backups'));
+ instance.db.settings.set('last_verified_backup_at',new Date().toISOString());
+});
+let shuttingDown=false;
+async function shutdown(){
+ if(shuttingDown)return;shuttingDown=true;
+ const deadline=setTimeout(()=>{console.error('Shutdown timed out; durable jobs will be reviewed on restart');process.exit(1);},60000);deadline.unref();
+ const httpClosed=new Promise<void>(resolve=>server.close(()=>resolve()));server.closeIdleConnections();
+ await Promise.all([httpClosed,tasks.stop()]);
+ instance.simulator.db.appDb.close();instance.db.appDb.close();clearTimeout(deadline);
 }
-const reminderTimer = setInterval(()=>{void runReminders();},REMINDER_INTERVAL_MS);
-void runReminders();
-
-// Graceful shutdown
-function shutdown() {
-  console.log('\nShutting down server gracefully...');
-  clearInterval(reminderTimer);
-  clearInterval(reconciliationTimer);
-  clearInterval(messagingTimer);
-  server.close(() => {
-    instance.db.appDb.close();
-    console.log('Server and database closed. Goodbye.');
-    process.exit(0);
-  });
-}
-
-process.on('SIGINT', shutdown);
-process.on('SIGTERM', shutdown);
+process.on('SIGINT',()=>{void shutdown();});process.on('SIGTERM',()=>{void shutdown();});
