@@ -34,6 +34,9 @@ export class AppDatabase {
     for(const column of ['options TEXT','idempotency_key TEXT']) {try {this.db.exec('ALTER TABLE outbound_jobs ADD COLUMN '+column);}catch{}}
     this.db.exec('CREATE UNIQUE INDEX IF NOT EXISTS outbound_idempotency ON outbound_jobs(idempotency_key)');
 
+    const duplicates=this.db.prepare('SELECT appointment_id FROM invoices GROUP BY appointment_id HAVING count(*)>1').all();
+    if(!duplicates.length) this.db.exec('CREATE UNIQUE INDEX IF NOT EXISTS one_invoice_per_appointment ON invoices(appointment_id)');
+
     // Ensure default settings
     try {
       this.db.prepare(`

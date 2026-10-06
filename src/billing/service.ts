@@ -20,12 +20,16 @@ export class BillingService {
    * Generates a formal invoice for an appointment.
    * Grounded strictly in the actual appointment record (no AI hallucination).
    */
-  public async createInvoiceForAppointment(appointmentId: string): Promise<Invoice> {
+  public async createInvoiceForAppointment(appointmentId: string): Promise<Invoice> {return this.createInvoice(appointmentId);}
+
+  private createInvoice(appointmentId:string):Invoice {
     const appt = this.db.appointments.findById(appointmentId);
     if (!appt) {
       throw new Error(`Appointment ${appointmentId} not found.`);
     }
 
+    if(!Number.isFinite(appt.price) || appt.price<0) throw new Error('Invalid invoice amount');
+    if(appt.status==='cancelled') throw new Error('Cannot invoice a cancelled or inactive appointment');
     const existing = this.db.invoices.findByAppointmentId(appointmentId);
     if (existing) {
       return existing; // Idempotent: do not duplicate invoice
@@ -56,6 +60,9 @@ export class BillingService {
       throw new Error(`Customer for invoice ${invoiceId} not found.`);
     }
 
+    if(customer.opted_out) return;
+    const notificationKey=`invoice:${invoice.id}:${invoice.status}`;
+    if(!this.claimNotification(notificationKey)) return;
     const appt = this.db.appointments.findById(invoice.appointment_id);
     const dateStr = appt ? new Date(appt.start_time).toLocaleDateString('en-US', {
       timeZone: 'Asia/Beirut',
@@ -73,15 +80,16 @@ export class BillingService {
       `Total Amount: $${invoice.amount.toFixed(2)} ${invoice.currency}`,
       `Status: *${invoice.status.toUpperCase()}*`,
       ``,
-      `Payment instructions: Payments can be settled in cash, debit/credit card, or bank transfer.`,
-      `Thank you for choosing Dr. Smith's Medical Practice!`,
+      `Payment instructions: ${this.db.settings.get('payment_instructions','Please contact the clinic for payment instructions.')}`,
+      `Thank you for choosing ${this.db.settings.get('clinic_name', "Dr. Ziad El Khoury's Clinic")}!`,
     ].join('\n');
 
     try {
-      const sendRes = await this.gateway.sendMessage(customer.phone, body, customer.id,{category:'invoice',variables:{'1':invoice.id.substring(0,8).toUpperCase(),'2':invoice.amount.toFixed(2),'3':invoice.status}});
+      const sendRes = await this.gateway.sendMessage(customer.phone, body, customer.id,{category:'invoice',idempotencyKey:notificationKey,variables:{'1':invoice.id.substring(0,8).toUpperCase(),'2':invoice.amount.toFixed(2),'3':invoice.status}});
       const conv = this.db.conversations.getOrCreateActive(customer.id);
       this.db.messages.create(conv.id, 'outbound', body, sendRes.messageSid, 'sent');
     } catch (err: any) {
+      this.releaseUnqueuedNotification(notificationKey);
       this.db.alerts.create({
         type: 'delivery_failure',
         title: `Invoice Send Failed for ${customer.phone}`,
@@ -101,11 +109,14 @@ export class BillingService {
       throw new Error(`Invoice ${invoiceId} not found.`);
     }
 
+    if(invoice.status==='paid') return invoice;
+    if(invoice.status!=='unpaid') throw new Error('Only unpaid invoices can be paid');
     this.db.invoices.markPaid(invoiceId);
     const updated = this.db.invoices.findById(invoiceId)!;
 
     const customer = this.db.customers.findById(updated.customer_id);
-    if (customer && !customer.opted_out) {
+    const notificationKey=`receipt:${invoiceId}:paid`;
+    if (customer && !customer.opted_out && this.claimNotification(notificationKey)) {
       const receiptMsg = [
         `✅ *PAYMENT CONFIRMATION*`,
         `Thank you, ${customer.name || 'Patient'}!`,
@@ -115,10 +126,11 @@ export class BillingService {
       ].join('\n');
 
       try {
-        const sendRes = await this.gateway.sendMessage(customer.phone, receiptMsg, customer.id);
+        const sendRes = await this.gateway.sendMessage(customer.phone, receiptMsg, customer.id,{category:'invoice',idempotencyKey:notificationKey,variables:{'1':updated.id.substring(0,8).toUpperCase(),'2':updated.amount.toFixed(2),'3':'paid'}});
         const conv = this.db.conversations.getOrCreateActive(customer.id);
         this.db.messages.create(conv.id, 'outbound', receiptMsg, sendRes.messageSid, 'sent');
       } catch {
+        this.releaseUnqueuedNotification(notificationKey);
         // Non-blocking for receipt
       }
     }
@@ -129,13 +141,25 @@ export class BillingService {
   /**
    * Marks appointment as completed, generates invoice, and dispatches it.
    */
-  public async completeAppointmentAndBill(appointmentId: string): Promise<{ appointment: Appointment; invoice: Invoice }> {
-    this.db.appointments.updateStatus(appointmentId, 'completed');
-    const appointment = this.db.appointments.findById(appointmentId)!;
-
-    const invoice = await this.createInvoiceForAppointment(appointmentId);
-    await this.sendInvoiceToCustomer(invoice.id);
-
-    return { appointment, invoice };
+  private claimNotification(key:string):boolean {
+    return !!this.db.appDb.db.prepare('INSERT OR IGNORE INTO billing_notifications(notification_key,created_at) VALUES (?,?)').run(key,new Date().toISOString()).changes;
+  }
+  private releaseUnqueuedNotification(key:string):void {
+    if(!this.db.appDb.db.prepare('SELECT id FROM outbound_jobs WHERE idempotency_key=?').get(key)) this.db.appDb.db.prepare('DELETE FROM billing_notifications WHERE notification_key=?').run(key);
+  }
+  public async completeAppointmentAndBill(appointmentId:string):Promise<{appointment:Appointment;invoice:Invoice;notificationStatus:string}> {
+    const current=this.db.appointments.findById(appointmentId);
+    if(!current || !['booked','confirmed','rescheduled','completed'].includes(current.status)) throw new Error('Only active or completed appointments can be billed');
+    const sql=this.db.appDb.db;let invoice:Invoice;
+    sql.exec('BEGIN IMMEDIATE');
+    try {
+      this.db.appointments.updateStatus(appointmentId,'completed');
+      invoice=this.createInvoice(appointmentId);
+      sql.exec('COMMIT');
+    } catch(error) {sql.exec('ROLLBACK');throw error;}
+    let notificationStatus='accepted';
+    if(this.db.customers.findById(current.customer_id)?.opted_out) notificationStatus='opted_out';
+    else {try {await this.sendInvoiceToCustomer(invoice.id);}catch{notificationStatus='pending_review';}}
+    return {appointment:this.db.appointments.findById(appointmentId)!,invoice,notificationStatus};
   }
 }

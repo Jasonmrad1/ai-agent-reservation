@@ -13,6 +13,8 @@ export class InvoiceRepository {
     currency?: string;
     payment_link?: string | null;
   }): Invoice {
+    if(!Number.isFinite(data.amount) || data.amount<0) throw new Error('Invalid invoice amount');
+    const existing=this.findByAppointmentId(data.appointment_id);if(existing) return existing;
     const now = new Date().toISOString();
     const invoice: Invoice = {
       id: crypto.randomUUID(),

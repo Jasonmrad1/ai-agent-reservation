@@ -1,4 +1,5 @@
 export const SCHEMA_SQL = `
+CREATE TABLE IF NOT EXISTS billing_notifications (notification_key TEXT PRIMARY KEY,created_at TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS reminder_claims (claim_key TEXT PRIMARY KEY, appointment_id TEXT NOT NULL, created_at TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS message_status_events (message_sid TEXT PRIMARY KEY,status TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS inbound_jobs (message_sid TEXT PRIMARY KEY, sender TEXT NOT NULL, payload TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pending', created_at TEXT NOT NULL, last_error TEXT);
