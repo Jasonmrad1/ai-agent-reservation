@@ -1032,6 +1032,19 @@ export class MockGeminiClient implements GeminiClient {
       };
     }
 
+    if (lower.includes('reschedule') || lower.includes('move')) {
+      const requested=parseDateTimeFromMessage(params.incomingMessage);
+      if(!requested?.date || !requested.time) return {text:'What new day and time would you like to move your appointment to?'};
+      return {
+        toolCalls: [
+          {
+            name: 'reschedule_appointment',
+            args: { new_date: requested.date, new_time: requested.time },
+          },
+        ],
+      };
+    }
+
     if (lower.includes('book') || lower.includes('appointment')) {
       return {
         toolCalls: [
@@ -1049,16 +1062,7 @@ export class MockGeminiClient implements GeminiClient {
       };
     }
 
-    if (lower.includes('reschedule') || lower.includes('move')) {
-      return {
-        toolCalls: [
-          {
-            name: 'reschedule_appointment',
-            args: { new_date: '2026-09-10', new_time: '14:00' },
-          },
-        ],
-      };
-    }
+
 
 
 
