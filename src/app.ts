@@ -141,6 +141,8 @@ export function createApp(options: CreateAppOptions = {}): AppInstance {
     publicBaseUrl: cfg.publicBaseUrl,
     asyncProcessing: cfg.nodeEnv === 'production',
     allowTestReset: cfg.mode === 'simulator' || cfg.nodeEnv === 'test',
+    allowSimulatedDoctorOutbound:cfg.nodeEnv==='test',
+    clinicWhatsappNumber:cfg.twilioWhatsappNumber,
     skipSignatureVerification: options.skipSignatureVerification ?? (cfg.nodeEnv !== 'production'),
     processMessage: async ({ customer, conversation, incomingText }) => {
       // Check if this incoming message is an interactive reminder confirmation (e.g. YES to confirm)

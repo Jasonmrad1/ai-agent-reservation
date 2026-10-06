@@ -14,6 +14,8 @@ export interface WebhookHandlerOptions {
   publicBaseUrl?: string;
   asyncProcessing?: boolean;
   allowTestReset?: boolean;
+  allowSimulatedDoctorOutbound?:boolean;
+  clinicWhatsappNumber?:string;
   processMessage?: (context: {
     customer: any;
     conversation: any;
@@ -76,11 +78,12 @@ export function createWebhookRouter(options: WebhookHandlerOptions) {
     }
 
     // 3. Outbound Message Filter (Dr. Ziad talking from the clinic WhatsApp number directly)
-    const clinicDigits = (process.env.TWILIO_WHATSAPP_NUMBER || '+14155238886').replace(/\D/g, '');
+    const clinicDigits = (options.clinicWhatsappNumber || process.env.TWILIO_WHATSAPP_NUMBER || '+14155238886').replace(/\D/g, '');
     const fromDigits = fromPhone.replace(/\D/g, '');
     const isDoctorOutbound = fromDigits && clinicDigits && (fromDigits === clinicDigits);
 
     if (isDoctorOutbound) {
+      if(!options.allowSimulatedDoctorOutbound){res.type('text/xml').send('<Response/>');return;}
       const recipientPhone = params.To;
       if (recipientPhone) {
         const patient = db.customers.findOrCreate(recipientPhone, 'Patient');

@@ -46,6 +46,7 @@ describe('👨‍⚕️ DR. ZIAD EL KHOURY CO-PRESENCE & LIVE CHAT NON-INTERFERE
       db,
       gateway,
       skipSignatureVerification: true,
+      allowSimulatedDoctorOutbound: true,
       processMessage: async ({ customer, conversation, incomingText }) => {
         return agent.processMessage({ customer, conversation, incomingText, db });
       },
