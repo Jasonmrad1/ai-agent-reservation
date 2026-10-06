@@ -3,6 +3,7 @@ import { WhatsAppGateway } from '../twilio/client.js';
 import { SchedulingEngine } from '../calendar/scheduler.js';
 import { AdminNotificationService } from '../notifications/admin.notifier.js';
 import { formatEnglishDate } from '../gemini/agent.js';
+import {isAppointmentConfirmation} from '../utils/patient-commands.js';
 
 export interface ReminderRunnerOptions {
   db: DatabaseContext;
@@ -146,7 +147,7 @@ export class ReminderRunner {
     }
 
     // 1. Direct Confirmation
-    if (upper === 'YES' || upper === 'CONFIRM' || upper === 'TAMAM' || upper === 'EHH' || upper === 'AKID' || upper === 'OUI') {
+    if (isAppointmentConfirmation(clean)) {
       // A short answer belongs to the booking question currently in progress.
       if(this.db.workflows.findActiveByCustomerId(customerId)) return null;
       this.db.appointments.updateStatus(active.id, 'confirmed');

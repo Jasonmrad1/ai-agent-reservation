@@ -1,4 +1,5 @@
 import { isUrgentMessage } from '../security/urgent.js';
+import {isAppointmentConfirmation} from '../utils/patient-commands.js';
 import { GoogleGenAI } from '@google/genai';
 import { Customer, Conversation, Appointment, VisitType, PendingBookingWorkflow } from '../types/index.js';
 import { DatabaseContext } from '../db/index.js';
@@ -1287,7 +1288,7 @@ export class AgentCore {
     if (/\b(cancel|reschedule|move|postpone)\b/i.test(incomingText)) db.settings.delete(`additional_booking_${conversation.id}`);
     const selectedKey = `selected_appointment_${conversation.id}`;
     const upcoming = db.appointments.findUpcomingByCustomerId(customer.id);
-    const action = /\b(cancel|elghe|ilgha|laghe)\b/i.test(incomingText) ? 'cancel' : /\b(reschedule|move|postpone|ghayyer)\b/i.test(incomingText) ? 'reschedule' : /^(yes|confirm|oui|tamam)$/i.test(incomingText.trim()) ? 'confirm' : null;
+    const action = /\b(cancel|elghe|ilgha|laghe)\b/i.test(incomingText) ? 'cancel' : /\b(reschedule|move|postpone|ghayyer)\b/i.test(incomingText) ? 'reschedule' : isAppointmentConfirmation(incomingText) ? 'confirm' : null;
     let choices: any = null;
     try { choices = JSON.parse(db.settings.get(choicesKey, 'null')); } catch {}
     if (choices && choices.expires <= Date.now()) { db.settings.delete(choicesKey); choices = null; }
