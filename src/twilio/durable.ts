@@ -23,6 +23,8 @@ export class DurableWhatsAppGateway implements WhatsAppGateway {
     if (this.active.has(id)) throw new Error('Message send already in progress');
     this.active.add(id);
     const sql=this.db.appDb.db;const job=sql.prepare('SELECT * FROM outbound_jobs WHERE id=?').get(id) as any;
+    const claimed=sql.prepare("UPDATE outbound_jobs SET status='sending',attempts=attempts+1 WHERE id=? AND status='pending'").run(id);
+    if(!claimed.changes){this.active.delete(id);return {messageSid:job.message_sid || 'OUTBOX_'+id,status:job.status==='accepted' ? 'sent' : 'queued',to:job.recipient,body:job.body};}
     try {
       const options:SendMessageOptions=JSON.parse(job.options || '{}');
       if(options.appointmentId) {
@@ -40,7 +42,6 @@ export class DurableWhatsAppGateway implements WhatsAppGateway {
           options.contentSid=contentSid;
         }
       }
-      sql.prepare("UPDATE outbound_jobs SET status='sending' ,attempts=attempts+1 WHERE id=?").run(id);
       const result=await this.provider.sendMessage(job.recipient,job.body,job.customer_id,options);
       sql.exec('BEGIN IMMEDIATE');
       try {
