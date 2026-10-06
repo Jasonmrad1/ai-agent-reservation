@@ -47,6 +47,10 @@ export class DurableWhatsAppGateway implements WhatsAppGateway {
       try {
         sql.prepare("UPDATE outbound_jobs SET status='accepted',message_sid=?,last_error=NULL WHERE id=?").run(result.messageSid,id);
         sql.prepare('UPDATE messages SET message_sid=?,status=? WHERE message_sid=?').run(result.messageSid,result.status,'OUTBOX_'+id);
+        if(options.category==='reminder' && options.appointmentId && options.expectedStart){
+          const type=options.idempotencyKey?.split(':')[1];
+          if(type==='24h' || type==='1h')sql.prepare(`UPDATE appointments SET reminder_${type==='24h' ? '24h' : '1h'}_sent=1 WHERE id=? AND start_time=? AND status IN ('booked','confirmed','rescheduled')`).run(options.appointmentId,options.expectedStart);
+        }
         sql.exec('COMMIT');
       } catch(e) {sql.exec('ROLLBACK');throw e;}
       const callback=sql.prepare('SELECT status FROM message_status_events WHERE message_sid=?').get(result.messageSid) as any;
