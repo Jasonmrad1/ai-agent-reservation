@@ -279,7 +279,7 @@ describe('Phases 5, 6, 7: Reminders, Billing, & Admin Dashboard', () => {
 
       // Appointment updated to rescheduled status in DB with notes
       const updatedAppt = db.appointments.findById(appt.id);
-      expect(updatedAppt?.status).toBe('rescheduled');
+      expect(updatedAppt?.status).toBe('booked');
       expect(updatedAppt?.notes).toContain('emergency surgery');
     });
 

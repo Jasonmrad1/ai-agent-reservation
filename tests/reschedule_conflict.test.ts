@@ -66,7 +66,7 @@ describe('Proactive Schedule Conflict Detection & Multi-Week Availability', () =
 
     // 3. Verify appointment status is updated to 'rescheduled'
     const updatedAppt = db.appointments.findById(appt.id);
-    expect(updatedAppt?.status).toBe('rescheduled');
+    expect(updatedAppt?.status).toBe('booked');
 
     // 4. Verify WhatsApp message was sent through gateway
     expect(mockGateway.sentMessages.length).toBeGreaterThanOrEqual(1);
@@ -112,7 +112,7 @@ describe('Proactive Schedule Conflict Detection & Multi-Week Availability', () =
 
     // 3. Verify appointment status updated and alert generated
     const updated = db.appointments.findById(appt.id);
-    expect(updated?.status).toBe('rescheduled');
+    expect(updated?.status).toBe('booked');
   });
 
   it('searches multi-week availability across future weeks correctly', async () => {

@@ -576,7 +576,7 @@ export class SchedulingEngine {
     const conflicts: Appointment[] = [];
 
     for (const appt of appts) {
-      if (appt.status === 'cancelled' || appt.status === 'completed') continue;
+      if (appt.status === 'cancelled' || appt.status === 'completed' || new Date(appt.start_time).getTime()<=Date.now()) continue;
 
       const apptStartMs = new Date(appt.start_time).getTime();
       const apptEndMs = new Date(appt.end_time).getTime();
@@ -588,7 +588,7 @@ export class SchedulingEngine {
       }
 
       // Check if appointment fits within any shift
-      const fits = shifts.some((s) => apptStartMs >= s.startMs && apptEndMs <= s.endMs);
+      const fits = shifts.some((s) => apptStartMs >= s.startMs && apptEndMs+(appt.visit_type==='home_visit' ? this.getHomeVisitBufferMinutes(dateStr)*60000 : 0) <= s.endMs);
       if (!fits) {
         conflicts.push(appt);
       }
@@ -605,11 +605,11 @@ export class SchedulingEngine {
     newShifts: Array<{ start_time: string; end_time: string }>,
     isActive: boolean
   ): Appointment[] {
-    const upcoming = this.db.appointments.listUpcoming(100);
+    const upcoming = this.db.appointments.listUpcoming(-1);
     const conflicts: Appointment[] = [];
 
     for (const appt of upcoming) {
-      if (appt.status === 'cancelled' || appt.status === 'completed') continue;
+      if (appt.status === 'cancelled' || appt.status === 'completed' || new Date(appt.start_time).getTime()<=Date.now()) continue;
 
       const apptDate = new Date(appt.start_time);
       if (getBeirutTimeInfo(apptDate).dayOfWeek !== dayOfWeek) continue;

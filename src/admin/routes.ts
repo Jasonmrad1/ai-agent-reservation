@@ -61,6 +61,7 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
       seenApptIds.add(appt.id);
 
       const customer = db.customers.findById(appt.customer_id);
+      db.alerts.create({type:'schedule_conflict',title:'Appointment needs a new agreed time',details:`Appointment ${appt.id} at ${appt.start_time} conflicts with ${reason}. The appointment has not been moved.`,customer_id:appt.customer_id});
       if (!customer || customer.opted_out) continue;
 
       // Find 2-3 candidate open slots across the next 14 days
@@ -102,34 +103,35 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
       }
 
       // Send WhatsApp message if gateway is available
+      let notificationAccepted=false;
       if (gateway) {
         try {
           const sendRes = await gateway.sendMessage(customer.phone, outreachMessage, customer.id,{category:'schedule_change',variables:{'1':new Date(appt.start_time).toLocaleString('en-US',{timeZone:'Asia/Beirut'})}});
           const conv = db.conversations.getOrCreateActive(customer.id);
-          db.messages.create(conv.id, 'outbound', outreachMessage, sendRes.messageSid, 'sent');
+          db.messages.create(conv.id, 'outbound', outreachMessage, sendRes.messageSid, sendRes.status);
+          notificationAccepted=true;
         } catch (err) {
           console.error(`Failed to send proactive reschedule WhatsApp to ${customer.phone}:`, err);
         }
       }
 
-      // Mark appointment as 'rescheduled' and update notes
+      // Record the outreach separately from the actual appointment time and status
       const updatedNotes = [
         appt.notes || '',
-        `[Auto Schedule Conflict Outreach Sent at ${new Date().toISOString()} (${reason})]`,
+        `[Schedule Conflict Outreach ${notificationAccepted ? 'accepted' : 'pending/failed'} at ${new Date().toISOString()} (${reason})]`,
       ].filter(Boolean).join('\n');
 
-      db.appointments.updateStatus(appt.id, 'rescheduled');
       db.appDb.db.prepare('UPDATE appointments SET notes = ? WHERE id = ?').run(updatedNotes, appt.id);
 
       // Create admin alert record
       db.alerts.create({
         type: 'schedule_conflict',
-        title: `Auto-Rescheduled: ${customer.name || customer.phone}`,
+        title: `Reschedule Needed: ${customer.name || customer.phone}`,
         details: `Auto-contacted ${customer.name || customer.phone} via WhatsApp to reschedule ${appt.service} on ${appt.start_time} (${reason}).`,
         customer_id: customer.id,
       });
 
-      notifiedList.push({
+      if (notificationAccepted) notifiedList.push({
         appointmentId: appt.id,
         customerName: customer.name || 'Patient',
         phone: customer.phone,
@@ -815,7 +817,6 @@ export function createAdminRouter(options: AdminRouterOptions): Router {
       `[Doctor AI Reschedule Sent at ${new Date().toISOString()} (${logDetails})]`,
     ].filter(Boolean).join('\n');
 
-    db.appointments.updateStatus(appt.id, 'rescheduled');
     db.appDb.db.prepare('UPDATE appointments SET notes = ? WHERE id = ?').run(updatedNotes, appt.id);
 
     res.json({
