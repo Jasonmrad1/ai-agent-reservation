@@ -171,7 +171,7 @@ export function createApp(options: CreateAppOptions = {}): AppInstance {
   app.use('/admin', adminRouter);
 
   // WhatsApp Simulator API (Zero-Twilio Testing Framework)
-  const sandboxDb = createDatabaseContext(cfg.databaseUrl === ':memory:' ? ':memory:' : 'data/simulator.sqlite', { syncEnabled: false });
+  const sandboxDb = createDatabaseContext(!cfg.databaseUrl || cfg.databaseUrl === ':memory:' ? ':memory:' : path.join(path.dirname(cfg.databaseUrl),'simulator.sqlite'), { syncEnabled: false });
   const sandboxGateway = new MockWhatsAppGateway();
   const sandboxCalendar = new InMemoryCalendarProvider();
   const sandboxScheduler = new SchedulingEngine({ db: sandboxDb, calendar: sandboxCalendar });
