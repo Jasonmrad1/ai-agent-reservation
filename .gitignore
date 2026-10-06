@@ -7,3 +7,5 @@ data/
 *.sqlite3
 *.db
 coverage/
+.demo-tools/
+artifacts/demo/

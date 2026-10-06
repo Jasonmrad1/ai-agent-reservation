@@ -8,6 +8,8 @@ A WhatsApp appointment assistant with an administrator dashboard and an offline 
 
 **Heavy booking tests:** [42 additional end-to-end checks and the three bugs they exposed](docs/BOOKING_E2E_REVIEW.md), including concurrent patients, duplicate webhooks and complete simulator lifecycles.
 
+**Video demo:** [Narrated and caption-only walkthroughs, plus instructions to regenerate them](docs/DEMO_VIDEO.md).
+
 ## Did the review find bugs that could make the agent malfunction?
 
 Yes. The most consequential weaknesses were:
